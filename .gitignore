@@ -1,0 +1,4 @@
+# fetched at build time by tools/tbc-weakaura-creator/scripts/setup.sh
+LibDeflate.lua
+LibSerialize.lua
+paladin_starter.txt
