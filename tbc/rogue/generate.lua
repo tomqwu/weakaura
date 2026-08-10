@@ -1,4 +1,4 @@
--- Historical iteration script (v40 of 40). Requires the original workspace:
+-- Historical iteration script (v41 of 41). Requires the original workspace:
 -- dump.lua + decoded schema template + prior version strings + LibDeflate/LibSerialize.
 -- For new packs, use ../../tools/tbc-weakaura-creator/ instead.
 math.randomseed(20260809)
@@ -254,8 +254,15 @@ table.insert(parent.controlledChildren, 7, rip.id)  -- after SnD MISSING, before
 table.insert(c, 7, rip)
 
 
--- ===== Combo points: 5 red dots above the buff row =====
+-- ===== Combo points: 5 dots above the buff row, green->orange left to right =====
 local cpX = { -70, -35, 0, 35, 70 }
+local cpColors = {  -- v41: per-dot gradient replaces the all-gold-at-5 recolor
+  { 0.20, 1.00, 0.25, 1 },
+  { 0.55, 0.95, 0.15, 1 },
+  { 0.90, 0.85, 0.10, 1 },
+  { 1.00, 0.65, 0.08, 1 },
+  { 1.00, 0.45, 0.05, 1 },
+}
 for i = 1, 5 do
   local dot = {
     regionType = "texture",
@@ -266,7 +273,7 @@ for i = 1, 5 do
     texture = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Square_White_Border.tga",
     desaturate = false,
     width = 32, height = 8,
-    color = {0.2, 1, 0.25, 1},
+    color = cpColors[i],
     blendMode = "BLEND",
     textureWrapMode = "CLAMPTOBLACKADDITIVE",
     rotation = 0, discrete_rotation = 0,
@@ -295,12 +302,7 @@ for i = 1, 5 do
     },
     actions = { init = {}, start = {}, finish = {} },
     animation = deepcopy(T.d.animation),
-    conditions = {
-      [1] = {
-        check = { trigger = 1, variable = "power", op = ">=", value = "5" },
-        changes = { [1] = { property = "color", value = { 1, 0.65, 0.1, 1 } } },
-      },
-    },
+    conditions = {},
     config = {}, authorOptions = {}, information = {},
   }
   table.insert(parent.controlledChildren, 7 + i, dot.id)
@@ -940,7 +942,7 @@ local transmit = { m = "d", d = parent, c = c, v = 2000, s = "3.5.0" }
 local serialized = LibSerialize:SerializeEx({ errorOnUnserializableType = false }, transmit)
 local compressed = LibDeflate:CompressDeflate(serialized, { level = 9 })
 local encoded = "!WA:2!" .. LibDeflate:EncodeForPrint(compressed)
-local out = io.open("import_string_v40.txt", "w"); out:write(encoded); out:close()
+local out = io.open("import_string_v41.txt", "w"); out:write(encoded); out:close()
 
 -- ===== verification =====
 local back = H.decode(encoded)
@@ -983,8 +985,8 @@ for i, ch in ipairs(back.c) do
   print(string.format("  %2d %-28s -> %-22s %s%s", i, ch.id, ch.parent, ch.regionType, gate))
 end
 
--- uid continuity vs v2 (same seed => same uids => WA offers "Update")
-local f2 = io.open("import_string_v39.txt","r")
+-- uid continuity vs prior version (same seed => same uids => WA offers "Update")
+local f2 = io.open("import_string_v40.txt","r")
 if f2 then
   local old = H.decode(f2:read("*a")); f2:close()
   local oldByI = {}

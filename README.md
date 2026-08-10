@@ -18,8 +18,9 @@ tools/tbc-weakaura-creator/
 
 ## Packs
 
-- **tbc/rogue/all-specs.txt** — full HUD, v40 of a 40-iteration build: health/energy/threat
-  bars with 35/40 energy threshold lines, combo pips (gold at 5), spec-adaptive cooldown row
+- **tbc/rogue/all-specs.txt** — full HUD, v41 of a 41-iteration build: health/energy/threat
+  bars with 35/40 energy threshold lines, combo pips (green→orange gradient, left to right),
+  spec-adaptive cooldown row
   (15 spells, talent-gated, tooltips + keybind labels), animated alert flow (SnD missing,
   Riposte window, Feint-at-70%-threat, Evasion-below-50%-HP), weapon enchant proc tracker
   with clones, out-of-combat fade. Locale-independent (pure spell-ID matching, built on a
