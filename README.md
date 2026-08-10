@@ -16,6 +16,16 @@ tools/tbc-weakaura-creator/
                        also packaged as a Claude skill (see its SKILL.md)
 ```
 
+## Import strings (quick copy)
+
+Latest version of every pack. Each link jumps to the pack README's fenced code block —
+use GitHub's copy button on the block to grab the whole string in one click.
+
+| Pack | Version | Copy |
+|---|---|---|
+| Rogue — All Specs | v41 | [string](tbc/rogue/README.md#import-string-v41) · [raw](tbc/rogue/all-specs.txt) |
+| Paladin — Tank Starter | v1 | [string](tbc/paladin/README.md#import-string-v1) · [raw](tbc/paladin/tank-starter.txt) |
+
 ## Packs
 
 - **tbc/rogue/all-specs.txt** — full HUD, v41 of a 41-iteration build: health/energy/threat
