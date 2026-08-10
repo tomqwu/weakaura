@@ -21,6 +21,10 @@ commit directly on `main`.
      never reorder existing ones.
    - Version numbers and feature wording in the root `README.md`, the pack `README.md`, and
      the pack's `generate.lua` lineage script match the shipped string.
+   - Every pack `README.md` ends with an `## Import string (vN)` section embedding the
+     current string in a plain fenced code block (GitHub's copy button is the quick-copy
+     path), byte-identical to the shipped `.txt`; the root `README.md` "Import strings"
+     table lists every pack's current version and links to that block.
 4. **Commit** on the branch: one logical change per commit, message `<area>: <what>`
    (e.g. `rogue: v41 — combo pip green→orange gradient`), with the string, lineage script,
    and docs in the same commit.
