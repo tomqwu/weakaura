@@ -13,12 +13,24 @@ commit directly on `main`.
 2. **Build, don't hand-edit**: `!WA:2!` import strings are only ever produced by Lua build
    scripts through `tools/tbc-weakaura-creator/scripts/wa_lib.lua` (run `setup.sh` there once
    to fetch LibDeflate/LibSerialize; needs lua5.1).
-3. **Test before every commit** — for every changed import string, with lua5.1:
+3. **Test before every commit** — always run the repo suite, which must pass:
+
+   ```bash
+   lua5.1 tools/verify-packs.lua && tools/verify-rebuild.sh
+   ```
+
+   It verifies every string, checks each README's embedded copy block is byte-identical to
+   its `.txt`, enforces globally unique aura ids and uids across all packs, and proves every
+   string reproduces from its committed script. Additionally, for every changed string:
    - `wa_lib.verify(transmit, encoded)` — round-trip fidelity, unique ids/uids, parent refs
      resolve, controlledChildren complete.
    - `wa_lib.uidContinuity(encoded, <last committed string>)` — existing auras must keep 100%
      stable UIDs (the in-game Update flow depends on it); new auras append new `uid()` calls,
      never reorder existing ones.
+   - A **new pack takes a new `math.randomseed`** — never reuse another pack's. Identical
+     seeds produce identical uids, and WA matches auras across imports by uid, so two packs
+     sharing a seed silently "Update" over each other. The seed registry is in the root
+     `README.md`; aura ids must be unique across packs too (WA ids are global).
    - Version numbers and feature wording in the root `README.md`, the pack `README.md`, and
      the pack's `generate.lua` lineage script match the shipped string.
    - Every pack `README.md` ends with an `## Import string (vN)` section embedding the
