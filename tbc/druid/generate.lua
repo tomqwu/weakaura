@@ -1,4 +1,4 @@
--- generate.lua — Druid TBC "All Specs" HUD (v1).
+-- generate.lua — Druid TBC "All Specs" HUD (v2).
 -- Run: lua5.1 generate.lua   (toolkit libs live in ../../tools/tbc-weakaura-creator/scripts/,
 -- fetch them once with that directory's setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (copy whole -> /wa -> Import).
@@ -10,6 +10,10 @@
 -- Every spell id below was verified on wowhead.com/tbc (2.4.3 data): aura triggers carry
 -- EVERY rank id as strings; cooldown triggers carry the numeric rank-1 id; spellknown gates
 -- use a castable spell that is in the spellbook whenever the talent is taken.
+--
+-- v2 (rotation review fixes) — see README "## v2 — rotation fixes". New elements are
+-- constructed in the block at the BOTTOM of this file so every pre-existing uid() draw keeps
+-- its position in the seeded stream; they are re-parented into the right group there.
 
 math.randomseed(20260812)  -- FIXED pack seed; append-only uid order across versions
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -34,8 +38,11 @@ end
 
 -- ===== spec gates (castable signature abilities, verified on wowhead.com/tbc) =====
 local GATE_F = { use_spellknown = true, spellknown = 33878 }  -- Mangle (Bear)  — Feral 41
-local GATE_R = { use_spellknown = true, spellknown = 18562 }  -- Swiftmend      — Resto 21
+local GATE_R = { use_spellknown = true, spellknown = 18562 }  -- Swiftmend      — Resto 31
 local GATE_B = { use_spellknown = true, spellknown = 24858 }  -- Moonkin Form   — Balance 31
+-- Enrage is a PRE-PULL rage generator (it also strips armour), so it loads out of combat only.
+-- WA load booleans are tri-state: use_combat = false means "must NOT be in combat".
+local GATE_F_PREPULL = { use_spellknown = true, spellknown = 33878, use_combat = false }
 
 -- ===== verified spell ids =====
 local IDS_LACERATE  = { 33745 }                                -- 15s bleed, single TBC rank
@@ -52,6 +59,8 @@ local IDS_MOONFIRE  = { 8921, 8924, 8925, 8926, 8927, 8928, 8929,
                         9833, 9834, 9835, 26987, 26988 }       -- Moonfire r1-r12
 local IDS_CLEARCAST = { 16870 }                                -- Clearcasting proc, 15s
 local IDS_OOC       = { 16864 }                                -- Omen of Clarity, 30min
+local IDS_DEMOROAR  = { 99, 1735, 9490, 9747, 9898, 26998 }     -- Demoralizing Roar r1-r6, 30s
+local IDS_TOL       = { 33891 }                                -- Tree of Life Form (self shapeshift aura)
 
 local CD_MANGLE    = 33878  -- rank-1 cooldown ids (cooldown is shared across ranks)
 local CD_ENRAGE    = 5229
@@ -102,8 +111,9 @@ manaR.subRegions[2] = F.subtext("%percentpower%%", 12, "INNER_RIGHT", "percentpo
 manaR.subRegions[3] = F.subborder("bar")
 manaR.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
 
--- R4 Mana (Balance) — identical to R3 but Balance-gated; a resto/balance hybrid sees
--- both, pixel-identical on the same slot (harmless by design)
+-- R4 Mana (Balance) — identical to R3 but Balance-gated. Swiftmend (31 pts Resto) and Moonkin
+-- Form (31 pts Balance) cannot both be taken at TBC's 61-point cap, so the two mana bars are
+-- mutually exclusive, not merely overlapping.
 local manaB = resBar("Druid - Mana (Balance)", -27, { 0.25, 0.5, 0.9, 1 }, GATE_B)
 manaB.triggers = F.triggers({ F.powerTrigger(0), F.unitCharTrigger() })
 manaB.subRegions[2] = F.subtext("%percentpower%%", 12, "INNER_RIGHT", "percentpower")
@@ -127,7 +137,9 @@ threatB.conditions = {
   F.condition(1, "aggro", "==", 1, "barColor", { 0.9, 0.12, 0.12, 1 }),
 }
 
--- ================= Buffs (0,-16): three 40x40 timers per spec, slots shared =================
+-- ================= Buffs (0,-16): 40x40 timers per spec, slots shared =================
+-- Bear runs FOUR slots (-66/-22/+22/+66), the caster specs three (-44/0/+44); both rows stay
+-- centred on the group and only one spec's row can ever load.
 local function buffIcon(id, x, gate)
   local ic = reg(F.icon(id, CLASS, 40, 40, x, 0, nil))
   ic.zoom = 0.3
@@ -136,22 +148,26 @@ local function buffIcon(id, x, gate)
   return ic
 end
 
--- B1 Lacerate — stacks to 5 (%s) + timer, glow inside the refresh window
-local lacerate = buffIcon("Druid - Lacerate", -44, GATE_F)
+-- B1 Lacerate — stacks to 5 (%s) + timer, glow inside the refresh window.
+-- Desaturated below 5 stacks: colour returning IS "the stack is capped, stop feeding it".
+local lacerate = buffIcon("Druid - Lacerate", -66, GATE_F)
 lacerate.triggers = F.triggers({ F.auraTrigger("target", false, IDS_LACERATE, { ownOnly = true }) })
 lacerate.subRegions[2] = F.subtext("%s", 16, "CENTER")
 lacerate.subRegions[3] = F.subtext("%p", 11, "INNER_BOTTOM")
 lacerate.subRegions[4] = F.subborder()
-lacerate.conditions = { F.condition(1, "expirationTime", "<=", "5", "sub.1.glow", true) }
+lacerate.conditions = {
+  F.condition(1, "stacks", "<", "5", "desaturate", true),
+  F.condition(1, "expirationTime", "<=", "5", "sub.1.glow", true),
+}
 
 -- B2 Mangle debuff — uptime awareness only; C1 is what you actually press
-local mangle = buffIcon("Druid - Mangle Debuff", 0, GATE_F)
+local mangle = buffIcon("Druid - Mangle Debuff", -22, GATE_F)
 mangle.triggers = F.triggers({ F.auraTrigger("target", false, IDS_MANGLE, { ownOnly = true }) })
 mangle.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
 mangle.subRegions[3] = F.subborder()
 
 -- B3 Faerie Fire (Bear) — ANY caster's FF or FFF satisfies the armor debuff rule
-local ffF = buffIcon("Druid - Faerie Fire (Bear)", 44, GATE_F)
+local ffF = buffIcon("Druid - Faerie Fire (Bear)", 22, GATE_F)
 ffF.triggers = F.triggers({ F.auraTrigger("target", false, IDS_FAERIE) })
 ffF.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
 ffF.subRegions[3] = F.subborder()
@@ -163,26 +179,32 @@ lifebloom.triggers = F.triggers({ F.auraTrigger("target", true, IDS_LIFEBLOOM, {
 lifebloom.subRegions[2] = F.subtext("%s", 16, "CENTER")
 lifebloom.subRegions[3] = F.subtext("%p", 11, "INNER_BOTTOM")
 lifebloom.subRegions[4] = F.subborder()
-lifebloom.conditions = { F.condition(1, "expirationTime", "<=", "2", "sub.1.glow", true) }
+lifebloom.conditions = {
+  F.condition(1, "stacks", "<", "3", "desaturate", true),
+  F.condition(1, "expirationTime", "<=", "2", "sub.1.glow", true),
+}
 
 -- B5 Rejuvenation — own HoT on target, all 13 ranks (downranking-safe); Swiftmend fuel
 local rejuv = buffIcon("Druid - Rejuvenation", 0, GATE_R)
 rejuv.triggers = F.triggers({ F.auraTrigger("target", true, IDS_REJUV, { ownOnly = true }) })
 rejuv.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
 rejuv.subRegions[3] = F.subborder()
+rejuv.conditions = { F.condition(1, "expirationTime", "<=", "3", "sub.1.glow", true) }
 
 -- B6 Regrowth — own HoT on target, all 10 ranks; the other Swiftmend fuel
 local regrowth = buffIcon("Druid - Regrowth", 44, GATE_R)
 regrowth.triggers = F.triggers({ F.auraTrigger("target", true, IDS_REGROWTH, { ownOnly = true }) })
 regrowth.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
 regrowth.subRegions[3] = F.subborder()
+regrowth.conditions = { F.condition(1, "expirationTime", "<=", "3", "sub.1.glow", true) }
 
--- B7 Insect Swarm — refresh early (glow at 3s), especially while moving
+-- B7 Insect Swarm — plain uptime timer, NO refresh glow: TBC Balance refreshes it only while
+-- moving, and WA cannot see movement without custom code, so a glow here would be wrong most
+-- of the time. The icon vanishing is the only claim it makes.
 local swarm = buffIcon("Druid - Insect Swarm", -44, GATE_B)
 swarm.triggers = F.triggers({ F.auraTrigger("target", false, IDS_INSECT, { ownOnly = true }) })
 swarm.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
 swarm.subRegions[3] = F.subborder()
-swarm.conditions = { F.condition(1, "expirationTime", "<=", "3", "sub.1.glow", true) }
 
 -- B8 Moonfire — NO expiry glow on purpose: let it fully expire, then recast
 local moonfire = buffIcon("Druid - Moonfire", 0, GATE_B)
@@ -190,9 +212,11 @@ moonfire.triggers = F.triggers({ F.auraTrigger("target", false, IDS_MOONFIRE, { 
 moonfire.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
 moonfire.subRegions[3] = F.subborder()
 
--- B9 Faerie Fire (Balance) — same combined FF+FFF set as B3 (Improved FF hit debuff)
+-- B9 Faerie Fire (Balance) — same combined FF+FFF set as B3, but OWN-ONLY: a feral's Faerie
+-- Fire (Feral) satisfies the armour debuff yet strips the raid's Improved Faerie Fire hit,
+-- so the moonkin must see "mine is not up" even when someone else's is.
 local ffB = buffIcon("Druid - Faerie Fire (Balance)", 44, GATE_B)
-ffB.triggers = F.triggers({ F.auraTrigger("target", false, IDS_FAERIE) })
+ffB.triggers = F.triggers({ F.auraTrigger("target", false, IDS_FAERIE, { ownOnly = true }) })
 ffB.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
 ffB.subRegions[3] = F.subborder()
 ffB.conditions = { F.condition(1, "expirationTime", "<=", "5", "sub.1.glow", true) }
@@ -229,9 +253,11 @@ clearcast.subRegions[1] = F.subglow(true, { 1, 0.85, 0.2, 1 })
 clearcast.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
 clearcast.subRegions[3] = F.subborder()
 
--- A3 Omen of Clarity missing in combat — "you forgot to buff it"
+-- A3 Omen of Clarity missing — "you forgot to buff it". NOT combat-gated: Omen of Clarity is
+-- a 30-minute out-of-combat self buff that cannot be cast while shapeshifted, so a combat
+-- gate would only ever fire at the one moment you cannot act on it.
 local oocMissing = alertIcon("Druid - OoC Missing",
-  { use_spellknown = true, spellknown = 16864, use_combat = true })
+  { use_spellknown = true, spellknown = 16864 })
 oocMissing.triggers = F.triggers({
   F.auraTrigger("player", true, IDS_OOC, { matchesShowOn = "showOnMissing" }),
 })
@@ -271,8 +297,9 @@ local function addCD(label, realName, spellId, gate)
   return ic
 end
 
-addCD("Mangle",             "Mangle (Bear)",         CD_MANGLE,    GATE_F)  -- C1
-addCD("Enrage",             "Enrage",                CD_ENRAGE,    GATE_F)  -- C2
+local mangleCD =                                                            -- C1
+addCD("Mangle",             "Mangle (Bear)",         CD_MANGLE,    GATE_F)
+addCD("Enrage",             "Enrage",                CD_ENRAGE,    GATE_F_PREPULL)  -- C2
 addCD("Frenzied Regen",     "Frenzied Regeneration", CD_FRENZIED,  GATE_F)  -- C3
 addCD("Swiftmend",          "Swiftmend",             CD_SWIFTMEND, GATE_R)  -- C4
 addCD("Nature's Swiftness", "Nature's Swiftness",    CD_NSWIFT,
@@ -281,6 +308,72 @@ addCD("Force of Nature",    "Force of Nature",       CD_TREANTS,
   { use_spellknown = true, spellknown = 33831 })                            -- C6
 addCD("Barkskin",           "Barkskin",              CD_BARKSKIN,  nil)     -- C7
 addCD("Innervate",          "Innervate",             CD_INNERVATE, nil)     -- C8
+
+-- Mangle (Bear) is the bear's every-6-seconds press, so it gets the "press it NOW" treatment
+-- the rest of the strip does not: an orange pixel glow the instant the cooldown clears, on top
+-- of the shared desaturate-while-down readout.
+mangleCD.subRegions[1] = F.subglow(false, { 1, 0.55, 0.15, 1 })
+mangleCD.conditions[2] = F.condition(1, "onCooldown", "==", 0, "sub.1.glow", true)
+
+-- ================= v2 additions =================
+-- APPEND-ONLY: every constructor below draws a uid AFTER all v1 ones, which is what keeps the
+-- in-game import dialog on "Update". Each element is re-parented into its v1 group by the
+-- helper it is built with (adopt() appends to that group's controlledChildren).
+
+-- R7-R10 Rage thresholds — the bear's two spend decisions drawn on the rage bar itself.
+-- Rage caps at 100 and the bar is 172 wide anchored at x=0, so x(v) = -86 + 1.72*v.
+-- Dim line = where the threshold is; the wider lit line pops in the moment you cross it.
+local function rageLine(id, rageValue, w, h, color, minRage)
+  local x = math.floor(-86 + 1.72 * rageValue + 0.5)
+  local line = reg(F.texture(id, CLASS, w, h, x, -27, nil, F.TEX_SQUARE, color))
+  line.triggers = F.triggers({ F.powerTrigger(1, minRage) })  -- rage only exists in bear form
+  line.load = F.load(CLASS, GATE_F)
+  if minRage then
+    line.animation.start  = F.animPreset("shrink", "0.25", "easeOut")  -- WA "shrink" = pop-in
+    line.animation.finish = F.animPreset("fade", "0.2")
+  end
+  adopt(gRes, line)
+  return line
+end
+
+rageLine("Druid - Rage Line Mangle",     20, 2, 16, { 0.25, 0.95, 0.45, 0.55 }, nil)
+rageLine("Druid - Rage Line Maul",       70, 2, 16, { 1, 0.75, 0.2, 0.55 },     nil)
+rageLine("Druid - Rage Line Mangle Lit", 20, 4, 18, { 0.25, 0.95, 0.45, 1 },    20)
+rageLine("Druid - Rage Line Maul Lit",   70, 4, 18, { 1, 0.75, 0.2, 1 },        70)
+
+-- B10 Demoralizing Roar — bear priority #1 alongside Faerie Fire. Not own-only: any druid's
+-- roar satisfies the -240 AP debuff. Takes the fourth bear buff slot at x=+66.
+local demoRoar = buffIcon("Druid - Demoralizing Roar", 66, GATE_F)
+demoRoar.triggers = F.triggers({ F.auraTrigger("target", false, IDS_DEMOROAR) })
+demoRoar.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+demoRoar.subRegions[3] = F.subborder()
+demoRoar.conditions = { F.condition(1, "expirationTime", "<=", "5", "sub.1.glow", true) }
+
+-- A5 Maul prompt — Maul is off the GCD and has no cooldown, so the decision is purely
+-- "am I about to waste rage": above 70 you have room for Maul (15) and the next Mangle (20)
+-- and still cap. Appearing is the instruction; it leaves when the rage is spent.
+local maulPrompt = alertIcon("Druid - Maul Prompt",
+  { use_spellknown = true, spellknown = 33878, use_combat = true })
+maulPrompt.triggers = F.triggers({ F.powerTrigger(1, 70) })
+maulPrompt.iconSource = 0
+maulPrompt.displayIcon = "Interface\\Icons\\ability_druid_maul"
+maulPrompt.cooldown = false
+maulPrompt.subRegions[1] = F.subglow(true, { 1, 0.65, 0.15, 1 })
+maulPrompt.subRegions[2] = F.subborder()
+
+-- A6 Tree of Life missing — resto priority #1 is "be in Tree of Life whenever possible".
+-- The form is a self aura, so its absence in combat is the prompt to shift back after the
+-- Healing-Touch/Tranquility window that forced you out. Gated on the 41-point talent itself.
+local tolMissing = alertIcon("Druid - Tree of Life Missing",
+  { use_spellknown = true, spellknown = 33891, use_combat = true })
+tolMissing.triggers = F.triggers({
+  F.auraTrigger("player", true, IDS_TOL, { matchesShowOn = "showOnMissing" }),
+})
+tolMissing.iconSource = 0
+tolMissing.displayIcon = "Interface\\Icons\\ability_druid_treeoflife"
+tolMissing.cooldown = false
+tolMissing.subRegions[1] = F.subglow(true, { 0.35, 0.95, 0.45, 1 })
+tolMissing.subRegions[2] = F.subborder()
 
 -- ================= assemble (v2000 nested), encode, verify, write =================
 local transmit = F.assemble(top, byId)

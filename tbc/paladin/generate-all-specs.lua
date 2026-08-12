@@ -1,6 +1,17 @@
--- generate-all-specs.lua — "Paladin TBC - All Specs" (v1)
+-- generate-all-specs.lua — "Paladin TBC - All Specs" (v2)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code).
+--
+-- v2 rotation fixes (no uid() call was added, removed or reordered — Update-safe):
+--   * SEALS gains Seal of the Martyr (348700) / Seal of Corruption (348704), the 2.5.1
+--     Alliance/Horde damage seals. Without them an Alliance Ret had a blank Seal Active
+--     icon and a permanent SEAL MISSING alert.
+--   * Hammer of Wrath is no longer gated to Retribution (it is baseline at 44 and an
+--     explicit Protection priority line); it now gates on its own id and only fires on a
+--     HOSTILE target under 20%.
+--   * Judgement / Crusader Strike / Avenger's Shield — the press-on-cooldown buttons —
+--     get a gold "ready NOW" glow (condition -> sub.1.glow), suppressed out of combat.
+--   * The whole cooldown row fades to 50% alpha out of combat like the resource bars.
 --
 -- Run: lua5.1 tbc/paladin/generate-all-specs.lua   (after tools/.../scripts/setup.sh)
 -- Writes: tbc/paladin/all-specs.txt (single line, no trailing newline)
@@ -37,6 +48,8 @@ local SEALS = {
   20166, 20356, 20357, 27166,                                           -- Wisdom r1-r4
   20165, 20347, 20348, 20349, 27160,                                    -- Light r1-r5
   20164, 31895,                                                         -- Justice r1-r2
+  348700,                                                               -- the Martyr (Alliance, 2.5.1 — Ret's default seal at 70)
+  348704,                                                               -- Corruption (Horde, 2.5.1 — the SoV-equivalent)
 }
 local JUDGES = {
   20185, 20344, 20345, 20346, 27162,               -- Judgement of Light r1-r5 (r5 = 27162, the debuff;
@@ -202,10 +215,15 @@ hsNow.triggers = F.triggers({
   F.cdTrigger(20925, "Holy Shield", "showOnReady"),
 })
 
--- 17) execute window: target under 20% HP AND Hammer of Wrath ready
+-- 17) execute window: HOSTILE target under 20% HP AND Hammer of Wrath ready.
+-- Baseline at 44 and a numbered Protection priority line too, so it gates on its own
+-- rank-1 id (known from 44 onward) instead of on a spec capstone. The hostility filter
+-- stops a wounded ALLY under 20% from firing a prompt for a spell you cannot cast on them.
 local howHealth = F.healthTrigger(20)
 howHealth.unit = "target"
-local how = alert("Paladin - Hammer of Wrath", "Interface\\Icons\\ability_thunderclap", GOLD, GATE_RET)
+howHealth.use_hostility = true
+howHealth.hostility = "hostile"
+local how = alert("Paladin - Hammer of Wrath", "Interface\\Icons\\ability_thunderclap", GOLD, 24275)
 how.triggers = F.triggers({ howHealth, F.cdTrigger(24275, "Hammer of Wrath", "showOnReady") })
 
 -- 18) panic button: own HP under 25% AND Lay on Hands ready (all specs)
@@ -219,25 +237,42 @@ adopt(top, gCds)
 
 -- 20-30) gated icons last so the shared part of the row keeps a stable position.
 -- Talent cooldowns gate on their OWN rank-1 id (untalented => icon unloads => row collapses).
+-- { label, rank-1 id, spellknown gate or nil, press-on-cooldown? }
+-- The 4th column marks the buttons the rotation says to press the moment they are up
+-- (Judgement 10s/off-GCD, Crusader Strike 6s, Avenger's Shield on pull + on CD). Those get
+-- the gold ready glow. Consecration and Holy Shock deliberately do NOT: Consecration is a
+-- mana-permitting filler for Ret and Holy Shock is a Holy emergency instant, so a glow
+-- would push the wrong button. Every other icon stays a passive readout.
 local CDS = {
-  { "Judgement",           20271, nil },
-  { "Consecration",        26573, nil },
-  { "Hammer of Justice",     853, nil },
-  { "Avenging Wrath",      31884, nil },
-  { "Divine Shield",         642, nil },
-  { "Lay on Hands",          633, nil },
-  { "Holy Shock",          20473, 20473 },
-  { "Divine Favor",        20216, 20216 },
-  { "Divine Illumination", 31842, 31842 },
-  { "Avenger's Shield",    31935, 31935 },
-  { "Crusader Strike",     35395, 35395 },
+  { "Judgement",           20271, nil,   true },
+  { "Consecration",        26573, nil,   false },
+  { "Hammer of Justice",     853, nil,   false },
+  { "Avenging Wrath",      31884, nil,   false },
+  { "Divine Shield",         642, nil,   false },
+  { "Lay on Hands",          633, nil,   false },
+  { "Holy Shock",          20473, 20473, false },
+  { "Divine Favor",        20216, 20216, false },
+  { "Divine Illumination", 31842, 31842, false },
+  { "Avenger's Shield",    31935, 31935, true },
+  { "Crusader Strike",     35395, 35395, true },
 }
 for _, e in ipairs(CDS) do
   local ic = reg(F.icon("Paladin CD - " .. e[1], CLASS, 32, 32, 0, 0, gCds.id))
-  ic.triggers = F.triggers({ F.cdTrigger(e[2], e[1], "showAlways") })
+  -- trigger 2 is the always-active state feeder that carries inCombat (disjunctive "all"
+  -- stays satisfied); trigger 1 keeps driving the swipe.
+  ic.triggers = F.triggers({ F.cdTrigger(e[2], e[1], "showAlways"), F.unitCharTrigger() })
   ic.cooldownTextDisabled = false  -- WA swipe text; no %p subtext (OmniCC would double it)
   ic.useTooltip = true
   ic.conditions = { F.condition(1, "onCooldown", "==", 1, "desaturate", true) }
+  -- LAST condition: out of combat the row dims and the ready glow is forced off, so the
+  -- HUD is still while you ride around (a later match overwrites the same property).
+  local quiet = F.condition(2, "inCombat", "==", 0, "alpha", 0.5)
+  if e[4] then
+    ic.subRegions[1] = F.subglow(false, GOLD)  -- index 1 stays the glow; polish appends the border
+    ic.conditions[#ic.conditions + 1] = F.condition(1, "onCooldown", "==", 0, "sub.1.glow", true)
+    quiet.changes[2] = { property = "sub.1.glow", value = false }
+  end
+  ic.conditions[#ic.conditions + 1] = quiet
   if e[3] then gate(ic, e[3]) end
   polish(ic)
   adopt(gCds, ic)

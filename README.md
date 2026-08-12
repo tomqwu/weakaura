@@ -24,13 +24,13 @@ use GitHub's copy button on the block to grab the whole string in one click.
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
 | Rogue — All Specs | Combat · Assassination · Subtlety | v41 | 45 | [string](tbc/rogue/README.md#import-string-v41) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v1 | 30 | [string](tbc/paladin/README.md#import-string-v1) · [raw](tbc/paladin/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v2 | 30 | [string](tbc/paladin/README.md#import-string-v2) · [raw](tbc/paladin/all-specs.txt) |
 | Paladin — Tank Starter | Protection (minimal) | v1 | 6 | [string](tbc/paladin/README.md#tank-starter-import-string) · [raw](tbc/paladin/tank-starter.txt) |
-| Druid — All Specs | Feral tank · Restoration · Balance | v1 | 32 | [string](tbc/druid/README.md#import-string-v1) · [raw](tbc/druid/all-specs.txt) |
-| Warlock — All Specs | Affliction · Demonology · Destruction | v1 | 25 | [string](tbc/warlock/README.md#import-string-v1) · [raw](tbc/warlock/all-specs.txt) |
-| Hunter — BM & Survival | Beast Mastery · Survival | v1 | 28 | [string](tbc/hunter/README.md#import-string-v1) · [raw](tbc/hunter/all-specs.txt) |
-| Priest — All Specs | Shadow · Holy · Discipline | v1 | 28 | [string](tbc/priest/README.md#import-string-v1) · [raw](tbc/priest/all-specs.txt) |
-| Mage — Arcane & Frost | Arcane · Frost | v1 | 26 | [string](tbc/mage/README.md#import-string-v1) · [raw](tbc/mage/all-specs.txt) |
+| Druid — All Specs | Feral tank · Restoration · Balance | v2 | 39 | [string](tbc/druid/README.md#import-string-v2) · [raw](tbc/druid/all-specs.txt) |
+| Warlock — All Specs | Affliction · Demonology · Destruction | v2 | 27 | [string](tbc/warlock/README.md#import-string-v2) · [raw](tbc/warlock/all-specs.txt) |
+| Hunter — BM & Survival | Beast Mastery · Survival | v2 | 33 | [string](tbc/hunter/README.md#import-string-v2) · [raw](tbc/hunter/all-specs.txt) |
+| Priest — All Specs | Shadow · Holy · Discipline | v2 | 29 | [string](tbc/priest/README.md#import-string-v2) · [raw](tbc/priest/all-specs.txt) |
+| Mage — Arcane & Frost | Arcane · Frost | v2 | 32 | [string](tbc/mage/README.md#import-string-v2) · [raw](tbc/mage/all-specs.txt) |
 
 Every pack is class-gated and auto-adapts to your spec through `spellknown` talent gates —
 import the one pack for your class and it shows the right elements after a respec, with no
