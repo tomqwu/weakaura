@@ -14,6 +14,11 @@
 -- v2 (rotation review fixes) — see README "## v2 — rotation fixes". New elements are
 -- constructed in the block at the BOTTOM of this file so every pre-existing uid() draw keeps
 -- its position in the seeded stream; they are re-parented into the right group there.
+--
+-- v3 (spec-selective loading) — see README "## v3 — each spec loads only what it presses".
+-- Pure gating: no element added, removed or reordered, so every uid is unchanged. Barkskin,
+-- Innervate and the Innervate prompt now carry an INVERSE gate (not_spellknown = Mangle (Bear))
+-- and no longer load for a feral druid, who cannot cast either spell without dropping form.
 
 math.randomseed(20260812)  -- FIXED pack seed; append-only uid order across versions
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -43,6 +48,21 @@ local GATE_B = { use_spellknown = true, spellknown = 24858 }  -- Moonkin Form   
 -- Enrage is a PRE-PULL rage generator (it also strips armour), so it loads out of combat only.
 -- WA load booleans are tri-state: use_combat = false means "must NOT be in combat".
 local GATE_F_PREPULL = { use_spellknown = true, spellknown = 33878, use_combat = false }
+
+-- ===== v3 inverse gate: "load only for druids who do NOT know this spell" =====
+-- There is no negated form of use_spellknown (use_spellknown = false means IGNORE, not "must
+-- not know"), so WA exposes a separate `not_spellknown` arg — verified in Prototypes.lua's load
+-- prototype: test = "not WeakAuras.IsSpellKnownForLoad(%s, %s)". Requirements:
+--   * WeakAuras 5.4.0+ (the arg does not exist before that). On an older client the unknown
+--     field is ignored and the element simply loads for everyone — the v2 behaviour — so this
+--     degrades gracefully rather than erroring.
+--   * do NOT set use_exact_not_spellknown: with `exact` falsy, IsSpellKnownForLoad resolves the
+--     rank-1 id through the spell NAME to whatever rank the player has, so one id covers r1-r3.
+-- 33878 is Mangle (Bear), the 41-point Feral talent every other feral element gates on, so
+-- NOT_FERAL is the exact complement of the bear HUD: what a bear loads, this hides, and vice
+-- versa. Mangle (Cat) is a different spell NAME (33876), so the name resolution is unambiguous.
+local NOT_FERAL        = { use_not_spellknown = true, not_spellknown = 33878 }
+local NOT_FERAL_COMBAT = { use_not_spellknown = true, not_spellknown = 33878, use_combat = true }
 
 -- ===== verified spell ids =====
 local IDS_LACERATE  = { 33745 }                                -- 15s bleed, single TBC rank
@@ -267,8 +287,12 @@ oocMissing.cooldown = false
 oocMissing.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
 oocMissing.subRegions[2] = F.subborder()
 
--- A4 mana < 20% AND Innervate ready (no spec gate: any druid should press it)
-local innervatePrompt = alertIcon("Druid - Innervate Prompt", { use_combat = true })
+-- A4 mana < 20% AND Innervate ready. v3: hidden from feral. Innervate cannot be cast while
+-- shapeshifted in 2.4.3 ("Cannot be used while shapeshifted" on 29166), and a bear's mana neither
+-- pays for nor gates anything it presses — so in bear form this prompt sits lit for whole fights
+-- asking for a button that would first cost the tank its form. For Resto and Balance it is the
+-- mana decision of the fight, and Tree of Life explicitly whitelists Innervate.
+local innervatePrompt = alertIcon("Druid - Innervate Prompt", NOT_FERAL_COMBAT)
 local lowMana = F.powerTrigger(0)
 lowMana.use_percentpower = true
 lowMana.percentpower = "20"
@@ -306,8 +330,13 @@ addCD("Nature's Swiftness", "Nature's Swiftness",    CD_NSWIFT,
   { use_spellknown = true, spellknown = 17116 })                            -- C5
 addCD("Force of Nature",    "Force of Nature",       CD_TREANTS,
   { use_spellknown = true, spellknown = 33831 })                            -- C6
-addCD("Barkskin",           "Barkskin",              CD_BARKSKIN,  nil)     -- C7
-addCD("Innervate",          "Innervate",             CD_INNERVATE, nil)     -- C8
+-- C7/C8 v3: both carry the "Cannot be used while shapeshifted" flag in 2.4.3, so they are
+-- caster-spec buttons only. Barkskin "takes you out of form when used, making it only usable
+-- while you are not actively tanking" (Icy Veins feral tank guide) — i.e. pressing it mid-pull
+-- is the mistake, not the save. Tree of Life whitelists both, and a moonkin can drop form for
+-- them, so they stay for Resto and Balance.
+addCD("Barkskin",           "Barkskin",              CD_BARKSKIN,  NOT_FERAL)  -- C7
+addCD("Innervate",          "Innervate",             CD_INNERVATE, NOT_FERAL)  -- C8
 
 -- Mangle (Bear) is the bear's every-6-seconds press, so it gets the "press it NOW" treatment
 -- the rest of the strip does not: an orange pixel glow the instant the cooldown clears, on top

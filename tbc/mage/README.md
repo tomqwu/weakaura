@@ -1,4 +1,4 @@
-# Mage — Arcane & Frost HUD (v2)
+# Mage — Arcane & Frost HUD (v3)
 
 Programmatically generated WeakAuras pack for TBC Anniversary (WeakAuras internalVersion
 45, tocversion 20501). One import covers raid Arcane (40/0/21) and raid Frost (10/0/51):
@@ -10,6 +10,56 @@ code-review panel. Import `all-specs.txt` (or the fenced block at the bottom of 
 whole: copy all → `/wa` → Import → paste. Heads-up: the `/wa` editor preview force-shows
 every aura at once with placeholder data (load gates ignored, identical fake "55.1"
 timers, both specs' icons visible together) — judge the pack in combat, not in the preview.
+
+## v3 — per-spec audit: each spec sees only what it presses
+
+v3 is an in-place update of v2 (same UIDs — the import dialog offers **Update**, not a
+duplicate group) and adds, removes and moves **nothing**: it only changes which spec loads
+what. The test was tightened from "can this spec *cast* it" to "does this spec *press* it as
+part of playing well", which is the question the HUD actually answers. Three elements failed
+it somewhere:
+
+- **Frost no longer sees the mana conserve breakpoint** (the amber line and its lit crossing
+  marker are now gated on Arcane Power, 12042). The line marks where Arcane stops spamming
+  Arcane Blast and starts the 3x Arcane Blast / 3x Frostbolt conserve cycle — it is a switch
+  between two rotations. Frost has no second rotation to switch into; it is Frostbolt spam all
+  the way down, with Ice Lance while moving. Its actual low-mana actions are Evocation and the
+  mana gem, and both already have their own prompts carrying their own thresholds, so for
+  Frost the line marked a mana level nothing was done about — and the lit marker put motion on
+  the HUD for a non-decision.
+- **Arcane no longer sees the Ice Lance / SHATTER prompt** (inverse gate: `not_spellknown` =
+  Arcane Power 12042, the 31-point Arcane capstone and therefore a true spec discriminator —
+  no deep-Frost build can reach it). Ice Lance is *trained* at 66 by every mage, so gating on
+  Ice Lance's own id hid the prompt while levelling but not from the wrong spec: 40/0/21
+  Arcane loaded a reactive prompt it never acts on. Arcane's rotation is Arcane Blast with
+  Frostbolt as the mana filler, and the Arcane guides state outright that the spec uses
+  neither Ice Lance nor Frost Nova/shatter combos; it also has neither Frostbite nor the Water
+  Elemental, so two of the three ways the freeze window opens do not exist for it. Frost keeps
+  the prompt — Ice Lance into a frozen target is its one reactive button outside a raid.
+- **The Evocation prompt is Spell Known gated** (12051), like its cooldown icon already was.
+  A cooldown trigger on a spell you have not trained reports "ready", so below level 20 the
+  prompt fired for a button that does not exist. Neither spec at 70 is affected.
+
+**Requires WeakAuras 5.4.0+ for the inverse gate.** The `not_spellknown` load argument does
+not exist before that release; on an older client the unknown field is ignored and the SHATTER
+prompt simply loads for everyone, exactly as it did in v2, so the pack degrades gracefully
+instead of erroring.
+
+Everything else survived the audit unchanged, and deliberately so:
+
+- **Both specs press Icy Veins and Cold Snap.** The Arcane raid build is 40/0/21 — "Arcane
+  IV" — and spends its 21 Frost points precisely on Icy Veins plus Cold Snap, so it can use
+  Icy Veins twice per burn. Cold Snap's *glow* is still the Frost sequencing cue (both Icy
+  Veins and Summon Water Elemental spent); for Arcane the icon is availability only, since
+  the mage never has a Water Elemental to bank. That is a condition, not a gate, so it is
+  left for a future version rather than smuggled into a gating pass.
+- **Clearcasting stays ungated**: the standard Frost raid build is an Arcane Concentration
+  build, exactly like Arcane's, so the free-cast proc is a real decision for both.
+- **Ice Block, Counterspell, Blink and Invisibility stay** for whoever has them. They are
+  emergency and utility buttons both specs press under pressure, and each is gated on its
+  own id, so a build that lacks the talent never sees it — no spec gate needed.
+- **The mana gem prompt stays ungated**: both specs gem in their regen phase, and the Item
+  Count trigger already hides it from anyone without a gem in their bags.
 
 ## v2 — rotation fixes
 
@@ -73,7 +123,8 @@ only and only appears when you have a hostile target: it runs green, turns orang
 threat and red the moment you pull aggro, and a pulsing red overlay flashes across it above
 80% threat — mage burst has no passive threat dump, so the bar is the warning system. Health,
 mana and the conserve line fade to 50% alpha out of combat so the HUD breathes with the fight,
-and the lit crossing marker is combat-only.
+and the lit crossing marker is combat-only. Since v3 the conserve line and its lit marker load
+for Arcane only: they mark a rotation switch that Frost does not have.
 
 **Buffs** (static timer row under the bars). Arcane and Frost are mutually exclusive at 70,
 so both 40x40 centre icons share the one slot. Arcane Blast stacks (self-aura 36032, 8 s
@@ -90,13 +141,14 @@ right, each appearing only while the buff is actually running.
 from below and flies away upward when it resolves, and the stack collapses gaps
 automatically. Clearcasting (12536) fires on the Arcane Concentration proc in combat — the
 next spell is free, weave it immediately. The Evocation prompt fires when mana drops below
-30% **and** Evocation is off cooldown. Barrier MISSING fires when Ice Barrier is absent
+30% **and** Evocation is off cooldown, once you have trained it. Barrier MISSING fires when Ice Barrier is absent
 **and** its 30 s recast is ready, so it stays quiet during the cooldown instead of nagging.
 The Ice Block prompt fires below 30% health **and** only when Ice Block is ready. The
 Invisibility prompt fires at 70%+ threat **and** only when Invisibility is ready, in a party
 or raid. The mana gem prompt fires below 70% mana **and** only with a Mana Emerald off
 cooldown in your bags. The SHATTER prompt fires when your target is frozen **and** Ice Lance
-is castable, with the freeze window running as the icon's swipe and bottom timer. Every
+is castable, with the freeze window running as the icon's swipe and bottom timer — for every
+build except deep Arcane, which does not use Ice Lance. Every
 prompt requires all of its conditions at once (`disjunctive = "all"`), so an alert appearing
 always means the button is pressable right now, and all six are combat-gated.
 
@@ -115,18 +167,27 @@ resets have been spent.
 | Element | Gate |
 |---|---|
 | Arcane Blast Stacks icon, Arcane Power CD, Arcane Power window | Spell Known 12042 (Arcane Power) |
+| Mana conserve line + lit crossing marker | Spell Known 12042 — **Arcane only** (v3) |
 | Presence of Mind CD | Spell Known 12043 |
 | Icy Veins CD + Icy Veins window | Spell Known 12472 (loads for deep Arcane *and* Frost) |
 | Summon Water Elemental CD | Spell Known 31687 |
-| Cold Snap CD | Spell Known 11958 |
+| Cold Snap CD | Spell Known 11958 (both raid builds take it) |
 | Ice Block CD + Ice Block prompt | Spell Known 45438 |
 | Ice Barrier timer + Barrier MISSING alert | Spell Known 11426 (rank 1) |
-| Ice Lance SHATTER prompt | Spell Known 30455 (learned at 66) |
-| Evocation CD, Counterspell CD, Blink CD, Invisibility CD | Spell Known 12051 / 2139 / 1953 / 66 |
+| Ice Lance SHATTER prompt | Spell Known 30455 (learned at 66) **and NOT** 12042 — hidden from Arcane (v3) |
+| Evocation CD **and Evocation prompt** (v3), Counterspell CD, Blink CD, Invisibility CD | Spell Known 12051 / 2139 / 1953 / 66 |
 | Invisibility prompt | Spell Known 66 |
 | Threat bar, Threat Flash, Invisibility prompt | party/raid only (`ingroup`) |
 | All six alert prompts | in combat only |
 | Everything | class MAGE |
+
+Only six elements are ungated after v3 — the health, mana and threat bars, the threat flash,
+Clearcasting and the mana gem prompt — and every one of them is a decision both Arcane and
+Frost make. The inverse gate (`use_not_spellknown` / `not_spellknown`, WA 5.4.0+) is used
+once, on the SHATTER prompt; `use_exact_not_spellknown` is deliberately left unset so the
+rank-1 id resolves through the spell name to whatever rank the player has. Audit any future
+change with `lua5.1 tools/spec-preview.lua mage`, which decodes the shipped string and prints
+each spec's loaded set.
 
 Two IDs are worth calling out because TBC reshuffled them relative to the classic era:
 **Cold Snap = 11958** (8 min CD) and **Ice Block = 45438** (5 min CD, Frost talent). All
@@ -143,18 +204,19 @@ numeric item ID, never a name.
 `tools/tbc-weakaura-creator/scripts/setup.sh` once beforehand to fetch LibDeflate and
 LibSerialize). The script is fully deterministic — fixed UID seed 20260816, no time or
 environment inputs — so rebuilding produces a byte-identical `all-specs.txt`
-(sha256 `1591bb6903427f0c075a40dd988651113acdbdb7ea57d5d4aee5228564761e88`, 7224 chars,
+(sha256 `564fef30f0552bd3df8e5dbf906d4bbed5cc54aaa812e36b45548386d74ac8a1`, 7253 chars,
 32 auras). It round-trip verifies the encoded string and checks UID continuity against the
 committed `all-specs.txt` **before** overwriting it; `changed` must stay 0 so in-game
 re-imports offer *Update* instead of duplicating the group. v2 added six auras and changed
-none of the 25 v1 UIDs (`stable=25 changed=0`). Future versions must keep the
+none of the 25 v1 UIDs (`stable=25 changed=0`); v3 added none and changed none of the 31
+(`stable=31 changed=0 parentSame=true`) — it edits load conditions only. Future versions must keep the
 seed, never reorder existing `W.uid()` calls, and append new auras at the end of the
 creation order. One import-time note for users: the Update dialog's *Arrangement* category
 is checked by default and will reset any positions dragged in game back to the string's
 defaults — uncheck it, or report the coordinates so they can be baked into the script.
 
-## Import string (v2)
+## Import string (v3)
 
 ```
-!WA:2!DV1AWTX11zVgw1sq2juuw0wkw2WkMkIo2YGae8LLscaiOiPjbHwaskzRAGfaxGDfxS7QDxWxP5ftCQ67wwx34PPnj0nUTz6pQzZKXDMmTnSj1TDYm9u(JmBBtM2rTjn9DRY003D65E3DXlcasltn2s)Gl39EV7DV798D(UFNZDb3SDM7Z(Wx9H3kRqU5ZRRQfvvwvFcpE8KWJ)thsRZCQkM6QYYK8rfLKZRtuU8wtjuK47j8ngrq2uCdNRMsqrWTMuI6ebtTdx3L(gvwWqu7O10EFrvvmi6lq8nPKcr7bArvMxlRQEEIEeNXOwhrKLwzfb98(sPQkBkPPV00fkyqm5YQjGdrtNNsQirXUlSEobfIVt6BuDvdZS29LO(Y23YvwxNuusvj1YAe(I6QL1w3UfjLwHSVnKukOQxsWeBH3nSRWEkIJJZZwcLnfv1NwJwTH3S4KvbPIE1fYXkOFEdtbDtVzliPizi6nc(ptVRAQlvSir3i(j1Do9fJysF6cL1fcSj9OHgrwwkVXX60FKY4nLvtwyzI(QSYhpVH3Rzuolzb8nnz5cfKwAJ0rdNmv6KPcZNQsvj0jyv8jteBYjVEzdsSLWXvs7EidVIqjIH31ZtYI9a9LxFSytMy0zMCTYkodlVBKxY4YLvW3MfibeKL1oKa78u21pLAEYV(D4mDflFrI2HsELYObW3OLLL9nNOKjzt7ATNRpWAcks2tM9dpWOBsemijnrdwrtX7goEefvfYw5X3FAlstNt0ni4KAEJvPnLokH(IusqszuiiEdqFqiOFya8)hTXswZGixiHQKIz2OXINkg)jKYR1HdcJNyOwwphX46y9eDfb5zXhf(qF2nkOJtm4GsWuWZ1fuYH23rPfrF4ztgLpwS4RBQMBb72V)ehjqzP8BCQIHUYkMxqlvKH4nYjit8SoAg4zildxGZ4iI20Z60xijBetezvH8E3W(XWgSWWx1)6gikE(5KYBkEK1LWMNKnyFW7aoih8o)M3bmgm8wS2WRAYMR40ouDxtTmrcptQPJqVDr4D9CNeEWxeNE8bVB4r5zWJS2(VyrpcCcVRIaK0uOwgOB4KWP8c9apg8E9w79btRDFZGnXxurbkgNOlzykLZWPlGZ3W9cpo8eWPrecDqKoNlZIh4mplmem8QzfC8LsCx(pDVHOhhyq6XaH8GatdbtkuGiUj7DZgcDroyKH7co(gu3eSdsJ)D1U060KSKzAdrH8QlEbhUG1yLrpO1r3iukh(slYEN7UBToQ5gQ6qFn7sDroWuAhMvc6NRsXT5ygLiHXlVoRc0bJKNv4hBlBR4fDE6BYQ)YLXzOclddVUo10qsHfgj(0XJbhxhbi02SoRHvNDSh2fqExTogvxAfFNVSqEkC0xQuA(R8oL2MxkDDVyPZtYHoyYP10XtmyiJANAChCBXkBrevoNUG2QZ5CYwvE0mcHPNj1KJhpMZCvnG0ngpE8y8P5h)CJLsRNDyiHuQk5zoZ8fKvv1TNywahDzLjzQ(iP8Th1zs01eQ19o052fMnE5szXflGJVgoPA7STL9)Cg2bqyIBjQogiNlZv167uI7yZXTnnbP2a)UxzGJtpzfjsffnpoCUzxJ65KdxBZitwt0ZxXSl(sLXvL8YZk9KznKukktImv4ZfdwTl45Zeb5XZ1fSQ3i0oJEY1yq8i4DNN67gi8iJO1b2XHZtrqK8K8tjSKiCpWtztoeTQZ0r82ylLqp(o0DCqGU8wR)Zf4wJ5nAiLNWZmGqakxCJ8PdUZmSW9J3Ox4OEHJ5Dd2Jym2KYz1P2RY6e(OYebfEbznrbp2dIu21ODQXP8UfeYrUuub0frPyeb9lnZ4pr1REIKmgn2TjcFaKPfzWbprwrvTehCwp8lsD7(QEH3h8(HWBqkUu2jNU)WtAmLUKcLEMi6mQKYNNOWhp2SX43qvxcTqmsY1hBA(XFMPJNk8KWOdFs(CIKCZpk8G7B1fe0LeqeWQskrvlLvWKFbb5YeUtOQDIZEw9CIckfjgh7KWlZujTQgkkHOBUm8cNe(Syp4b(CBvhofE5teYpE3DEg4xMEBtWKx1p9qVEGppKQY9bVc22G11wARgIrrgW(i7oGd796urBfz(xvOWOnEGR6hg)iWeoly8L5Olyapnhmjmfe3z1GVuvwD(eQls0PS4RPrpJ6RYvhH(wumEL6Y001ga(DADaizT0)qQjS56zZH0thkKhygrywhkEyUR2fCbo4Ix3L9Mnc6UB4zzURWLWxNFq45G0FmidhiGDzwihEF5bI9dQaueK40ovRiry9xneuWvGldZdYqjqbub9mApA7Vv7YGfaJJciB1t2(wVDYzKXcwewcwgwHd(G2Vv)qzGpe4h(WEGpcLEb(OzGpgLIa(4Ne(eWZBZGaFswr)WSJxf(rGFug5a8J5Yja)4iha8tGE)Wpjh8tb)07jU5WpZzH1GFw4f8a)CWlc)8v9lVl4trDkHxQId54rEg)90ZqdmXa5GFbr4td)IWVe8zGrpMnwFFiwFD4LD8PSH6mKacUFbeCd)kTao)PVZgHZXRfiUUjlAdQofKowViXebIxJIFRwrgkkDAToCcmjPKzzgJad2URXSdspeS5q2n72(PPLZScEv7X3g8OsJAc2O5WBThPnDsf4428bQfx3KfvR2f15mWq1OBWodtxaHPBqNKrUBAmuoywDNlXZpjCOmr0fKYN5T3a59TnGC0srMBOZpYktp(O1bKFSkK2Rvz(djVhGsEFI33z3jMEEHI4Cd8YEQ1dO1K916p4JofDDNvzPc3OAg0UVOtgEQeOM)jdh9PrbeJNA8zJz7D8776DSvvhbC0Mb(nGxLYtVrg4lFIb9JUfOCXkyb6IAcMQ60xMPHFZM5DCyuKJTue2BO9bCCpyi00LTKKUUQUiZNTdC(UlVRL1vIdAQh1BlSLfGJNfDeq5kSRXQ)ARZurKOSSbzv3ie7Sx2TSndT2HW4wZPtmjP1DdqQoJ)AAdxv)r485NwX4sZreMpmn07lnfjVKWLCuQyCj7qAtZIM90MffyifkFacsqkbkM5hGsm9cuMGvR(adVHWtxirSrvNRWCLyqjkT1hP7S2rciA70aVMl9(V139LATNXlDxh02Qd)2WVZ2wah(vzl9(Rv)I2Wx4gEHAeUTjAsPbKXO6yyXquBk87jYuuyBoHVkFKjJfFKDjR(nSN7Fqd2p4pSjwH7go4zUtBZa8hrN)NZFHXs80HgQ)PMP68)JaFDXD3YQV0(QDkN6g9DCNe1osDlSxXr5mNDZARafY5ACyA0RtoqMwBVATDWttmbv9Kq)g4RbdOttwY0Lnzooznerw45HxpcDDl2mAtMXDUthNTifeqh0xpaEhSMSRM(3FJt)lmv8PUWiLNCKfIwd8Nn9xOY0)6SONyISBZcdV0bU6ddCvsljCNtODmNu54KDViyOw4k5MOIydToDQB8Cyfc6OKF9gBptYRV5KuWOI1U)kTFzFZsKumCQaoa4L6AFpW9cVdCs)EOt6hc6CFudZ9zVoiApqJqTtpv0J8qWdFSo976Sr99Og63tMM4W9K4sP9EGBCheBBWMoVhrkJX65yDOZ8mJv4ncnzPqtifD05dXdr9aJ4fI5HcDoNxQT5QVBMel895DYcyyRCQQY4KGsYfLqn)B6EjnrFIT(fMpy)(dgyx9sFMN96ZtiAHPrdBYtPnfzISqa0it8n2QOS6IJQtUszIsULTLDzN1eAfBI4MZj7K7MmRslILb3eslrKxNE5KS0kEKnON7M3J1k6ElmDC9hYwcNhwJCt6qe6fISMMKLkp2ijLOuU5viggEy1qtyTXHypOi2ju(QhMP87eDB8gm(KA0Mnmy8i2sUQ0BA3W92M2zPjY0Psn9uGX9B3XfyA5AQoUZBVKetSmltZZRG2BxEYp52ylxVAJ2)t66Q2beh9x(wu3MWBmzIexrmxOeJfsLsKrhLFk2u(QUOPmveE9NQDFUfsx7DejdAi4OCrKs5Lopepd1pd1Fz7Jqb(h3MUYXhPHso62kH6j4UofQ)kRbJSaE5odw7QvzGppn1TNU3ttTTuh9Z6Prxd4Vid8x2AFGlZ3BV9fOF(Ed6pyVSJbyhdYhyGEd2hFWG95p0U0dbUwvFIH)gWFLRFa8xdF7mW3b(BGV7rG)wo4VJPCSpBTx408Fph8pic)JEG)jpW)8HG)fX9aaf8VwjIGDgfbxV1ah47T)hF9MHxIpEYIxyKsJD(II1JxG)TQaL)m47FtduCnYsAs2QltjvIGGJquWXzQcoG)JBimXX47nG)(cSNB19uXStZEYBDw9y7kR(2zjUhp0C3TcPNfNtjVXqbBTz)p31ShBV3SBXDh7TM6(g4nPPgnJFBMLSIH2JTxnfdGw3VZwzlBAQQm9ceDzHLFBP12)R1O1wan2lp6ydTCS(6rrzQwBS)M75gBVo2s)rWOUx8eZKaUZvQSd10evJ6czPEUIAWylOMJXe4lHUAjntTUCLxzlP03uJNm54XpxnYhP6qvZnV7n4Q5CCf2wkijlzUCJDgBZUphPKB5pqnD2Kck4XKJfovQy8mXOum4xHHbTLFstpEoY9(Mv)5gyq8LlPKK2z256kRTSbEbzPIOUeDCXs6w(YrvnI6fRQfx3ElDjzyQKJ6bJaErN(bLmt112XM5xwrOKuowQGq1Zrmu1nH(wROUK9ENDWvPNs1VDc(r4LLkjzEq6gsoj9mXRLtvbF8kMJkKddYklF4rgFMKz1fYlv24tCpOU51qJNTCVprxUqi3VfHWYeDtJ1luwwoQKEozCG6Okgdsb1)Eq53eYUrGPnWk8gb658Nk6LV8c9oZPUb4lcfS)BclnWed4e3iDPHmVvjiOA8EGvBcZJXtyX9W2IbgTNIJ33SKloe)cTKOWI7UBHAa3iA3Ifr7ggYs5jzvrkZsSaBd6gjCJShxTJ1yBGpfnULHPUaDlTyXbahpBUYgyhKL1GLzR8sFc2xVK91VEN9cVahBtbzfNPZLZFGoxIBnwcSO96QU9k9zVfEUIHmDRHXQ0oKBDPClghy2jTZTGmS(M1BzQNA7rHj4ApQ75QnjgWFCNNbGAYrb8NKPT5q6QhIhhf5MpcD7W1oeDyuKOq0LYLuuDXPvYSvDxUHb7F8eH8lZ2Cjw4cXfkr2)tEy448SlD(UcoAuhP)uAWI6yyw(of7tvPhTozPvUOIQorfxSdjkiz2sNiiN0T7wRct9wvcDHwoln)0rV97YAotJ5MpJ2HPNtOFqm128w6O9y7OY7GSmZ6Pj(z7PEg0Vih63c04iNO2jQMet61gxInJKoo97MGKorz9IeBpPZFXIsNA6lsMnbPrpjXQEs7Fx5jzX9OWRBX1DR9FS4oPf37boUf3PS46PIxIf3JvRhIf37111WI7XT4EcApzXDAlUNe7llo)zS469gcG)korHb)NW)f8Fd)pW)l8)TfUevorIHnYClBK5usg0TMVDeVmuVfxalUGwC9HdPqwCmMAlUbOXWGVKdAdHT4gYIBySfp1g1K2jlUZ2ak0I79Hn69)McSvFyEVbqBFshrB2qRMd7Am2me1zX9b081CWg(UMEs05rX0gQfo(yp9Cbwz0EdnABGAh42eOwL9vbEfBE0emWecFqBo1EF(m28K191aKrRR6)kwCZFmYhVlGDV6hUPWU1Qi)8MaOZod02rzEtc1HVwBh19inh1X(soTpAd7gmYY8JoFI5hT8qTb2592oy3VB9BH3a0TWd(kBFd7AhG65BkCAZAdAzVhrXeN2xiN9f9niG6vyBwwt2(gBC2R5c1qq2375BcQQNgrvHTFnttJziDTV42ORPIoGQQWqblSC7i1o4TbOlLMiqCGDTaXVeC8isMKs0BMcZqHDpqte2no2KESjjDaIyFTjtMhwdtk2QUNT)zFWQ9)3GoPKW(dUtTSIzgBq760o0xuAj0V1dwv1U512siTv7v5jGpCEwlXzt8XBXXJtyjR(4UH5jd6WtAVLP3SfesHZD3iCE84ZMgf3Kl95iLsN0uvHK2FV2qz)pZsgIdo7iR8mbBdu(EUnHO0jc7vc0BGabgS)qr6VxAg59hiOF(ad4FWbPPQBiAg5doenJ8VAt0bQpwy(PgDMj3PLLx4FV1llZsKZncj6W7iCleJdDipVfhH)UBnECoA7W3tUJRXZ2CxB87ipJIQG(5oLuOrAtsbU332JF9BX9daFg4o)cojcm6inS30ojpKvEc63cdnvGQf8nLKsEN8wYQRYEwR5RAHjlxQKQIV5eWjwFXKju95cY1EBrrwzFjve0QVVCuqwBHvcUU2rkJSLOZID(6vloISKY812U6wl1nbMp(DvtgmT4Ehh4nB6lT4ENUFHEwChIEOZTNOslUd7MJslU7RA2jT4oc05(S46c6ZI7(pOf3dCc(rS4okE2XeT4ExwCpOf3Xz5z0I7HQMGXk)ysCxHZWIZxJjxKBpj3Itn4vgzXzn1004PeF7uUfFUTZtTonI3WYlkSSHlF1t6T56(Qfe2wkR3WFvrVH1hwxYlf3LRHg(gyNOS40OFiko)AYY4SzKdiFXjxqpKzWfBdvtb47lYOAcVxTtfv)UcxxvXfC1W3jiD3PMbBx)Wd(43b85ceo(izzF)6gpw)o7O1cWlJlo5(fz5z77Q1JU7Ys92wXtVcc6GnfbP1rJ8vVjdFyh3lmlU7AVcwCWgGfwCMoWb1ItQrgzHOdoWkTbouCphou7UuUqZGb7EZ5Z1wZP)xRvcyCwH52x2G63PY6m7kRm7GP6P0qN)zc1gZU4nrwGwy2R69BXTOf3s7Po(ThP8bF9M743vZ1DC7lUbNiAfUP3jJjhC5yZotQEBdUr62mCJsBXnN(l1CgMkIr3jKsdD91SZJFL1iBprMf3h8ny)BX9r3biVf3hAhwClGGYY3Gj5VM462BHTODOvWwZbdDb9fsPmt)XBdS9YV1dBhE7W2iu4aEV4v3nTMp(nhzpTi)7wCtCRJoNgt2EniGyblpsEdXGYdfTniG5F7SoNDq26HBH97m3cPt9WT0(LqYmx8CZvoirVn2p5BzTFFXwSFf1MsIBzmKFXNVL2Xl07efNyUEJTSz7c)S0TS2X7BLMAh5z5q6wgdi(w0kdyQleUNq6ZhiL)EAJbu5wwd4Z3cA0PULX41ANVSbMIeFGbtQKA82y7uFRY21zPoZ3z(R(q1)BIcEk4BXYPUM7pCj6pAPV((F79pAj4E3(VuPLKh8YkgpDjPbMOj)sL60Gp4PdDA)DUWD9H()d
+!WA:2!DV1AWTX11zVgwXsq2jKuw0wkwXWmMkIo2YGae8HIusaabejnji0cqsjBvdSa4sGvCXUR2DbFLMKAw7u23TSUPXttBsOBCBZ0F0GMjJ7mzABytQB7KzYPSDYStBAZunTjPVBvNM(Utp37UlEraqjk6Xw6hC5U3x79EpFNV739CxWnBxz)0pY6pY2zeYUqonf1WkskAt4YLR4U8E6aQDLvr2qtrsIKlCbrPCAe5RS9uc5jEEspJreKmku2(PPeKfCYjzbnIGH6rQ7rprLe0lOESAkVNWkY6eTfjEMuuMO(qTilJRLrrlhrlKDFuTJqsIRUQGwopjvuKmev1wE65NxNyWLrva7Ig2VLKHcJnxqTScYepN0tunfDJmwTvbTvSQYv3uJKxuro5kQe(8AkLu30QejexLCGYIYZROvuWalH7YwzynfXXX5ABHsgfu0MwLMTU7m4K18I5DRjKLLWG86gcAgUZmVOSOEb3HW)z4EndnX85jA6XoPM9TF8qg03UqjnbFBrVQRsKKeZPF8U8gQewPmQscRq0wJL(450DFn9szilIJ0eLMFEXLlNkCWejtLizq(KvYkUgbZIpr8ito51lPtISm2Vsy1cP5Lfks0DVzosgSfOdETXImz8OZm5gLKT7wUlNtu)kLKXrZIeFcssQDkWUpPv(tPKJ8RDx2txrYLNO2zIRwcnaEIwssYZCfeniBzLR1C9H2qqw0AYCq4HIUfrqNKWany5nkCVWjcjRit2oho(PLifDortNGtQ50xJwuAVegiurbr5OGFScWaqayqyi8)hRXu2qNinFCfrzJmHJelze(EeZP2HncJNORusllr)6y(enzbPzXxf(sF2YZRHtmyNsWqW11fKZI23O0KOV8mjcZhjsSnnuYUOv5py8J6RKyUYNkFGRUQXfvtgAeE9ScsexBIMbEgYs3b4moIOnCTjDajAHycjPiKZDzRxdRZcNzDVBQJO4fMtmNrHJUPiw8eSo7dFxWH5G3X38UGXGZSnRm8kgS5ko1oR7zQLjuWzsoDiA1laVZN7KWd)XXPhpW7gEmEg8iJL)lM0Jc94EneGKIc1sd9cNeoLBOp4XH3R7ARhmT6dmdwepHliqX4enrDdXS62nbCHgQl8eWtcNgri0orQSomlUGZ(SWiWzwlJGTVu87X7P7pa96qdtV6lGleyQlyqHcKcBXgBwqOlXbJEMUHtuM6MGnqk8V17wTldYYgP0liKtzPlAZfSbln6f1o6fHszXbDb2yU3Ev7OMku1H(AwP6GCGPupclf0pxHIBZYmkHcIpEDwgOdgjhlXNFBlR4LSF7BXY)kLWzO5xboZMAutdjjMyOythlcCcneGqlZMScwD2XQBppY7Q2runXv9CHsc5OWrpjtQ6TYykLfVuQ6gyPYrYIoysPu1WB0ziJANAC6CBZsBjevoNMG6AZzFZ2vE1mcHPNj5KJhlI9CvnG0YJhlwe(u8JF(XsQ23U0Lqkv5CmNz(5Luu0SMywe7DzKiPR(kP8ThZEs0XeQ27U04wjMjwPIzWflGtSboPA5STT1)S72(qyItkk2gi7hZw16BNItFZ2TnfbP2aVopPJ9txzkqeZxW4eW5NDdQNtwCTn90zmqpFzJU5lwcxvYnpl1tMrxuoVej0ubpFeyTUHxmDiKhpB3WAUdrBm6nxJbXdH1oh131xWrhvTdSHdMJIGi5i5Msy5cW9bVplYHWvDMoQ7glPi6X3HMTdc0T7A9FUi3gmVrDXCeEMbe8r5IBKpD4DNHfEqSIUHJ5goU7YSxXySjLZPrTxL0i8HLicY8csQfeCz1jsALJ6PgNY7oVqwYLdlGUiY5djOD5zg)jR(0tMGXOXQwb4dImTido4k0Qkkf5GZ5IFjQB3xXn8(HpaeSmj)YzMC6bdoP(uAIYu6zsb7ELyUCez(yrMncFzfnr0cXij3CSP5h)zMowYGtcrpZj5ZwGKDHOWdFG1wuqtuaraRjkhwPygbd(ffKkr46rrTNZDoTSfeKZt0p(jHxHPsAnvuucrZyf4Loj8PXwWf8z2UoCk8k9eWlw7Uol8lrR2em5vdsV0Vl4ZcjRup4vXY6VUYsl1imksFwxz1aoI7RtfTLN5FvHcJw4Hw3lm(rHjSxW4lXrxWaEAoysykiM9QbFXQS68XvwIOrzX3qLEh1xLRoc9TPy8k5LUPRna8726aqIAP)HKtyX1ZMdP3osaxWmfGzTP4H5wVB4ICWLUUd7nRh0BVWZYCxHlJdNVp45GuppKMdeWMmdKfRxoGy9IMhYdICQNQvKiS2Rgck4QWvGfajOiidkGwA1hR9v1knyrq)yaYw9uTV07KCgzSGLGLHvGv5GpK1O67pn8HbVWhXf8rP0lWpqA45PueWp4jHxaErlge4JXs6hIDDD4hg(ryKdWpQdNa8JHCaWpo69d)eCWpj8tTV4Md)0Nd2a(zGxYf8ZcFC4NRQF59aFcQtj8YvCihp0Z4TV(gzOjgkl8Zxa(KWVa8lcFki6XTW6haX6BcVITpLfuNHeqW9lHGB4xUfW5p5D3iCowTaXnny72GQtbPJ1YtmqG41O43QzKMIsNwTd7nMKq0OeJrGbBVHXSdtV4V5q2T616TPM1OcEv9j2b8OsHAc2O5WB1hTnnsf44o8bQfx3KfvR2e15mWq1OBWUdtxeHPLPtYi3nDpu2ywn7hX7pj0z6qAcI5s)wBG8b2bqoCXqZnYfgD1PhpADa5hVcP9gvM)qY7HOK398(p3UX0ZlKhNBGxXvTEaTMSVw)bp0PORBVklv4gvZG6deEYGtfh18pzWWpnkGy8KJpBelVJFphVJTR6iG920WVo85P80LtdFPEg2l6wGYfRGfOlQjyOOrhmtd)gnZ74iOihlPiSrO1fSFpCa00LPOOMMIwbMpBh48D3U3iJJeh0uh1DlSLZdNid6iGYvypJz)v3KPIiEjjDYAo7qSR(zvzhgA1oX9TMvJyqsP5SbP6m(BOEMQ6pcMl30Y6xEoIWcbPB9(YtrYjkCzBLk6x2AlTPy7M90g5fyifkFacsqkbkM5TrjMEjktWAvFHbll80ZhpsuL5MFUImOeL26J2BgRDcuWYPbEnh69FZV7l3ApJx(EoSLvh(TGF7DSao8RWw69xT(fTHp3EEHAeUTfAsPBiJr1XWIbO2u43TatrHL5e(k8HMmsSrVbz13ZEU)(ny)G)GMyfUx4WN9UTmdWFiD(FoVZpw8NoWido1mvN)Fu4Rzp1ZwuGfrLfKvws2Xo8X2XITBwTqh8PQyroqTgeQt232zkw9O1TSFf3OZEUTQnduMNJPJPGVoXcPBT1S1wjxnXav1pd9QGVkmKgnuktxYG5wLrVaYrVa86HORQXMVBI9WUM2UIHMxaDFFDFynyf5gY4CWgnolovSPU4OLMC0fdxJZbZ48XO(fFDhhaMvzt2MSyAXBy9dOgtYHw)raUkbVeU7jupUDaFSJbyiCdz469gOUzD1USZB8SygcA4gd0AS8mHXEMtug37S6dwP8R4zwIOSUDgWHa3ucG7dUF4TJt(3hDYVtORdqnqpG1QLODbng1onvr1Y7cEKJ3LxhxsQhk1G)Es3e3YNcxWT)dT3DJSSfBzpocvc3rOTvIAbygTGLdmzXatigo6cb4HWUGrDdrCrHqN3n1gT(7MjedhpVd22k2oRIIeojiNyjrCNbB58inCGfA9aM3)GE977gAqF2N96lqiQbP7z2GNsUwGjfdbsJoX3y78sklfvJC1se5SRyjoZk2k0m2cHnNxYocpPxJMeloVXfxMiTj9XjzbF8OLP37eDKnY7ufMAVbdyj0ZfRqoHMie9HcSIMGfWpwpjzbXSlit01DXYHgwB9ozVOqwHDE9JW0h2tV63K7IPgfCNb0FulHzvAn19CRTLvSCcnDYKtpfO)Gwn88mfFnvT3fSx46R3AcZADk7aIHEgFlQdsWYtgp(vlKnq8XcOqPUO9NpbBYDnhCt6kcX(ZuFaNePRfpQOoDl5O8rKe5LVaeln1Jc1Jz5nqH4NWIGY2BOHuo2osHI5Dw3c1JLrNrlaVsx(RD1R0WNLgk3t3)PPwrQl95C1Ota8xMgUwRr7xHV)(hW3G8973R)(zx9XU6N33q97FaE)(hWBGBqFb4VQk6)mFd4V2bXdFB47Kg(UWFd83Eu4VJd(7zkjhWslgon)pWb)JfG)jxW)Sl4FPt46f2hGoW)ALDiClJxEInBgEj24jYFXrlo2fYxOE8c8VvfO8nHV3ByGIRrwwv0sTzsXIeeCeGcooBvWb8FSNWehNVFFEhW3(Uv3vfZonAkV5z1JShzjUpx0y5TkPVLMtoN(i(BTz)p3XShz)3SBYDx7VM6bg6w0uJMXVdZswXq7YYRMIbqR73D7mLmmuKNErIMKWkVL0A791A0AlGg7vIo2iRezG(KLNQ1g7)I9DJTBBBP3q4UWxQNzId39QvoXAAGRrfGSqrxr3xKfvYYyc8extPOQHA3ocPSep6zQXtKy8yNVgHIufNkzxWPcoQlhxMDedIsIgR0yJXo87Ztk6K(dvtJnPGmEnXybtMmcpt2jfd(LzyqlHM0WLNLC)3QknlJBQVur5e0gZk2xzSeiWlijMhvGOHlwspcyoQ(quzyvv3AwhXljntpCyx4oIxYUDqXXufSDSvUvKfkkMLfAiuNCiDfndyGnYRjADwAhEn6TuLA9WpkVKyrrJdtpGYjP3v4AzvKXxVSruHS42QYWhC0XNjrgnHCIL0FH7dviVbA8Se29cD7aHC(2eckr0m03C(sssHf1YkHDuB9V42sqLUhw6wqGncmTawbl7RVlCQWx5kl2)mNApWxeW)GVbS0atmG9ofPlnK(nlbbZxnQ2)PTjEGmEctUhXsmq0(Yp(aZsU0i8l2sIctU7TfQbC2d7FcBpSL1LeZrYOGuMfzBL1VZEFBK9y9o2GDG(u0426gAc0J4IP4horMSL0XgidRaRWw5L(gSEEzRNF9U6hEjo2HeYsoDxRK7qDTm3gSaArB11CAv67EB8EzDj6rfJzP2PtEjDsg7ywbXZjH0S2M1APRNA7XGj4ApQ75QnSfWFuxNf2UMOsa)XPBBmLwVtESxKDHq0JhxTtA3iprMOjMnrbLLMwo9219yzD2)4jc5wHDytSWQetOi5Gp1rGtWZE0(7m4yHTL(tPbZRHBOYZPyF6k9P2flmZ5Lv0ik4IDirbj92AebPeon3gvyQ3UsiEOPZc7pT3Bnw2WEAm7cPvpc9Ec9dKP2I3shThFxvE7NfPwxnXpR9Egnj2h7WfbOZx17Hq)sDOFJqJJCJQ9un4M0N1VmBMjvm63tbjv8sA5jwEux4s5fp10xImBCsJEufQ6rDWBipktUhdEDtUEBTFKj3jn5EpWjm5oLjxFv8wm5E8A9um5EVoUiMCpHj3tsBjtUtBY9uyBzY5nTjx)7jG(RAVBm4)e(VG)B4)b(FH)VTXLQYwGOBHq32cHoLOo9i7Bhbmd9BY5ZKZVj3ayxkGjhJX2KBi6EzWb5WwqztUrm5odwI3x5Ac0Kj35AanAY9(Xc9bULaD1VDV9Dux97rdrDMCFqvpnhSHJ1utIorYgwqTGXg7PNZ3Qr7pq02a1o0DiqTkN3c8Qw8PXzGje(G2CQ9(cPT4lR7ReiTA31)1T4e5yKx(ga295)inf2TrfzOVba6SI9S1UnFdc1HdRDI6E0MJ6yFHNwxTGDdhAf(OleFHOLgPnWo33Xb7(DQ)O9gIE0EWxENhKx7auVytHtBv7Mx2)rumrQdeW(8sVjbuVk7q0AYxlHfo71CGAiidZANOQ(Aevf0AyMIU3Hu1oWTqxtfEiffHr8p)kTJu7W3bGUKBIqXHUHfk(fHtes0GuKwzkmdf49qnrG34yr6ZIK0giIT1wm5EyomjzR5C3bN9HR2(Fd6KsCRpepLsYgPTaTBsBqpHPPq)gqyzv7HABjL0s1xL3a(Y5zLeNnXxVjhpoHLO6RBpZt63MN06OuVPX23KBzIcN7Tr484XMnfkUjBQZtkMkHHImjL3(TGYEFML1lm8SJU6Z4Vnq577oeIs7DAVQV(95Z3Wdgi0G9tJmVxF(9Y7BiVdpmnKDJqJmV)rOrM)Z3eDGAJfKFQOZm5UTS8I)7TEzzwaD2lKONzxHBbyCOJ46n5D6)QTKo(AYkgPQ7K1T8hRp5APSPtL7eLFYDvka7uFTG5J(mYkcAN)uIbgTnXq4(Flpm3Rj3Bd(uWD)5SJBy4rB4qRTJ1il940pLgAKdvM3ZuIY5SdZjlVkhMTQNQjMOuXIkYEMtaNy9erIqLXlivB1cJK3EsilOwFBzl0S2eRSx8A7PmozIgZmF9QjhssuEHAlxDl56eVZN4EQjGNMCV9dDRgTttU3HZh4NjxN0lDTZ4AAYDeNqAAY9avdMPj3rHUoGjx3WaMCp4Hn5EOE4h1K7y4DhVGj370K7Hn5oblSKMCVRQXJSYVffNfc1n580ySi52xcf5udF1rxAwdvvvEk)4UfkYNBN0zBs3yCqPLewr3Hw7PC3C5H1ccBlZ2n9hL0nTmY6I1zHBWLAdUho4kton6hOI9pgT02ND5qsxAYf1cy4FP2q1ua(Efyunb3VoyJQFwIBQi7aUA4ZmKEywZGLBq4HFI7c(m(cgB0mSp)D9hFq7daBz4vW1WC(GUCTZdb7XUXcQ9owy0Occ6WnfbP2rJ8v3I7Yyxp6mtU7z)cwC4gGfMClAdhuYpPkz0fdp8qR2g4G4(oCO2d1C5MbdUXnNpxBnNEFTwPZXEfM7CzdQ)GnRZSlV6SdNSVIJCHNjqBm7x5nqwGwy2R69BYH7JF19vh)2Ju(qVEZD87U56oUZf3GteTc30)KrK8VsKzNjz)Tb3SWDy4g52IBo9xS5mmveJUBiLgA6RzfU)kRr2EImtUp8nz7BYT2Ua5n5(O7YIB(eKxzpEwa1S9V9xylAhAfS1y4axuBXKYZmyS2aBLEZh2EMDcBdrHdyDXNUxAoV4BmYEAry6n5M42hDongt(Aqar8xA0C6f8lns42Gak(wzDo7IS1J0c73zVnsN6rAP9lUOr2yzNRKFIwBSFY32A)(cT4ynQnKe32yi)cVylTJxS)jYpXC9hzfJ2T9tLBBTJpWQn1oYZIH0TngqCu0kdyYlgSVaAl4lP3(AJbu92wd4l2cA0PUTX41ANVm(MIeBOHtiNC82y7U6Bw2UUk2vUUYT(7Q(FSuW7d(wSyQR58lAI(Rz6RDW3A)RzcU)D(tyAzPHVIS(txuCOjAYpHPU059F6aN2BxlEpF4))p
 ```

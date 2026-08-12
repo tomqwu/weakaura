@@ -1,4 +1,4 @@
-# Hunter TBC — Beast Mastery & Survival (v2)
+# Hunter TBC — Beast Mastery & Survival (v3)
 
 A single WeakAuras pack for TBC Anniversary (2.4.3) hunters that covers both raid specs:
 Beast Mastery (41/20/0) and Survival (0/20/41). It is built from the rotation, not from a
@@ -9,6 +9,48 @@ does not change which button you press next was left out. Everything matches by 
 33 auras: one draggable top-level group `Hunter TBC - BM & Survival` anchored at screen
 centre `(0, -140)`, holding five sub-groups you can drag independently. Built for WeakAuras
 `internalVersion 45` / `tocversion 20501`; modern WA migrates it forward on import.
+
+## v3 — spec-selective loading
+
+v3 is a **gating-only** in-place Update of v2: no new elements, nothing removed, every UID
+unchanged (`stable=32 changed=0`). The audit question was not "can this spec cast it" but
+"does this spec *press* it as part of playing well", asked element by element for Beast
+Mastery (41/20/0) and Survival (0/20/41, or the 0/21/40 variant that skips Readiness — the
+Readiness icon gates on its own spell id, so the row is right either way).
+
+The answer for this pack is mostly *yes, both*. BM and SV run the same shots in TBC — the
+Auto Shot ↔ Steady Shot weave, Multi-Shot on cooldown, Kill Command off the GCD after a crit,
+Serpent Sting / Arcane Shot as the instants you press while moving, one pet, Aspect of the
+Viper for mana, Misdirection then Feign Death for threat. Both raid guides describe the same
+loop, so the shared core is legitimately large and it stays shared. Cutting it per spec would
+have been noise, not clarity.
+
+Exactly one element failed the test:
+
+| Element | No longer loads for | Why |
+|---|---|---|
+| **Expose Weakness** timer | Beast Mastery | The 7s debuff is a **Survival talent proc** and the trigger is `ownOnly`, so a BM hunter could never fill this timer — it was an SV raid mandate sitting in the "loads for everyone" set. Now `use_not_spellknown = 19574` (Bestial Wrath): anyone 31 points deep in Beast Mastery is not the hunter this element speaks to. |
+
+That also upgrades the shared `x=44` buff slot from a talent-arithmetic argument to a load
+rule: BM sees **The Beast Within** there and nothing else; every other build sees
+**Expose Weakness** there and nothing else. The two can no longer overlap by construction.
+
+**Requires WeakAuras 5.4.0+** for the inverse gate (`not_spellknown`). Older clients ignore
+the field, which means Expose Weakness simply loads for everyone — exactly v2's behaviour, so
+nothing breaks.
+
+Kept deliberately, and worth naming because they look like cut candidates:
+
+- **Mongoose Bite** stays for both specs. Both raid guides discourage melee weaving, so the
+  cut would have to hit *both* specs, not one — and its trigger already gates it perfectly:
+  it only appears when something was dodged **by you**, i.e. when you are standing in melee.
+  It is silent for a ranged hunter of either spec, and it is the right button for the
+  levelling/solo case both specs share.
+- **Kill Command, Mend Pet, Revive Pet** stay for both. Survival runs a pet too and uses Kill
+  Command on cooldown; a dead pet costs an SV hunter the same button it costs a BM hunter.
+- **Serpent Sting and Arcane Shot** stay for both — both specs press them on the move.
+- **Intimidation** (BM) and **Wyvern Sting** (SV) are already single-spec via their own spell
+  ids and were left exactly as they were.
 
 ## v2 — rotation fixes
 
@@ -51,7 +93,8 @@ ranks) sits centre. The right slot is spec-shared: Beast Mastery sees **The Beas
 (the 18s self-buff from the 41-point talent, spell 34471 — not the passive talent), Survival
 sees **Expose Weakness** (your own 7s debuff on the target, spell 34501). Keeping that debuff
 as close to 100% uptime as possible *is* the Survival raid job, so it gets the prime slot and
-doubles as the alignment cue for Rapid Fire and Readiness.
+doubles as the alignment cue for Rapid Fire and Readiness. Since v3 the two are exact load
+complements on Bestial Wrath, so a Beast Mastery hunter never loads the Survival timer at all.
 
 **Alerts** `(-150, 96)` — a dynamic stack of glowing 40x40 prompts growing upward beside your
 character; each one slides in from below and flies up while fading out when it stops applying,
@@ -93,7 +136,7 @@ actually there:
 | Element | Gate | Shows for |
 |---|---|---|
 | The Beast Within timer | `spellknown 19574` (Bestial Wrath) | Beast Mastery |
-| Expose Weakness timer | none — the debuff can only exist if talented | Survival |
+| Expose Weakness timer | `not_spellknown 19574` (v3) — inverse gate | everyone except Beast Mastery |
 | Bestial Wrath / Intimidation CD | `spellknown 19574` / `19577` | Beast Mastery |
 | Readiness CD | `spellknown 23989` | Survival (41-pointer) |
 | Wyvern Sting CD | `spellknown 19386` | only if you took it (raid SV skips it) |
@@ -108,11 +151,13 @@ actually there:
 | Revive Pet prompt | `spellknown 982` | any hunter with a pet |
 | Threat bar / threat flash | party/raid only | grouped play |
 
-Beast Mastery and Survival never both light up at `x=44`, but not because of the `spellknown`
-gate — a 31/0/30 build knows Bestial Wrath *and* the Expose Weakness talent. What makes the
-shared slot safe is the tracked auras: 34471 only exists for the 41-point talent The Beast
-Within, and Expose Weakness costs 31 points in Survival, so 62 talent points would be needed
-to make both live and a level 70 has 61.
+Beast Mastery and Survival never both light up at `x=44`. Since v3 that is enforced by the
+load rules themselves and not by talent arithmetic: The Beast Within needs `spellknown 19574`,
+Expose Weakness needs `not_spellknown 19574`, so the two are exact complements — whatever your
+build, exactly one of them is eligible for that slot. (Belt and braces: the tracked auras
+already made a double-show implausible, since 34471 only exists for the 41-point talent The
+Beast Within.) On a pre-5.4.0 WeakAuras the inverse gate is ignored and the aura falls back to
+the v2 situation, where the tracked debuff itself is what a BM hunter can never produce.
 
 ## Deliberately not included
 
@@ -164,7 +209,8 @@ never change: it is what makes the UIDs stable, which is what makes WeakAuras of
 instead of creating a duplicate group. When adding auras in a future version, append new
 elements at the end of the build order — never reorder or delete existing ones. v2's five new
 auras are built at the bottom of the script and re-parented into their groups afterwards,
-which is why every v1 aura kept its UID (`stable=27 changed=0`).
+which is why every v1 aura kept its UID (`stable=27 changed=0`). v3 adds no constructors at
+all — it only sets two load fields — so it reports `stable=32 changed=0` against v2.
 
 ## Verified spell IDs
 
@@ -194,8 +240,8 @@ All checked on wowhead.com/tbc. Aura triggers carry every rank; cooldown trigger
 | Mend Pet | pet prompt + gate (r1) | 136 |
 | Revive Pet | dead-pet prompt + gate (r1) | 982 |
 
-## Import string (v2)
+## Import string (v3)
 
 ```
-!WA:2!LV1AWTX11zVgwXsWpIiSKCKuSnSSLcLITcaibFOyzhaqqrsrWhlafPEytSa7LyxXf7UA3f8vAsJzuCzFLMYM6mnnPjMPXDMonjTCMM2jtN0wM4mDMM2Ck)rN9hnTnQTPTPpMg1)L(J2Z9Ex8IeeKwpsmD)bVC37E37EV3Z335CUNZfcxiq(pFWLEI1ZjLFAzldZegAgwd4ZNVr8f60rndK3q3XYqtJiNqrvt2IOpWn7RKUdXk4ZgSpIKMJY6vUpLKUu1NMrXIi5yEWnurWE1KSvUrodlzIvCVpR5(JRPUWcswYbZyyO5OAAn3WtnLnXriNPe(vDmpIx)KjEcSVINk4jcMUK1mQZiPLJ3zkwZZFNRTIfPGQHEM5njIfSmkzUcVfPvxGSNvv1NYWQOKd2c)RYFaFAlii4BDPsokgwdBsFST)C4cWuQf8BjLNvrhI2oswo(ZnLQUQTI)44)C8VOJLAHcel7HoHL3LVACh6xxQKLuK1OL2Mennvz7Jeiu8s4lLZutAEI1IS67x22)nSlLJmdovtxAQPuNB1jtelDMjtNjMyMkpAelc(iX0JKCWbVzjBsY5WXvAEpKvuxQiX2)kYKCypqN8w9LCWr6DSbxgx64dl)RkRAF1s64SzgsejnnZwKyxNH)8ugYKFN7XB5kPCbIzlPVwjuceS3sAAbhxr1HSg)P8169TSKUkFXSd4q9UgrYMK2bLyfCuUF4OX1n0jRlJZFAlMKUMyztWfvz7fPnLokHiXlkPQ3legFbic0g0oef))JUXAw2MOn1igQ6o5sKCOmjfpMQSzGk4lrITrjR8e7BQsRrxs7c4hd)SxE1PSWLgCyj5i57Ms65rjCV0QOF(CPtiMm5qR4yKFgE737ihmsjv5v1MRZbfV2fU0CXMw0oVKgX3kOGqKHTSldD6xhxf8TcDkPYXmX1mKK9Vk)ZWgUqxlfAfBeip94QYokhCfvS5Pzd2399a7taEO)M7b6f6ADwBenCyRwcMTu39uzt8yJLz440xxbo8lDc4iVkUa94WtchtKbqYX5Kyvpbe0)Iiezskyll8uWtdNWp8EGwHt6V23dszEGXWMemHIefLtSuTDuZB71fWWB4DHtbVx4zqmcDqmz(Y6l8bN5YqNqxlMtYJnnY9f60HJsl7SlAzKO(qOPTKdfmquwJn34GOlkaXpZHGJUkLOGDWK4FlDiZaoK5CM0wrs2y2j8uhSmRoAH5(pocMYJtAf2C(4h3C)18cvP03GxBzSdCEZhHvdY0nOi38mHs8y4T3K9aKIrKzv(YRZLIx07RVg75xTeUcn18qxRyrfnKmyLXhA4Hsch1cbi02ScRHvxD4d7PqTPM7Vxl1fcoAjjzkCmyMmMHQmNMKRzAY6MytktYJumTjnTWlSziJAxAkp4wNv3SiQCCljZfh37I1R8PzQegESmd2)qj9wRQbKUA)dnusXjf7)C9LX8KBZqcvQQlZOZItPzyyXxyMbhD50izR(jPACpS3IyzrO5X3MoNxzUHkvmhXAg4OlJlQCY268)5nSJGWKY1y4jG8UnFvPVxnLhBE02jjOYn40LVZghN(YPqulO48yqYlSmL5KhTuzNnNdY81DoKyXsOHj)ISAproBv9cAKC9ngvre8roe8rZgh1LN)qWhXFCA3rV4gmqEC89LPS3iX6PhZ9JDDmzkgIitKtjnNc4h6MREirv60J4FJTuf58pSLhfboG)AzqtiSmJpARktezIqievF8g1P2X2RLfoi(I(Hh1p8U8Vk7t0hBz5SwujwjlIycnIKUOKMPIKp(Gid)jMT2pvZ7us5jxjHess0lexY6kJ1)Zw9UNnntNg71uGNh11IAXbFXxWWOOa8(9jolL49n9dphCw4fwvVJZrMyOb7)QMZAPQtvqtu8gvQYYeDXHsEHKIRAyPIYiMAYv6ByX(V0WdLj2Gqph5eI5vi5NUx4i7zXzKSuLqmWIQ6jmkMtYreDEOer4ygMh7SN1kVIKEbI9rob8AmVFw0e9mHy5mpSm0I)BsDrQad3xr1cTzDUui4Che6Ztr(FKavro0VamaCEyqpT0F1QABfhXywIfv76YM0ROCiH6u0Uof7v5zzBOoByKTt)mmATQLbXb46GPLrzLDh1hKwbY4P7fgBPdbxqag)MLvRYgch)4Wfz8i4s485YWvGx8LHxsaMe7ZSGe(E5G88VKmqGccMTUvSBw)vJMdWauav4QW0GguemZA(0n)v51boW1omyjy((AER3SwtuvcucMbMfMtaMNpRwil8bHtd)u(GpeL3dF4SWpnL5cV8jGfHpkNydxNv1hJv(kWpdSeJZc)SLPQWphsnHFEKuc)ccWVi8XVJW(GFPZcFc4xgw2h8RaFs4xTkD5(GxLYvGpvfEsx5dVGvXlnG8j7e(1uGpn8RdFg4Zc9CQta)gi43h85wR2vh41owKqiUpWZbRqb8m0rxrPa6iScFWxae5V7EGph85HxZJMWBpJGGnHYmGFZTGl8zU3nYfgQwu8koSneqD(a1XAvG4GO4Bqb)vFqwkepL5(927qAvNsmsodZVZa844QlArBngUV2X5FnZ8ovW6MpZMGwvAudWvnMAy(KnPtQaL3e)PwordSuwTlQJiXyeifA7H4ZGq8vPlYO6y6wJ8W7wE3IxFc4DMnULKQC23Atc2ZMibN88PmlfBOXoFOrQJeCMkKGLRS(HmGoPmGJ98Eq6by75TdAr4Aq)4lbFnSXDxFJ5AqRcX2WRikvaxoHxZxTKMbOnSBMFXr4LSxAduOG0v1B6zRL6ah1ZbZdKyWyPgb99FWyjop6gr)z6)cj5eQVvzc16v5o4eml8LHVc1UWVBw4RDSUcHmj0TXkWhQPnjhdl6ukf871icvlOZoChsyZqEbtpbkTZvu1YYWsHrZFyueDa)lNRSJoi6Oh)BH4Fk4O5qUd60c7E8XFJvy(smsjnBYIL3RyGWSxztydZwWDWM3I4qM0Q8gLQdV8jmptvVqIjlpSU9vgNinDm6MWVskISQ0v88xX(k8n3ojBFTN2PGedCrvHG4kulcfM9oO6YwMQ8yXQFWxyvs0yI92D4XCU4em0hvt3h64547iqHZZGVAzRj)bE8k4pSjKQp199al9eGqLWVa37aMhQY2BttSmr13bttDKQMWQWVWoyk0NiZdxt0wibJJBX2j44QokQ6MVRkpk5CMg2KG0ffDITnC)WEPZr)WdapikpFqbuE(oH9VhkWmaxhcYUrADTlZv0L)UHh7ibcv2DeQ3juO0XZ2axsEwun07BF36Qf4sKBuzIeVe68RN0IkdycVxyvvT8ZCYuZ3AFZnaeZhe3pKWhfpM0pvkT0tXmqHZOhI5R265nm0WTrPNEwv0DR1kFln6hkBEk)68P8VD8WD3zxIHBlA7DtlJgIvgMvgHv2gRSDwzuXirJ0nw2zOWDyH9(W6AZNfx0(knyrZQVyIP6DSbRDP7mx(MttiMXOBXWrKIcvyM5qtAXpZF96f0mMTxlY1kr0ZppxRuCADkRH6eoNM32HvwMwxAEOmOxoilonhCv61L3gjRnv3ic7zL36gFdU0AyFXmkQ5zqiFlYUfTfTEUsoog6dJEQRjnpRVgufBslSVxCEG6w6ryMEp2XnFt6CzvJJRX3TA8HZKz4uW1EmU5VPyM)AOPVr3zE39WWGir47a77BFVuK0qT1VrQcYMADb)j8bYRY8LyXYOKSvmh9NBEGYvsvV0JQnDVgOruu3XNAuyWSugeAvIJ(Pq6JYv)5H(3qnp6MQHIWXn0u2eZniZzQY1vMrTibETaTrn28CEgBYcFbA0QoD4ttx4Pu53VVnc9H)QSW6kBjTEG4Hd3gIRBVTiTXkBNvgDlGTWFB9aw4VRwik83ZHLW3tbUHc8p4d(hpi8pjaFF(Y6)mITG)f4F1h8dG)n4FVf4)4obkb(pVBanOQ)hTT4dLE6ot2P8O1JmG)RQqIVn8dVdl(9FljipIyBT3ENH3r6O3Dj3OwzzBzGfg9P1zmsUC86BsAUs1gT3bNzJs1lIs1wxyKbV4WktRDTj2AP6FXpPLQVEvPA0qHHVB2))oHKk6KVO0irLJoL0aDT1IU)Y7AIUqXr)9N9yJncCVF6ACo78QAAbtyuSOKUS5JwP6yPhjzImbt1F609p05QXjVug6fmOoNfhDi18OvQVxIAb9G9G(UReCelJIMoMTu5HNZi4fqxxSQ57stSwqhJG9jn70MV7QDVQTSkUVvQrJn3pPqV3docXX8rQjNkZOodHwjZlrk08pLbn5(fsdJxEYdD76y4Q42mkvupnTZ4BGph3WUOKgoVHUSSDKOPNsG6mh6gxvFKT4PFIKL5(AmFOp6Z61pOVSuhoF41KNxxQOAE2(Br3AJBBy5arwUGLkpk)pWI0lPEVCmXEe1ulQ68a0uNmi9kLBK3qh)86o9kLh3VuoXy90)yPZzjjRwY(6pi6q7Ysw55EsHOtpOw18GgtJy5yVYuL00sOALxdhQEUR(NjqDmDFA3gEeJqyoe8fwnU2WPkO0)0tCUbw6PH(eAUEKVokKEfUMtwEO4bB5OlNNfyunJcRuTEua(Kwt2tSuXoxY1ybg3s1rf9Iml8gbIcPwHhn1GdAuaEkrXydDUK8aw(kUcpg2PUcpURWtq7fxHGUcpP3R5kWre70MkMECKSWB(sTi6yHy840K4y2cDqvGOtSuZNwXy2H1ZUED3UQn7FIej55zHELzjyiPIK9E9FaCur2TEzd7Wj88IJsqkGBs0oyRSuSEsZaS4Muq3WIyGo4IGgs21XnuRLUC3TwTe(1RyyI(iwOSO4EE4AzzyGnhYA(i0Rj0C5wBZP8JC5lz7G00a8)7LLwCHwnVzhtXYJRHERoNmiUH4sw6bB15YHFXGgwbDUCeV)32lEYG4GbVQ9xmiYWBUXaQo)BKf(bIJOohrRQjb2((J4fPd02W3ll1IbAD4NiM8HF0wBLh(FOY0ASq4kCeAwVP5BVFKlBEQQHhGEV9vILtvt1z(j5u2jPIqpji3xpRoMU0LmlnN249VLMwCfUNTW2cD28nGOw00DpCjhwapw1wdXo5mWTkveEJi0UIYOBGvNL2)YSupZ2BLnIxOPIHTdokzPTCShopD0GkeCfodVI54v8gbcdllWqASQZgyE59fyoHLzXBH2LlwUlPF41XR1T1Oz0eFKzlLFwMYvJJQ19GT8kYY6BwVLTE7HBVgOA8K5tJ7roChrP7UiCxSYUz70GV3JWSYiSDq3bDh0T3o65tOoBFDuXFEfInNJVoNJJM4OPM7wWx3tTzwGRqh1tb4j0oC0gWbAoQ9v8qTC8kd7Uctvkt1z2nIGBR4gqWUcDAEIncCzQDMCiAk1jtkkndrVxdRICqBScZKhVThlRRTrqRsvqRqZbTiGIHxDfE)WB4k8CBnk1v4SUcppdt6k8cvXJUcFGAXIUcXkdcDfI7kKG2vUc94kKe7mxHEZ6kCU30qPVm3Jd04b1qf1RQK9uJHdxHNErzITd3wgZcwreLqb5zz3v(HzxSC9I9mCpLTIvUNDfUqDgUCfghEcxHjWH8fX)UKRWLlBCYv44UcNWv49G13QRWjPOrxHt58I0U69Yn04k8mUcpl2GtVEDE95keAdMkCfcJnlc3IaBbUDZtVDk)lR0VT3ek9RfUZKA(4LVvxHpUUUz2Y2PMp9SQt5K2XsDAcNXeAUr6mAOmXMt9Cnrn)9(2cgZlvBEdGVE95kOBAUcG)4nNzGMHT37b3Bdb3RwZwx2gO9TSw52JUvoM0CK1RxxC5RfFXJDFDOSFeoqtt1nJt0nJ2ADRqBIgfkrMKTiWwd4yTmAJPVGwVJMy8bBcwZ3BBWAF)YynZdwxs6lNfQaph8LowKqiE7lsXtSJ(sDPZpl861FkjGFRAozeLJiIRWiUcJ6kiEN38pt6WYqNV7eg)zyPny0)JDKgaSEFBJAmEgbmMYrHWccahFLAQfchB8CAor6Vjw)VV3(HVCfYt1B9LOj80dm5ki3C0ZRwf9C3b3S12rVJGBAKZIUcz4iHCTwAWexTyR5kuOjiH9Slaj8uqF752WQwN3sw1ELVudTQTwTrs7ULzTTE)23nmRHZ06rrC8tHqtCnYfZDHogBSMGFEh7oWp3FZXp61DAkQ7qPES2P6tgcE8iMSZPevEtL1dNLh9P6ACwZdv)jATgZCvWCFRQQSUAaVo3vy666Bxbn8VIbE(Dau96n2)Rflhv37cO0BhDBBVx9xFVneqMi1yJM4cJmXiIJ3ea59)2pfABpoHM83ThOiF2gcuwPAS(VBPq7wo6jBpybNuncS0910l0JM65TmNVjGL9UlaSec(FHpln5sLpIpj6HMNhITJQKwWXr1lkvoIpShH(nQwuvMDabQKzi2tOHbNEMmSR)fgF(ziw6ENVOdv3lizQkhSx0Ex91NIEI4F20kgovYTfR(yw5L0jbzpOUprTwnR)vQzxIvY00ZCF1KQjxH9TVB38m5k4V85d1v4bPfp0MZOKRWdxozsUcVZQPrYvy)W(3JRqlqexHapGRWJCmruIDa8QdI7S9qUcpQRW7ILqixHdxntq18luQCMfSDfo6gZcKWDKKa19eXNizKRMA2itq9CE7YM8lv7zeiC3r7SDUULTyDCZAvwHg01yAZknVDzpMgCMghKR6GQBJgMis6ZFNiwak7qvmX2rPvO(ZmGRWhKgbxVFVIz56BMIOznq4mLIvAHMSVEl4hQW03e7ovAOpvLJQ9kg6LHzB44NMf(cq6khFO4ujxnT4uET4)g)VcTLv3)1o5mjSjRnF4k4H5BSh01QF620GZo(emC7dbMFdqaxHx2t0h6QHoV2jBpx)HVute923Xf9vpryUcF0gjYVtjiFXF)gkixUI5KDnsrCMSvsXwtzh6cTRLA0Rj2ePOZUxP45)AnMowR1)DncsCYSvcYi9ziAoqHb6UJ0nrqw6TYcYATohVTqThTz(40mHEMV(w4XFf)622Ko9rUvJHruVForVjnhVJp)x1j0NO32NyUOofZy1mDWZCx087wi0RbuC9Fmy0T9VyJf4vDy)Tgu8BnP8jNQ)2SUA)9fAE5MiLNDxRo6EAmDD1A2w1UzXxMw7Rnj9WsNCMOnr8n3UxtSBrmJDfu21yyDJbdUgXNmXoLw4bk03mnl1LZV7v8TfjY2vi7UzwxScDxk205e7wAIMi2w4NyInA8T(4W9EeZdujCjJwsn)0m1D2vIju47wHek(Gj7nZp(Iku1FeBJyzKVrbe67EhjGqNR98Je)89eAO(AFh)ZlGfuNeAg4E6Yw29Zochn0T3VFKDMlI3noLrhEBpLrV5yvVkNrfvHmM40xl34JQ0eg1NSCSL3aJ6BXIsmp4Yu5gnQWXHVjpcYSGhhMI6(aE)pwwQqMEurJYInCd4F12J0g2f2NbMxiWC)WDAqMdumGCa5LE86(nOEjOB47WsQ8hKo19(XIs)HI(T37BT)HIIS1n9BdD0lDPlMmH5Cly3wd(THgWwSTth90HcmZ99H()c
+!WA:2!DV1A0TXX15SgwXsWooIWsYrs2XW0wkKk2YaGe8HJLDbabfjfbj1cqrQxMyb2HyxXf7UA3f8vIBtyCCzFLMY260MM0eZ04Eo90K0YZPP9KtpPnmX50ZPPn3YF0Z(JM2g12020hNg1)L(NENzw8IeeKwpsm9p4WDND2zNzUFF37DU3bcxiq(pxWLFSnYjLFgzldZegAgwd5ZNVX8f60rndK3q3XYqtJiNqrvt2IOp0nhOKUdXk4thCaIKMJYgvUpLKUu1NMrXIi5yE4nvrW(1KSvUrodlzIvCVpR5bJRPU4IswYbZyyO5OAAn)OtpTnXriNPe(vDmpMx)KjEcSVINk4jdMUK1SQZkPLJ3zkwlWFNRVQfPGQHEMfmjIfSmkzUkVfPvxKSV1u1N2WQOKd2c)RXFaFAlii4BdPsokgwJAsFST)C4cW0Qf8BjLNvrxI2oswo(ZnTQUQTI)44)C8VKJLAHcel7roPL3LVACh6xxQKLuK1PL2Mennvz7Jfiu8s4lLZutAbI1sS6hu22)nSlLJmlovtxA6PvNFTPselDMPsNjMyMkpAmlc(iX0JLC4HVzjBsY5XXvAEpKvuxQiX2)QYKCypqN8wdKC4X6F8Hxbx64dl)RjRAFTs64SzwsejnnZwKyxNH)8ugYKF)3H3Yvs5ceZwsF9sOeiy)L00coHIQdzD(t5R1hyfjDv(IzxWr6FDIKnjTdkXk4OCFWXJRBOt2qgN)0wmfDnXYMGlQY2lrBkDucrIxusvVFim(cqeOdOtik()hEZ1SInrB6Xmu1DYLi5izsk2QQSzGk4lrITrjR8e7BQsRrxs7c4hd)SxETPTWLgCyj5i57Ms65rjC)0QOF(CPtiMm5iR6yKFwE73)yhosjv510MV7HfV(fU08XMr0oVKgX3QOGqKHTSldDguhxf8TkDkPYXmX1mKK9Vg)ZWgUqplhAvBeipZeQYokhEvvS5Pzd2h5DahqaEx)DVdOFONnyTr0WHTAjy2sD3tLnXJnEMrJtFDf4OV4jHJ9Q4c07fECOvrgajhNtIv9yqq)lHqKPOGTSWtapjCs)W7dAdA3FTVhKY8qJJnjycfjkkNyPA7OM32RlGr307cNcE)WtHye6GyQ8L1x4dE2ldDd9Suojp20y3BOthokTS7EOLrI6dHM2souWarzD2CJdIUOae)zpcC81OefSdMc)B5JygWHmVZu2ksYgZnPN6Gvy1rlmp4jqWuECsRWMZN4eMhSMxOkL(g8AlJDGZz(qSAqMUbf5MNjuIhdV9MShGumImRYpYgCP4f9(6RZE(1kHRqtVa0ZQwurdjdwz8rgDKKWXTqacTnRYAy1vh(WEAuBQ5b73sDXGNVKKmfogmtgZqvMttX1mnvDtSPKj5rkM2uMw4f2mKrTlnLhCBWQBoevoHLK5st4DXgv(0mvcJoEMHhCKKERv1asxBWrgjP4uIdE2bYy2(omKqLQ6Ym6S40Aggw8fMzXrxons2QFsQg3J6TiwweAEIDOZ5vMBKsfZrSMfo(k4IkNSTb)FEd7iimPCngEciVBZxv67vt5XMhTDkcQCdoD57SXXPVCke1ckopkK8cRqzo5rlv2zZ5GmFDNJiwSeAyYViR2tMZwvVGgj3aJtvebF4JaF0SXrD55pc8H9hN2D0lUbdKhhFFzk7nsS(6Z8GyxhtMIHiYe5usZRa(HE5QhsuLo9q(3Clvro)dA5rrGd5Vwg0KcRW4J2QYerMiecr1hVzDQDTZAzHdJVOF4H9dVh)RX(edWwwoJfvIvYIiMqJiPlkPzQi5JpiYWFIzBds18oTuEYvsiHKe9cXLSUY4d(0vV7PtZ0PXEnf45rDTOwCWx8fnmkkaFaFIZrjEFt)WZbNbEH1076SKjhz4bVM5CwQ6uf0efVrLQSmrxCKKxiP4AgwQOmIPMC1bgvCWln6izInm03XoPyEfs(z6ho2(wAwjlvjedSKQEcJI5KCerNhkreA1WS1ZCgR8ks6fi2h7KWRX8(zjt0ZeILZcWkql(Vj1fPcmCFfvl0M19YHGZEyyapf5)Pcuf5WGcWqW5GH90s)vQQTvCmJ5iwuTRRysVIYHeQtr7guSxLNLTH6SHX2j9ZW5RvTmioexhmTmkRS3O(G0kqgpDVW4lFe4ccWe3SSAv2q4eNaUiJhbxcNpxgUcC1pc8IcWuyFMfKW3lhKN)LKbcuqWSTTJDZ6VA0CagGcOcxdMb0GIGzwZNS5VkVoWbU(rblbZNP5TERAnrvjqjywyoyEbyb(SAXSWheon8H8bVeL3d)0zHFgkZf(iNewc(OCIn8YSQ(ySYxb(zHLzCw4NRmvf(5rQj8lGKs4xua(LGp(De2h8lFg4ta)kWk(GFv4xd(1RsxUx4vPCf4twHN0t(WlAv8sdj3E3WVPc8PGFl4tdFgOVtDs43gb)(Gp761U6aVwRrcH4(aphSkfWZqh9eLcOJWk8bFEqK)U7d(SWNdEnpAcV9mcc2ekZa(D2gUWN(E2mxyKArXR6W2qa15duhRvbIdIIVbf8x9bzPq8uMh0BVdPvDkXi5mm)UdWJJREOfD0y4(6NG)1mZ7ubRB(uBbAvPrnax1yQH5J3KoPcuEl8NA5enWsz1UOoIeJrGuODgIplcXxJUiJQJPBnYdVB5DlE9jH3D24wsQYzFRnjyFBHe0(5szwk2iJFUqJvhj4zRqcwPY6hYa6MYaA959G0dX2ZBx0IW1G(Xxc(QyJ7T(gZ1GwfITPxruQaUCcVMVAjndrByVm)IJWlzV0MOqbPRQ30Zwl1boQNdMhkXWXsng67)WXsCo0nIbZm4fsYjuFRYeQnQYDWjyw4lbFzQDH)GSWxT1EcHmj0TXkWhQPnjhdl6ukf8h2icvlOZoChsyZqEbtpbkTZvu1YYWsHrZFqueDi)RKRSJoi6Op)BJ4FA445qUd60c7E8XFJvz(smwjnBYsL3RyGWSxzlydZwWDWM3I4qMYQ8gLQdV8jmF2QEHetwEuD7RmbrAMy0nHFLuezvPR45VI9v4BUDk2(ApTtbjg4IQcbXvOwekm7Ds1LTcv5Xsv)GVWAKOXe7V3WJ7CXjzOpQMUx6e547iqHZZGVszRj)XE8k4pPjKQp59E)l)yGqLWVa3ZqMhPY2BttSmr13bttDKQMWQWVWoyk0NiZJwt0wibJJBX2j4eQokQ6MVNkpk58Mg2KG0ffDITnCFW(PZr)W9dpakpFabuE(UHdUpkWmaxhcYUrADTlZv0L)iWJESaHk7oc17eku6ezBGljpnQg6zoWTUAbUe5gvMiXlHo)6jTOYaMW7fwtvl)STNAH2gy(HGy(G4(He(O4XK(PsPLFcMbkCg9Uy(QTrEddnCBu6PNtfD3A9Y3sJ(HYwNYVoFk)7fpCVD3Jy4oI2zV0YOHyLHzLryLDWk7Kvgvms0i9ILDhkCxwyVpQU2czXfTVCdw0SgiMyQ(hF4Ax6E2lFZzieZy0Ty4isrHkmZCOjT4p7F7gf0mMRFlY1lr0ZVaxRuCADkRJ6eoRM32HvwHwxAEOmOxomlonhEn61L3gjRnv3ic7zL36gFdU0AyFXmkQ5zqiFlXUfTfTrUsoog6JIEQRjTaRVgwfBslSVxCEG6w(HyMEB9eMVjDUSQXX157wn(OzYmAk46pk3830mZFn00353DE39GWWir47ah4BFpuK0iDmOrQcYMA9a)58bYRY8LyPYOKSvmh9xAEOYvsvV0NQnDVgOruu3XN88WWzPmi0Qeh9tH0hNR(Zd9VPAE4TudfHJBOPSjMBqM3uLRRmJArc8Ab6GAS558m2Kf(80OvD6WNMUWtPYFaFBg6d)nzHnu2wA9qXdhUdex3zhr6Gv2jRm62aBH)(6bSW)qTqu4FKdlHVNcCdf4FYh8pFy4Fra((8L1)veBb)BW)Up4ha)hW)zlW)1Dcuc8FF3aAqv)F(oIps6z6oz3YNVEKb8)ufs8THF4DyXV)Bjb5Xe7OZo7o8Ush9El5g1klBldSWOpJoJrYLJV8wKMRwTr7F4z3Su9IOuTTfhB4loQYmAxFYTxQ(x9tAP6RxvQgnuy47M9THesQG1mavYQB4SvP7nQVwQ4CN5TujS8fLglQC0PLgQNTxc)xFxtchkoUTG5AD8XG75tvJpCNtvtlycJIfL0LnF4kvhl9yjtKjyQbtNEWroBn(cMYqVGb1hU4OFRMhVs99tulOhSp0fFLGJzzu00XSLkp8SgbVa6HJvnFxA(3c6yeCaP5MX8rQ29Q2YQ42BP2w2A)KcDYp4yehZhQMuVmR6SeALmNjPi4VodbZDFKgTV8K31TR)JRH7gPur900oJVp)CC7)IsA48g6XY2rIMflbQpFO3EvDL2INLkswMxUX8HUYpNx)GU8s9l9bxxEbDPIQ5zBdg9(nUTHLdezLcwQ8KbC)lrVK6KtRI9jQPwu15(Pzyzy6vk3iVHo(51D6xkpUTQCIX6BWXtNZsswTK9l)aOFVRizLN7WfIo9GAvtxAmnILJ9QtxstlHQvEnCO65v7FHa1)1dODB44mcH5qWxyT4AJMQGYGZm5zhA5NegqO5QB(AOq6v4kyzPRIhtMJVsEw8t1mkSA16rb4JBnvFXsf7SjxNf)Clvhv0zZSWBeikKAvEqxdoSrb4jefJnYztYJR5R4k8yyN6ke0v4XP9IRqRUcpH3R5k8KmeXUTPIPNajl8MVClIowigponxpMTqhufi6el18PvmMBu9SBu3TRzZ(NirsEbweAzAygrQiz)V8paoUi7wVKMD0eEo7rjifW9sAhSnwMyBNR2cbKgwed0pye0qYUbUVBT0L7U1RLWVrf7x0hXI4ff3ZJQllreS5qwZhIEnHMY3ABoLFKlFjBhKMgG)FVK5Il0Q5n7AAw6En0BZP9G4(MlzPhSnNlh(QbnSc6C5iE)VJR2EqCWGx15vdIm8MBZGAA4gzHFG4yQZt0QA5GfEGiEbebnH89YsnSGgr(jIbe4hT9oda)FuzAnwiCfEeAYXPPLFqKlBEQQrrGEV9vILtvt1zHP4u2POIqpji3LqRUMP0LmlnV2edUTMwCfUNTX2cD28nGOw0SIpAjhwCrwZwdXo5mWDuveEJi0UIYOBGvNLp4kSmuZ2cMnIxOzSHTrpkzjAo2dxGoAqfcUcphVI55v8gbcdRiWqASQZgyb5deyEHvyHLH2LlvUlPF4nWR1T1Oj(eFKzlLFwMYvJJQn8GT8kYY6BwVLTE7H7SgOAC45tHBLoCxrPBcjCpSYEzBiHVfLWSYiSnA3fDJ2D2j6GuOU7CduXFEfInNJVbNJJM4OzW7wWL4tTvwGRqp1tb459oC0gWbAoQ9v8qTC8kd7Uktvkt1z2nJG7O4MqWUc9AEYndCzQDMAeAM3jtjknlrVFdRICqBScZMhVTplRRVzqRsvqRVMdArafdV6kCg4nCfE(ThL6k8cUc)ummPRqSQ4rxH41IfDfsuge6k0NRqsAx5k0VRWzXoZvyGSUcd(Mgk9L4ECGgpOgQOEvLSVAmC4kCYLKj2oCBzmlyfrucfKNLDx5hMDPY1l23O9v2kw5E2vyY6mC5kCr4XCfUeoKVm(3vCfUAzJtUcVpxH2CfAhR)uUcVFkA0v4PCUkTREAUHgxHt7k8mydcTrDE95keztMkCf6aBwNClcSf4Ump9oP8VSs)oEtO0Vw4otQ5Jx(wDf(466wzl7KA(0ZPoTtAhl1ziCgtO5hR7OHYeBE1Z2e1837BlymVyTPxa(A1NsHEPPua(Z2AceAg2E)hE)neCVwnBDzhG23YAL7m625ysZrwVEDHVVw8fpe)1HY(r4aDCQUzCIUv0wBBhAt0OqjYuSfb2AahRLrBC9f16)8jMy4MG123BBWAF)YynZdxxU8lNSQaph8fBnsieV9fO4j2jKPUS(NfE96pmfWVBnhGIYboXvq0viTRqM78M)zshwI88DNW4pdlTjJ(FSJ1aG1ZSdQX4joWyAhfcliaC8vQPxmCSjYP5ezWMy9)D(2p8LRaHQ36lsZlQhyYvy6MJEE1QON7o4MT3o6DeCtJCw0v4cCKqU2knCIRvSTCfk0eKW9Thaj8eWa772WQw33sw1ELVydTQTETrs7ULzTTF)23nmRHZ06rrC8tHqtEDYfZDHUgF8MGF2)Ed8Z91C8JEDh6I6o7QT2jvFYiW7nIj74mrL3uz9Oz5rFQUgN18i1FWxRXmxfm33QQklTaEDURqX66BxbD8pJap)UaQ(Yn2)RLkhv37cO0BhDB7Sx9V8(BiGmrQXpFIlm2KJjortaKh4TFk02zCcnhX7mqr(mneOSA1y9F3sH2TC0t2zWcoPAeyP3RRxOpn1ZzzUqtal(3dawc5kiaFgA2LkFuGs0hnrpeBhvjTGtG6xuQCuGypcDCuTOQm7Geuj1qSNqJdo9SByx)lmXcZsS09ohshPUxqYuvoy)ObV6Rpf9KZ)0PvmCQKClw9XSYlPtcYEqDFIAnBw)RuZ2eRKQPN6ERjxtUc3)bUDt0KRWdu(CK6k8G0I39wtPKRWblNnjxHwQMhjxHaWb3NRWdbrCfo097kC4wfrH3rWREyCRTVhxHJ6kCmwgHCfoE1ubvZVKPYPwW2v4r3CAGeUJKfOENm(KjJCTuZfzsQRZ7uwNFXAplbH7nA3DYvUSnRJBvTYQ0OUgtBoPfSl7Y0WZ24OCvhuDhuXersFH7ebdqzxQJj2UkVc1F2cCfEjAiC9(DnMLRWzAIM1qHZukwPfBYg7DGFOctHtS7u5H(uvos3RAOxgMTPJPAw4ZdPRCmJItLC10It51I)x8)k0wwDdy7MZUWwm38HRGhwOXUqxR(PBtlo76t6WTpeyHnbbCf(OEI(qxl050AVZCdg(snr0x6oUOV6jhZv4J1ir(Dkb5v)JAOGCLkMt2ZifXzY2jfBlLDOl0PwQZFDXMifNDVRu8CF1gthR16)Egbjoz2obzKbmenhQWq92v6MiiN7TYcYATohVJqDgTz(40mHEMV224YFf)62XSoT0TAqmI69Zo6nP54D9b3SoH(K935KZh1PygRMPdE(7IMF3gHEnGIx5hdgD78l0ybEvh2FRbf)wtk3(0d2H11gCGqli3eP8c7z1r3xJPRRvZ2Q2ll(Y02aDiPhwQ9zJ2eX3I7DnXUnbn2v4A7zmSU5ObxJ4tMyNsl8qfgy2ML7Yp4ExX32KjBxHC7LzDXk0BPyZKtSxPjBIy7d9tmXglaxFC4EoM5HQeVKZxsn)mm9D2vcku47wXek(Wj7pZp(clu1FTBJzzKVrre67EhjIqNTZ8Jf)C9fAKb6Cx)7qGfvNeAg4M6Yw2)ZUchn0T3p0KDNpI3noNrhDhpNrV5Ov)gCkvufY4IZC9CtCELMqPE1YrxEtuQVfloX8WltLB04c3h8n5XqMf(4WuuxCV)NilvitpSOrzrhUbeWA7rAd7b7Zaliey(F4UnmZbkgqoG8YV36(XQEjOx47WsR8lrN6E)QsP)Is)27)T2)Isr26w(rKE(lDPlMmH58lA3rd(rKgWwSJth90Hcm79(s))
 ```

@@ -1,4 +1,4 @@
-# Priest — All Specs HUD (v2)
+# Priest — All Specs HUD (v3)
 
 One pack for Discipline, Holy and Shadow on TBC Anniversary (2.4.3 client,
 WeakAuras internalVersion 45). Copy the whole string at the bottom of this file
@@ -16,6 +16,63 @@ threat, simulated clone slots, mutually exclusive auras (Shadow Word: Pain and
 Weakened Soul share a slot, Vampiric Touch and Renew share another) visible at
 once, and no real animation or condition behaviour. Judge this HUD in combat,
 not in the preview.
+
+## v3 — per-spec load audit
+
+v3 re-judged every one of the 23 elements against a stricter question than "can
+this spec cast it?": **does this spec press it as part of playing well?** The
+audit was run per spec with `lua5.1 tools/spec-preview.lua priest`, which decodes
+the shipped string and prints each spec's real loaded set.
+
+**What changed: the Holy proc row is no longer ungated.** Surge of Light sits at
+tier 6 of the Holy tree (25 points in) and Holy Concentration at tier 7 (30 points
+in), so no Shadowform build — the raid standard is 23/0/38 — can ever proc either
+one. The icon now carries `not_spellknown = 15473` (Shadowform), the same inverse
+gate Weakened Soul, Renew and Prayer of Mending already use, so Shadow no longer
+loads a healer-only proc watcher. That leaves exactly **four** ungated elements:
+the health bar, the mana bar, the threat bar and Inner Fire.
+
+*The inverse gates need WeakAuras 5.4.0 or newer.* On an older client the
+`not_spellknown` field is ignored and those four elements simply load for
+everyone, exactly as before — it degrades, it does not break.
+
+**What each spec no longer sees**
+
+| Spec | No longer loads | Why |
+|---|---|---|
+| Shadow | Holy Procs | Surge of Light (25 Holy points) and Clearcasting from Holy Concentration (30) are unreachable from a 31-point Shadowform build; the icon could never fire |
+| Shadow | *(already gone in v2)* Weakened Soul, Renew, Prayer of Mending | healing presses, and all three are Holy-school spells a priest cannot even cast while in Shadowform |
+| Holy / Discipline | *(nothing new)* | the audit found no Shadow-only element reaching a healer — Shadow Word: Pain, Vampiric Touch, Vampiric Embrace, the Shadowform alarm, Mind Blast and Shadow Word: Death are all gated on Shadowform or on their own talent id |
+
+**Deliberately kept, with reasons.** Each of these failed a first-pass reading and
+survived a second one; a false cut is worse than a marginal keep.
+
+- **Threat bar + Fade prompt for Holy and Discipline.** Both need a hostile target,
+  which reads at first like "DPS only". It is not: a healer using mouseover or
+  click-casting keeps the boss targeted, healing puts you on its threat table, and
+  Fade is the only threat dump a priest owns. Kept for every spec, and there is no
+  single spell id that means "healer" for an inverse gate anyway (Circle of Healing
+  identifies Holy, Pain Suppression identifies Discipline, and `not_spellknown`
+  takes one id).
+- **Fear Ward for Shadow.** Fear Ward is a Holy-school spell, so a priest in
+  Shadowform has to drop form to cast it — which is why this was the closest call in
+  the pack. Kept because the press still happens: it goes on the tank **before** the
+  pull, out of combat, where leaving form costs nothing, and Icy Veins lists it in
+  the Shadow priest spell summary. The icon answers the only question that press
+  needs — "is it back yet?" — and a Shadow priest is the raid's Fear Ward provider
+  whenever no priest is healing.
+- **Desperate Prayer for Shadow.** Also Holy-school and also a form drop, but it is
+  a genuine emergency button under pressure (instant, and cancelling Shadowform is
+  itself instant), especially in arena. Emergency survival stays.
+- **Shadowfiend (prompt + cooldown) for all three specs.** Verified rather than
+  assumed: it is a mana cooldown, not a damage one, and Holy, Discipline and Shadow
+  guides all list it. Correctly ungated beyond its own level-66 spell id.
+- **Inner Focus for Shadow.** The gate is Inner Focus' own talent id, so it loads
+  only for builds that took it — and the standard 23/0/38 Shadow build does, using
+  it on Mind Blast.
+- **Health bar, mana bar and Inner Fire.** Every spec plans around mana, every spec
+  keeps Inner Fire up (Shadow applies it before entering form), and the health bar
+  is half of the Desperate Prayer danger state.
 
 ## v2 — rotation fixes
 
@@ -126,8 +183,13 @@ gold-glowing icon per *active* Holy proc, so two procs show as two icons side by
 side: Surge of Light (your next Smite is instant and free) and Clearcasting from
 Holy Concentration (your next Flash Heal / Binding Heal / Greater Heal is free).
 Each pops in with an alpha pulse and slides off to the right when it is spent.
-No load gate is needed — the icon can only exist while one of those buffs does,
-so it stays silent for Shadow and Discipline.
+Since v3 the icon also carries an inverse load gate (`not_spellknown = 15473`), so
+it does not even load in Shadowform: both procs come from talents 25 and 30 points
+deep in Holy, which a 31-point Shadow build cannot reach. A 41/20 Discipline build
+cannot proc them either (20 Holy points stop at tier 5), but it keeps the icon
+loaded — no single spell id separates deep Holy from deep Discipline without
+risking a false cut on a Holy build that skipped one of the two talents, and the
+trigger keeps it silent regardless.
 
 ## Spec gating
 
@@ -143,6 +205,7 @@ Everything is class-gated to PRIEST. On top of that:
 | Shadow Word: Death cooldown | knows 15473 Shadowform | Shadow (baseline spell, gated on purpose) |
 | Weakened Soul (target) timer | does **not** know 15473 Shadowform | Discipline, Holy, and any non-Shadowform build |
 | Renew (target) timer | does **not** know 15473 Shadowform | Discipline, Holy, and any non-Shadowform build |
+| Holy proc clones | does **not** know 15473 Shadowform | Holy in practice (both procs are 25+ points into the Holy tree) |
 | Prayer of Mending cooldown | knows 33076 **and** not 15473 | any healing priest ≥ 68 |
 | Pain Suppression cooldown | knows 33206 Pain Suppression | Discipline 41-pt |
 | Power Infusion cooldown | knows 10060 Power Infusion | Discipline 31-pt |
@@ -157,8 +220,16 @@ Shadowform (15473) costs 31 Shadow points and Vampiric Touch (34914) costs 41, s
 neither can coexist with a "not Shadowform" gate: the two shared slots at `x=-66`
 and `x=-22` are single-occupancy for every possible 61-point build.
 
-Ungated (always loaded for every priest): the health, mana and threat bars,
-Inner Fire, and the Holy proc clones.
+The four `not_spellknown` gates require **WeakAuras 5.4.0 or newer**. Older builds
+ignore the field, so those elements load for everyone — the pre-v2 behaviour.
+
+Ungated (always loaded for every priest, and the whole of the levelling HUD): the
+health, mana and threat bars, and Inner Fire. Each is justified for all three
+specs — mana is the resource every priest plans around, Inner Fire is maintained by
+all three (Shadow applies it before entering form), the health bar is half of the
+Desperate Prayer danger state, and the threat bar exists only while you are on a
+hostile threat table, which includes a healer who keeps the boss targeted for
+mouseover healing.
 
 ## Regenerating
 
@@ -169,12 +240,14 @@ lua5.1 tbc/priest/generate.lua                        # rewrites all-specs.txt
 
 The build is fully deterministic: fixed seed `20260815`, no clock or randomness
 beyond it, so re-running produces a byte-identical `all-specs.txt`
-(sha256 `2f32d97f6d69f2ef0ee76db63d11a02948697128737908615988685e4991c346`,
-6594 characters, 29 auras). When editing, never remove or reorder existing
+(sha256 `41162464fa8b6e245a4093a6d13b6f803c2a7c56364ac17c14c42118cb5bee85`,
+6614 characters, 29 auras). When editing, never remove or reorder existing
 `W.uid()` call sites — append new auras after all existing ones — so re-imports
 offer "Update" instead of duplicating the pack. (v2 does exactly that: Renew is
 built at the end of the script and re-parented into the Buffs row, so all 27
-v1 auras keep their UIDs.) The script prints a UID continuity report against the
+v1 auras keep their UIDs. v3 adds no auras at all — it only sets load fields — so
+all 29 UIDs are untouched and it imports as a clean Update over v2.) The script
+prints a UID continuity report against the
 previous `all-specs.txt` before overwriting it; expect `changed=0`. On an update,
 WeakAuras' Arrangement checkbox (ticked by default) resets any positions you
 dragged in game back to the values in the string — untick it, or report your
@@ -188,8 +261,8 @@ cooldown icon), and its UIDs do not match that draft. It therefore imports as a
 new group — delete the old "Priest TBC - All Specs" group first. v2 is a true
 update of v1 and imports over it.
 
-## Import string (v2)
+## Import string (v3)
 
 ```
-!WA:2!TV16ZTX11DVcwXsq2Xsqw0w0wX00wYskwYaGaeGYsUgGe8L4ZfGsIYoMyb2lXUIl2D5Ul4dLMKkMex2hPTMTXtBQBIktA6mD6RHFWtFKKPHtN8HmPTNG2MUUnPzQsB)w70Q)c65E3fpjaeLeLNeM(bUC379U39(43VF375CUG7s(YEZNz1NTygHSZjAOP3RMIMXWE84zcp(pByDFz1uTm0uuiI9kjRiAqup3TNWqMyA1Xz6yqIGILuXYppQGQqLCtjzqeSUvgndrIrC36x)GXvKV(1fme7iLMMILSUXsJp7SMelUm6cy1BP3MBnKkEVyTetrPJK6KSMzCQijJLDk)8RBqYjRPMAzDcFodTc6R7uIKYxNS3nKvNvZiVGfwcVB4KHtFJJJZtrHcwsAgJRtZ20BgSxoRCoVgczzj0nVPLGHL3mZkRkBk5no(plVRyziNlhXWCSty4E77e3I(1fkyieCt6vtDIIISOz7(8hVa(sz0vewMyScl9Hen9ElZczilGDZKfMDw5L2yMEJLm1mjtfJpv5SMWGGzXNCIeJmYTlyssSe2Us6udP5vfYtm9UUijdwd0oVXGjgzI(NAK1kO62S8UHOS51kOI9Mfibfuu0pKa7(uo5pQMi5p8HChUsiMJOFOKZxah97O)c4W9LLKTiB6KRZy9(xtqv2zWSB4i9VjrWKK0cNTYzj9iq7Xv1ujffX(pTeZqhtmmj4GQO5k0IsBLqG45fKv7h8JVaeaccDbHW)3w9PSMjrz2j0KvTY0BIXsLGVtzrDFLrv8etTcgzjM3glbXqvq5s4hd)SV(gZAGdnyZsWsWZTfuZIZW9ttI(5ZKSx(ejgBDlTSl4u(9nXrcwqwCJqAxtmu0asNCXq8MzfuiEwhNi4zylZsqNHuXrbpRt7sYoyM4kAcIE3W5ZWAUqKv9VUjcIN7YYIwshzDzS4jzn2N5HG9Xbp63)HGeqKISYWRzXgT40punptNBIhBQuJhN(6sWt9MNao67Gdqhd6aEoEgajJdXdt6JapR3vqiYmuWwAOt45HJ7fob8IWj9w97bJO)etHfPJELeOOCIHSPLCwt3QagRU3fofCA4JIyeAJyMSLef8a986q3qKvYi4YMM4H9F2aHPxJeLEnyypi00uWIcgisBY6BoGOP5GyNRnO9nOefScMb)B1209zrwYAgtjbrTfVIRuWAS0Ox0p4XrWuwStlX6Zh)46hSQxOcL(woPwc7adRFywkitxJICZYMuIhdF82SmqkgrKL4nk6mloT7xFtw(xRaocn7YqK1nOtnKuyIXhB8XsaTBGaeAzwNvWkJoon7zrjt9d2VH817yYccIu4yhPsP7VCFAghLPzQPJnJijlsXuMr3aVXKHmQEOPuJRilTfru5Lne0x5YU3uS8NMjjm(uPgzOXs4owvfiDJHgBSe8ZWp0adMs)u3HMekQQkYOZ8ZQOPz4mWSa26YOqsx5tsvCpQ7GyPPq9JFhQCNeZmwH8ziglaTVgoO6q2k68p3MDqeMukfn3ji3hZwz23nLsTnxA7meuCdotPNmX2PNmse5Cswhd67sRrzozvemntNXcz(QwTXNVaUOKxEwQNiJPSAofsMj4hkrYuWNQnyL0XrT8STbFkVXPvh9MBXa5XX3xKYEdgRV(0piw1XePyiIirCuHLKG9drDKh6TcDYN36lPmY5FmdxkcCyVvZGUc3Am(OPSiHNnfcVmvpUEn1W3zvw4jWx0l0Mx4j9Ub7tmiBy5cg0zScge(EvicQ8ck6scECAePCYr)KdrvENvil5n6vajjQ5Ily8gtn0zQ80zsY00yVMeCbuRfvXbpXVUMwEo4CE4xKs8(R9cVcCE4v3yCLjtUSyg9Clg1qwLkqtKCBvYIIev(XsCPe8BOHlcO6itU(GJZp0vhFSuXgb690NGpRej7C9dhDVRSGGHSaIbwrwTxT8zeS4xqqPaHRtn9oVWfmYkjOMJy2(jGBY2IZk64UsigwldV9jGFhSg8aFXI1GuHB2zi)4B778WVl91gM(E9We(c6C1dSomjCqV3MUlQCmwtzHjAHXfgG(pcmG7YaFno6YaWGCWqWWWfD14FVkA18tOTiXGQnVMo9okdKRgz6IuKB58s3qfFy87K6omr1I6WKd7OGZgxO32d2Z4LGKUc3qQvBdMIdU0TlPjZAbh)4WvyKqyAS7Cv41H34gWhJdEtSkNbsJVNaKX5dLfeHz50pzZKgy1xvYoGkKdKaz4AWCGcOLw)fA9R6Kgyc6hfMNt)LBDP3QKlQdbwqbybyroyjNE1YPHRdNb(4EGFwQOb8jsdFskTh(5obCdyfhvb4tZs6ZWU(zH3c(5zeEy1s8C4xa51WViYOHFjo4xg(C7iux4x5cWVk8RbVThyn4xh(nQW1Ey4ZtjAW7uMKfDSqZkhrorUmPGFtj43c(cWVn8UqVT7G73l8fHVeCtxEIduNHeqW9BJGB4R0e487UN6HZJvnqCDlMDa0DFGISg5iwiq8wu8BLmstrPJOFqhtg6iPSvbglNbB32y2O0lD1yi7Mh35RPN1QmEv)L2c8OCHAa2OXWB9NRfvsz44w4avJRBWsLvQIAidmunsd29at37wGPZtgnF4ukZpYvJxdm90LLNxR8OdknhHkn35R6cyhMz3A30lbyQYLFjEHCOYmCtpvJVBUuE1O9Nf4kBrmSNRPF0YgJKKT1SoOBcRJjqRB0FYYzDjH86YgYzrZClKvQQ3PCgjYNb3koPS9UNPJlteMJOse7aTAqr)WLtFivvIrh9lBqUvv2bPswe(qWJq5G7h8chqcE0hLdN8(WWJVxAp4qo4cCofNmREYOm)8PHNbnuT0Qe0fnO8TxiDdwP4LqO1z3)9oya5Q40DLMFC04vtkjgN7PZ7u8ao5RpGFRHeJf6ulna8AEGyEH4EGE9c95LQXS6ZZeDWE0JYwcTywnnfCcqn5IY4QGBw6rQjTs12LPRW(vD6Y)bbdhTNGH7juWEI4pyp9emEWiDhHpGFmv21UyxdXhmCxy60RrnWADCvfKJDm4pUbdwgdgJFu0g87LfH751V9CeIEm6(kT4P6EsmPnugl25(EfZPOTy)gK5lquZUSJyxCAAsBIAOdO4AdK0A00s6y)k92rygNFKnO3xY2bwzQS7twEL2VUJvn0uyFXusYzNtLyA6zf2JO(tXmfSS0uhh3EMIWYS6AezSihI99I74DMvpmtUTZJRFxUPGkcIB6yIs8XtLA8rb9J5i5nltYRHYDtc9Tak3XwtH5OL5uXPRsYFF6TicUELcTVZpVRy4JbxePrFdyFV0dJ4Wq9oU)lk19ObMBs(QS(9ZZwHzLs4S0LLX(Z0FIsjs3LCFYM0TGkMMQ49otcxmnLdIQzo8hkPGsoqoIl)PUuABlPq5ivjbElYsOicBnYuY5jWn9fGQRDExDT0W6uNyC2aNLo1SnxF)CEQNFb)vPHVzZjsNJVRq9eie7A3SRrGVtZyiWFZ9g3a(BRMna)DomaablFxjOOh4V)iW)ah8p6m)89qym8pb2EG3h(NH)LdbF)Dcaj8dUlqHW)AZbEWpCFRMPE8MchI3IV0fV2q(V0IZFQGW)w1yn4wvaz)5Wp6bgGc(3rmux1HHG)JhuqN25deoy0U))Hl3b4YR8E1dxodIwiMxxkPHK40NQ)MJw(l2fGwkTjL4DhjA0FkhPO7JU(MQM1wxJ7w1MkDrTMUP)AxNl2vjdn1KlfEHPNV5iP)Yh0iPaFGHKUoU3VOXJeiy0GD7py8a(93nUzVEchGDniUzVqDfOvBi((eOn89dqZ8EhOfb0FohG2oeS9j3oW2TJrOLXJFweo2DKREj(5o1KzirBoC8RTJdhB)b1YCF7Gb6QN4D7psi6LW0lDtVeHEjkfZfmc7QZ99qn2iqy8AWGbyxd2IviFXFkzfY)RsyO)7TNWgBdvlo1adn8udCP8tfU5iPV(dAHTG3hcB(JNdT6SZPMa2ZW6pDDUCG6MOogDOKjhASb2AMYevXoMWqlVUL(tuoZ(fejLsTJYP2hbx4GgRomjAOQDlbZZcuy(3KbZD8La1F(zjp29RZe2aTOQqE1K0kZXrEzCm2JxqroNkeXW0sGgNAoQdaqt)R4(fdN4qtsZC5XR5zfCiYTEoGeZjfp2MIlRkKxol7ibap(EJBQzybbwlNHSt4(oWk0BPw02jFF8kY5LToangQJqVt6wz1uXpVQv)czT0mYWhRVHMkzgdbr5cMFMhfo7(xtWiRJ11iWZfkv5upetHyyzU(Sfuu6v2iRc2uDCXXkgLI4l1Ng7t5(WzkisTxVuycUaUYejntLWunuUvFbyaUwlnnwT7apuKUkIJMzLiMjL0wCC1IMS)nQSjnWxBlhdvRGYPRiOq1n(UPH3NFc5LikvKvQeX4aHzcmOwbk7Gsmm5Lwli8wUBz2H4ZKfwNfepwKEsx)2NR16EBUNMEWiOhjJHWzz9xSsCSOpB(gSTq5gVv3)rjAupS9QBygZFpxzkZlEs1bQxrPS7mT5(qnrsb7wz0niMeliKb9mrmEblCA1M7f3WurwKKrZYsl)kLodfbP1lD6UbkpREW1yNtbMpzmTmeOXTJ55h8BKTGjwpzyfyzAZleeYM7KojSelbBUt7la82CSOFYspTVLf3VVL4wJfTpA9UsP6L(1lI3RAQqJboML(HkLxQsjJnnwaPkxU0S6MvBPDeg96QQDNXO0Lp)plTMM(rQjGnAmPkndFNFZQtVZW(Xf)(9O4vw4uRjkpPHVATXod(9RkEzREiESvNDU40ZjG(HOVCoIkXqoRdJiDXAECdhccprqCzw85yqMXeYt23BDdODE2JUh4IJ2RRhHOsQ5W5EZooj7u8CkNTYJsDAgeTfigOCejDrewOKSu1Trvs5fl7ylAoSyLqB)o9M1Ch4ZoxA9dtVNqpTqvx87gYQnxNLzQ0ScZiQDf2Zobt1M753cdfh1QLHAZ9cvhG5MtmPJmomZPJQenAGEeMEP8TGz(inNzISqglXHqAZDkKIyZ9rBob0M7LS5od9fpRn3lxHMzZ5VgkMnxGsClBUG2CmoTnhMFy23Q702CrUNyiFRsmKIvIKMEwub8pc3SiIX)tsdVxNr8JyfDFvcMuj(dnEjJa)PvfEngvWM7vS5oVn3fWM1RAZ9Zqr42CV2x5fO90yoWABU42C9IfOV40nuyZ1FDasBUbWCh8Eh3XwHiuy3y48ab2H9OTI6otJrD5fYjNDgfK(sONnb6bmrwXAzhOxVI9FTHUYsXcnrGwa923UtOh8L7mev4Du2gfqqhIdOyGXs7iKwZPOiTEB1E(FQOLVnGG7R7unedQFW63)6daaPtyLz7)8bLmi292kG8engqkPPS8m4Yj4yNtqYziXKJowSW5VEUKkITajU)Fcbj63MBVW7c75luo6O92h9aglJg2exrW0s)yvNE1XHTpuRtQCGyRkB2kg1(EUM8OnBhJI5HB5T23ZnURA4MQ0BVM3JUXcm7zlqpza6ptn5jiR2rYc60D7XY9ivN7i0noTionwBY9tem64YcgILT76LE4Qm8YMZ7(VFT6YM7aLo1e2Cpg9YhER2xzZ94sUMwzZDWkgvzZDi0ukBoFqaBUdFaBUNaTDYM7i4DTjzZ9K2CpLn3rzMhzZ1Ef7IQ6G7wA3qM2CptjBIS5oMJ1qC7igdfswyQzfgOV89mivlB74OM6uCwNU)UyklkSSzjLNN9DBOYZ6vWITuY5(0dn397rtABkofBBfaI6TG6nPMB5EY9t7O8WNtSVejwqYk7un1vl2Ctb)ijMYtSDkFTCUY(AzDn1sOR6oGhuFUWxUC2CI150L7sFYSnavQnAzS0LatFYpEJxgZxvkyNZrc7UbvnAZqvpqrF)p759)GaXzZLXfPfPVXKcoL)StNAUwG0U0oosB4Arq3piSVmCt0A1QonPsvY)r2zqGVzlrGuZuBac0MlXhqYyBBhnFFJKQ32YQqsthF(PJM6uH1MuOfiPlVJJKo92djT3piqc3iuJ1Io0w2v0pzHmENgfYjN4iWIGq5DJ)dPdbndHykL4Y9ncPFRtfTfiKRSRgH0ZxQHiKnQAFX76enW(Ctx(j30tejq8Xf0eBbKy6D1qIxCKgcjUvTweTRdvGD7MHkMxq4KNkS6KH7F6wGkU6U7LsEVM4DM6ngExhW4gVxtbglPR3J1ugMtQE9wamE9DZaJ(otdXfRv2li72WdyhUzWH(cUGLzpwdKz4bBbC4n2vRt8uF7gJhk7(RDD6dypUzaImdny3xsXV2jZ3xlaeFSFCgqWCt7Nd2t7v9JvzqnLLPr8mRzzFzg4bLRmJpsI(t1sVzMEN0BMv(5RW6FnYrM)GDehzQETRenU4yJ3hP)TZjoJDSoyUUSxfnvIzANrZtZ3vxbchGVRqrch6E4WCCUTrC6IYItxWgexKDOZj2rVJNtSy3fh0qBUfCDaWYtFzERP19F1R0cYNvPWLuh57BXI6Ht4sOtF0GCeCD25DyIckMeNqJWIksakm0V7)dKMfXJthKboJKUrK2QQBNsgfREFlZ5BP)3TB4t8L3NOpXv)i187w7Qqu4BWIS0BshfC)LJr)vJ9D23pE)RgdjWB5hkwHubnIkpGO4IZ1GFOy(m576SHpRFFl8WFI)V)
+!WA:2!TV16ZTX11DVcwXsq2Xsqw0w0wX00wYskwYaGaeGYsUgGe8L4ZfGsIYoMyb2lXUIl2D1Ul4dLMKkMex2hPTMTXtBQBIktA6mD6RHFWtFKKPHtN8HmPTNG2MUUnPzktB)w70Q)c65E3fpjaeLeLNeM(bUC379U39(43VF375CUG7s(YERNzLNTygHSZjAOP3RMIMXWE84zcp(pByDFz1uTm0uuiI9kjRiAqup3TNWqMyA1Xz6yqIGILuXYppQGQqLCtjzqeS2mJMHiXiUB9RFW4kY34gcgIDKsttXsw3yXXNDwtIfxgDbS6T0BZTgsfVxSwIPO0rsDswZmovKKXsoL)6RzqYjRPMAjDcFodTc6R5uIKY3GS31LvNvZiVGfwcVR7KHtFJJJZtrHcwsAgJRtZ20BgSxoRCoVgczzj0nVPLGHL3mZkRkBk5no(plVlBziNlhXWCSty4E77e3I(1fkyieCd6vtDIIISOz7(8hVa(sz0vewIySml9Hen9UPzHmK5XUzYcZoR8IRptVXsMAMKPIXNQCwtyqWS4torIrg52fmjjweBxjDQH08Qc5jMExtKKbRbAN3yWeJmr)tnYQfuDBwExxu28AfuXEZ8KGckk6hsGDFkN8hvtK8h(qUdxjeZr0puYRxah97O)c4W9LLKTiB4KRZy9(xvqv2zWSB4i9VbrWKK0cNTYzj9iq7Xv1ujffX(pTeZqhtmmj4GQO5Y0IsBLqG45fKv7h8JVaeaccDbHW)3w9PSQjrz2j0KvTY0BIXsLGVtzrDFLrv8etTcgzjM3glbXqvq5s4hd)SV(6ZAGdnyZsWsWZTfuZIZW9ttI(5ZKSx(ejgBnlTSZ7u(9nXrcwqwC9qAxtmu0asNCHq8MzfuiEwdNi4zylZsqNHuXrbpRr7sYoyM4kAcIEx35ZWAUqKv8VMjcIN7YYIwshznzS4jzn2N5HG9Xbp63)HGeqKISYWRzXgT40punptNBIhBQuJhN(6sWt9MNao67Gdqhd6aEoEgajJdXdt6JapR3LriYmuWwAOt45HJ7fob8IWj9w97bJO)etHfPJELeOOCIHSPLCwt3QagRU3fofCA4JIyeAJyMSLef8a986q3qKLZi4YMM4H9F2aHPxJeLEnyypi00uWIcgisBW6BoGOP5GyNRnO91PefScMb)BL209zrw0AgtjbrTfUIRuWQS0Ox0p4XrWuwStlX6Zh)46hSQxOcLEtNulHDGH1pmlfKPRrrUzztkXJHpEBwgifJiYs8MfDMfN29RVbl)RvahHMDjiYAg0PgskmX4Jn(yjG2nqacTmRXkyLrhNM9SOKP(b73q(gDmzbbrkCSJuP09xUpnJJY0m10XMrKKfPykZOBG3yYqgvp0uQXvKL2ciQ8Ygc6lFz3Bkw(tZKegFQuJm0yjChRQcKU(qJnwc(z4hAGbtPFQ7qtcfvvfz0z(zv00mCgyMhBDzuiPR8jPkUh1DqS0uO(XVdvUtIzgRq(meJ5H2xfhuDiBfD(NBZoictkLIM7eK7JzRm77MsP2MlTDgckUbNP0tMy70tgjICojRJb9DPvPmNSkcMMPZyHmFvR24ZxaxuYlpl1tKXuwnNcjZe8dLizk4t1gSC64OwE22GpL340QJEZMmqEC89fPS3GX6Rp9dIvDmrkgIisehvyrjy)quh5HERqN85T(skJC(hZWLIah2B1mORWTkJpAkls4ztHWlt1JRxtn8DwLfEc8f9cT5fEsVRZ(edYgwUGbDgRGbHVxfIGkVGIUKGhNgrkNC0p5quL3zfYsEJEfqsIAU4cgVXudDMkpDMKmnn2Rjbxa1ArvCWt8BOPLNdoNh(fOeV)AVWRaNhE11hxzYKljMrp3crnKvPc0ej3wLSOirLFSexkb)6A4IaQoYKRn448dD1XhlvSrGEp9j4ZkrYox)Wr37YZlyilGyGLLv7vlFgbl(5fukq46utVZlCbJSscQ5iMTFc4wST4SSoUReIH1sWBFc43bRbpWxSyniv4wDgYp(2(op87sFTHPVxpmHVGox9aRbtch07TP7IkhJ1uwyIwyCHbO)Jad4UmWxJJUmamihmemmCrxn(3RIwn)eAlqmOAZRQtVJYa5QrMUif5woV0nuXhg)oPUdtuTOom5Wok4SXf6T9G9mEjiPRWnKAL2GP4GlD7sAYSwWXpoCfgjeMg7oxfED4nUj8X4G3eRYzG047jazC(qzbrywo9t2mPbw9vLSdOc5ajqgUgmhOaAP1FHw)QoPbMG(rHRZP)YTU0BvYf1HalOampSahSOtVAP0WnGZaFCpWplv0a(ePHpjL2d)CNaUjSSJQa8Pzj9zyx)SWBb)8mcpSsjEo8lG8A4xez0WVeh8ldFUDeQl8RCb4xf(1G32dSk8Rd)gv4Apm85Pen4DktYIowOzLJiNixMuWVPe8BbFb43gExO32DW97f(IWxcULlpXbQZqci4(TrWn8vAcC(D3t9W5XQgiUMfZoa6UpqrwJCeleiUjf)wjJ0uu6i6h0XKHoskBvGXYzW2TnMnk9sxngYUXXD(A6zTkJx1FPTapkxOgGnAm8w)5ArLugoUfoq146gSuzLQOgYadvJ0GDpW09Ufy61jJMpCkLRpYvJxdm90LLNxT8OdknhHkn35R6cyhMz3A30lbyQYLFjEHCOYmClpvJVBUuE1O9Nf4kBrmSNRPF0YgJKKT1SoOBcRJjqRB0FYYzDjH86YgYzrZClKvQQ3PCgjYNb3koPS9UNPJlteMJOse7aTAqr)WLtFivvIrh9lBq2Sk7GujlaFi4rOCW9dEHdibp6JYHtEFy4X3lThCihCboNItMvpzuMF(0WZGgQwAvc6Igu(2lKUbRu8si06S7)EhmGCvC6UsZpoA8QjLeJZ905DkEaN81hWV1qIXcDQfhaEnpqmVqCpqVEH(8s1yw55zIoyp6rzlHwmRMMcobOMCbzCvWnk9i1KwPA7Y0vy)QoD5)GGHJ2tWW9ekypr8hSNEcgpyKUJWhWpMk7AxSRH4dgUlmD61OgyToUQcYXog8h3GblJbJXpkAd(9YIW9863EocrpgDFLw8uDpjM0gkJf7CFVI5u0wOFdY1lquZUKJyxCAAsBGAOdO4AdK0Q00s6y)k92rygNFK1P3xY2bwzQS7twEL2VUJvn0uyFXusYzNtLyA6zz2JO(tXmfSS0uhh3EMIWsS6AezSihI99I74DMvomtUTZJRFxUPGkcIB4yIs8XtLA8rb9J5i5nltYRHYDtc9npk3XwtH5OL5uXPRsYFF6TicUwLcTVZFDxXWhdUisJ(gW(EPhgXHH6DC)xuQ7rdm3K8vz97NNTcZYLWzPllJ9NP)eLsKUl5(KnPBbvmnvX7DMeUyAkhevZC4pusbLCGCex(tDP02wsHYrQscCtYIOicBnYuY5jWT8fGQRDExDT0WAuNyC2aNLo1SnxF)CEQNFb)vPHVzZjsNJVRq9eie7A3SRrGVtZyiWFZ9g3a(BRMna)DomaablFxjOOh4V)iW)ah8p6m)89qym8pb2EG3h(NH)LdbF)Dcaj8dUlqHW)AZbEWpCFRKPE8MchI3IV4fV2q(V0cx)ubH)TQXAWMvaz)5Wp6bgGc(3rmux1HHG)JhuqN25deoy0U))Hl3b4YR8E1dxodIwiM3qkPHK40NQ)MJw(l2fGwkTjL4DhjA0FkhPO7JU(MQM1wxJBZAtLUOwt30FTRZf7QKHMAYfdp)0xV5iP)Yh0iPaFGHKUbU3VOXJeiy0GD7py8a(93nUzVEchGDniUzVqDfOvBi((eOn89dqZ8EhOfb0FohG2oeS9j3oW2TJrOLXJFweo2DKREj(5o1KzirBoC8RTJdhB)b1YCF7Gb6QN4D7psi6LW0lDtVeHEjkfZfmc7QZ99qn2iqy8AWGbyxd2IviFXFkzfY)RsyO)7TNWgBdvlm1adn8udCP8tfU5iPV(dAHTG3hcB(JNdT6SZPMa2ZW6pDDUCG6MOogDOKjhASb2AMYevXoMWqlVUL(tuoZ(fejLsTJYP2hbx4GgRomjAOQDlbZZcuy(3KbZD8La1F(zjp29RZewhTOQqE1K0kZXrEzCm2JxqroNkeXW0sGgNAoQdaqt)R4(fdN4qtsZC5XR5zzCiYTEoGeZjfp2gIlPkKxol7ibap(EJBQzybbwnNHSt4(oWY0BPw02jFF8kY5LToangQJqVtAZSAQ4Nx1QFHSwAgz4J13qtLmJHGOCbZpZJcND)RkyK1X6Ae45cLQCQhIPqmSmxB2ckk9kBKvbBQoU4yzJsr8L6tJ9PCF4mfeP2RxkmbxaxzIKMPsyQgk3kVamaxRLMgR2DGhksxfXrZSseZKsAlmUArt2)gv2Kg4RTLJHQvq50veuO6gF30W7ZpH8IeLkYkvIyCGWmbguRaLDqjgM8sRfeEl3Tm7q8zYcRXcIhlspPRF7Z1ADVn3ttpye0JKXq4SS(lwjow0NnFd2wOCJ3Q7)OenQh2E11nJ5VNRmL5fpP6a1ROu2DM2CFOMiPGDRm6getIfeYGEMigVGfoTAZ9IRBQilsYOzzPLF5sNHIG06LoD3aLNvo4QSZPaZNmMwgc042X88d(nYwWeRNmScSeT5fcczZDsNewKLGn3P9faEBow0pzPN23sI733ICRYI2hTExUu9s)6fX7vnvOXahZs)qLYlvPKXMglGuLlxAwDZQT0ocJEDv1UZyu6YN)NLwtt)i1eWgnMuLMHVZVr1P3zy)4IF)Eu8klCQ1eLN0WxT2yNb)(vfVSvoep2QZoxC65eq)q0xohrLyiN1HrKUynpUUdbHNiiUel(CmiZyc5j77TUj0op7r3dCXr711Jquj1C4CVzhNKDkEoLZw5rPondI28eduoIKUicluswQ6wVkP8ILDSfnhwSsOTFNEZQUd8zNlT(HP3tONwOQl(Ddz1MRZYmvAwHze1Uc7zNGPAZ98BHHIJA1YqT5EHQdWCZjM0rghM50rvIgnqpctVy(wWmFKMZmrwiJL4qiT5ofsrS5(OnNaAZ9s2CNH(IN1M7LRqZS58xdfZMlqjULnxqBogN2MdZpm7B1DABUi3tmKVvjgsXkrstplQa(hHBweX4)jPH3RZi(rSIUVkbtQe)HgVKrG)0QcVgJkyZ9k2CN3M7cyZ6vT5(zOiCBUx7R8c0EAmhyTnxCBUEXc0xC6gkS56VoaPn3ayUdEVJ7yRqekSBmCEGa7WE0wrDNPXOU8c5KZoJcsFj0ZMa9aMiRyTKd0RxX(V2qxzXyHMiqlGE7B3j0d(YDgIk8okBJciOdXbumWyPDesR5uuKwVTAp)pv0Y3gqW91DQgIb1py97F9baG0jSYS9F(Gsge7EBfqEIgdiL0uwAgC5eCSZji5mKyYrhlw483ixsfXwGe3)pHGe9BZTx4DH98fkhD0E7JEaJLrdBIRiyAPFSQtV64W2hQ1jvoqSvLnBfJAFpxtE0MTJrX8WT8w775g3vnCtv6TxZ7r3ybM9SfONma9NPM8eKv7izbD6U9y5EKQZDe6gNwaNgRn5(jcgDCzbdXY2D9spCvgEzZ5D)3VwDzZDGsNAcBUhJE5dVv7RS5ECjxtRS5oyfJQS5oeAkLnNpiGn3HpGn3tG2ozZDe8U2KS5EsBUNYM7OmZJS5AVIDrvDWDlTBitBUNPKnr2ChZXAiUDeJHcjlm1Scd0x(EgKQLTDCutDkoRr3FxmLfewYSKYZZ(Unu5zTkyXwk5CF6HM7(9OjTnfNITTcar9wq9MuZTCp5(PDuE4Zj2xIeZlzLDQM6QfBUPGFKet5j2oLVwoxzFTSMMAj0vDhWdQpx4lxoBoX6C6YDPpz2gGk1gTmw6sGPp5hVXlJ5RkfSZ5iHD3GQgTzOQhOOV)N98(FqG4S5Y4I0I03ysbNYF2PtnxlqAxAhhPnCTiO7he2xgUfATAvNMuPk5)i7miW3SLiqQzQnabAZL4dizSTTJMVVrs1BBzviPPJF9PJM6uH1MuOfiPlVJJKo92djT3piqc3muJ1Io0w2v0pzHmENgfYjN4iWIGq5DJ)dPdbndHykL4Y9ncPFRtfTfiKRSRgH0ZxQHiK1RAFX76enW(Ctx(j30tejq8Xf0eBbKy6D1qIxCKgcj2SwlI21HkWUDZqfxxq4KNkS6KH7F6wGkU6U7LsEVM4DM6ngExhW4MVxtbglQR3J1ugMtQEJwamE9DZaJ(otdXfRw2li72WdyhUzWH(coVLzpwdKz4bBbC4n2vRt8uF7gJhk7(RDD6dypUzaImdny3xsXV2jZ3xlaeFSFCgqWCt7Nd2t7v9JvzqnLLOr8mRzzFzg4bLRmJpsI(t1sVzMEN0BMv(5RW6FnYrM)GDehzQETRenU4yJ3hP)TZjoJDSoyUUSxfnvIzANrZtZ3vxbchGVRqrch6E4WCCUTrC6IYItxWgexKDOZj2rVJNtSy3dNtmBU5DDeWstFzERP19F1R0csOvPWMuhj8BXI(HtytOtJ0GDeCn25EyIckMeNqKWIosakC0V7)dKMf5JthKbsJKUrK3QQBNsgfREFlX5BX)3TByu8L3NOpXv(i187x7Qqu4BWIW0BshfC)fKr)1J9D23pE)RhdjYB5hmwHubnIkpGO4cZ1GFWy(m576SHpRFFZ)WFI)V)
 ```

@@ -1,4 +1,4 @@
--- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v2.
+-- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v3.
 -- Run: lua5.1 tbc/mage/generate.lua   (toolkit libs live in tools/tbc-weakaura-creator/scripts/)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (internalVersion 45).
 --
@@ -12,6 +12,21 @@
 -- turned into a sequencing prompt instead of a use-on-cooldown icon, threat bar gated to
 -- party/raid, Clearcasting gated to combat, spell-known gates on every cooldown icon.
 -- UID stream is append-only: no existing W.uid() call moved, so re-import offers Update.
+--
+-- v3 (per-spec audit — gating only, no element added or removed, no uid moved): the
+-- question changed from "can this spec CAST it" to "does this spec PRESS it as part of
+-- playing well". Three elements failed that test somewhere:
+--   * the mana conserve breakpoint (line + lit marker) encodes Arcane's burn/conserve
+--     switch — Frost has no second rotation to switch into, so it is now Arcane-only;
+--   * the Ice Lance SHATTER prompt is hidden from deep Arcane (inverse gate), whose
+--     guides state outright that the spec does not use Ice Lance or shatter combos;
+--   * the Evocation prompt gained its own spell-known gate so it stops firing for
+--     mages below level 20, who do not have the button it asks for.
+-- Everything else survived the audit unchanged: both specs press Icy Veins, Cold Snap
+-- (Arcane IV spends 21 Frost points precisely for Icy Veins + Cold Snap), Evocation,
+-- mana gems, Clearcasting (both raid builds take Arcane Concentration), Counterspell,
+-- Blink, Invisibility and Ice Block, and every spec-specific piece was already gated on
+-- the ability that defines it.
 
 math.randomseed(20260816)  -- FIXED pack seed; uid() call order is append-only forever
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -192,6 +207,11 @@ evo.displayIcon = "Interface\\Icons\\Spell_Nature_Purge"
 evo.cooldown = false
 evo.subRegions[1] = F.subglow(true, { 0.3, 0.7, 1, 1 })
 evo.load.use_combat = true
+-- v3: both specs evocate, but a cooldown trigger on a spell you have not trained reports
+-- "ready", so below level 20 this prompted a button that does not exist. Its own rank-1 id
+-- is the right gate — it scopes the levelling case without touching either spec.
+evo.load.use_spellknown = true
+evo.load.spellknown = 12051
 alertAnims(evo)
 adopt(gAlerts, evo)
 
@@ -319,6 +339,13 @@ local manaLine = reg(F.texture("Mage - Mana Conserve Line", CLASS, 2, 16, MANA_L
   F.TEX_SQUARE, { 1, 0.75, 0.2, 0.55 }))
 manaLine.triggers = F.triggers({ F.powerTrigger(0), F.unitCharTrigger() })
 manaLine.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
+-- v3: Arcane only. The line marks the point where Arcane STOPS spamming Arcane Blast and
+-- starts the 3x Arcane Blast / 3x Frostbolt conserve cycle — it is the switch between two
+-- rotations. Frost has no second rotation: it is Frostbolt spam all the way down, and its
+-- low-mana actions (Evocation, mana gem) already have their own prompts, both of which
+-- carry their own thresholds. So for Frost the line marked nothing pressable.
+manaLine.load.use_spellknown = true
+manaLine.load.spellknown = 12042      -- Arcane Power == deep-Arcane spec gate
 adopt(gRes, manaLine)
 
 local manaLit = reg(F.texture("Mage - Mana Conserve Lit", CLASS, 4, 18, MANA_LINE_X, -27, nil,
@@ -326,6 +353,8 @@ local manaLit = reg(F.texture("Mage - Mana Conserve Lit", CLASS, 4, 18, MANA_LIN
 manaLit.blendMode = "ADD"
 manaLit.triggers = F.triggers({ manaPctTrigger("<=", MANA_CONSERVE_PCT) })
 manaLit.load.use_combat = true   -- drinking after a pull is not a rotation decision
+manaLit.load.use_spellknown = true   -- v3: Arcane only, with the line it lights
+manaLit.load.spellknown = 12042
 manaLit.animation.start  = F.animPreset("shrink", "0.25", "easeOut")  -- WA "shrink" = UI "Grow"
 manaLit.animation.finish = F.animPreset("fade", "0.2")
 adopt(gRes, manaLit)
@@ -388,6 +417,24 @@ shatter.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
 shatter.load.use_combat = true
 shatter.load.use_spellknown = true
 shatter.load.spellknown = 30455
+-- v3: hidden from deep Arcane. Ice Lance is trained at 66 by EVERY mage, so the positive
+-- gate above scopes the levelling case but not the spec: 40/0/21 Arcane loaded a prompt it
+-- never acts on. Its rotation is Arcane Blast with Frostbolt as the mana filler, and the
+-- guides say outright that Arcane uses neither Ice Lance nor Frost Nova/shatter combos —
+-- it also has neither Frostbite nor the Water Elemental, so two of the three ways the
+-- window opens do not exist for it. Frost keeps the prompt: Ice Lance into a frozen target
+-- is its one reactive button outside a raid.
+-- Inverse gate: there is no negated form of `spellknown` (use_spellknown = false means
+-- IGNORE, not "must not know"), so WA exposes a separate `not_spellknown` arg — verified
+-- in Prototypes.lua's load prototype: test = "not WeakAuras.IsSpellKnownForLoad(%s, %s)".
+--   * needs WeakAuras 5.4.0+; on an older client the unknown field is ignored and the
+--     prompt simply loads for everyone (the v2 behaviour), so it degrades gracefully.
+--   * do NOT set use_exact_not_spellknown: with `exact` falsy, IsSpellKnownForLoad
+--     resolves a rank-1 id through the spell name to whatever rank the player has.
+--   * 12042 (Arcane Power) is a true discriminator, not a shallow dip: it is the 31-point
+--     Arcane capstone, so no Frost build can reach it while keeping deep Frost.
+shatter.load.use_not_spellknown = true
+shatter.load.not_spellknown = 12042
 alertAnims(shatter)
 adopt(gAlerts, shatter)
 

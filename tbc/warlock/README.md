@@ -1,4 +1,4 @@
-# Warlock — All Specs HUD (v2)
+# Warlock — All Specs HUD (v3)
 
 Import `all-specs.txt` whole (copy all → `/wa` → Import → paste). One pack for
 Affliction, Demonology, and Destruction: every spec-specific piece loads through
@@ -12,9 +12,70 @@ with fake data (all load gates ignored, both curse states and all three specs'
 icons at once, placeholder durations, no animations) — judge the HUD in combat,
 not in the preview.
 
-Upgrading from v1: paste the new string and the import dialog offers **Update**
-(the UIDs are unchanged), which upgrades the group in place instead of
+Upgrading from v1 or v2: paste the new string and the import dialog offers
+**Update** (the UIDs are unchanged), which upgrades the group in place instead of
 duplicating it.
+
+## v3 — per-spec load audit
+
+v3 asked one question of every element, for every spec that loads it: *does this
+change which button that spec presses next?* — the test being "does this spec
+**press** it", not "can this spec **cast** it". One element failed, for one spec.
+
+- **Demonic Sacrifice MISSING no longer loads for Felguard Demonology.** In every
+  Felguard build, Demonic Sacrifice is a 1-point prerequisite tax on the way down
+  to Soul Link: the talent is known, and the button must never be pressed —
+  burning the demon deletes Soul Link, Demonic Knowledge, Demonic Tactics and
+  Master Demonologist in one keystroke. v2 knew this and used a live "Soul Link
+  buff absent" trigger to suppress the prompt, but that discriminator inverts at
+  exactly the wrong moment: **when the Felguard dies, the Soul Link buff drops
+  too**, so the prompt fired and told a Demonology warlock to sacrifice the pet
+  their entire spec is built on, in the middle of the emergency. It is now an
+  inverse load gate — `not_spellknown = 19028` (Soul Link) — so a Soul Link build
+  never loads the aura at all, in any state. A 0/21/40 SM-Ruin lock reaches
+  Demonic Sacrifice but not Soul Link, so nothing changes for them.
+  The v2 trigger is deliberately left in place as the fallback for older clients
+  (see the WeakAuras 5.4.0 note below).
+- **Nothing else changed.** No aura was added, removed, renamed or reordered, and
+  all 26 UIDs are byte-for-byte stable, so re-importing offers Update.
+
+### Requires WeakAuras 5.4.0+ (degrades gracefully below it)
+
+The `not_spellknown` load argument does not exist before WeakAuras 5.4.0. On an
+older client the unknown field is simply ignored, the Demonic Sacrifice prompt
+loads for every warlock with the talent again, and the v2 "Soul Link buff absent"
+trigger goes back to being the discriminator — i.e. exactly v2's behaviour, with
+no error and no missing aura.
+
+### Audited and deliberately kept
+
+The three ungated DoT timers were the main suspects going in — Corruption, your
+curse and Immolate load for all three specs — and all three survived the audit
+against the current guides:
+
+- **Corruption is in every spec's priority list.** Affliction and Demonology
+  maintain it all fight; Icy Veins' Destruction list (both the Fire and the
+  Shadow variant) carries "Corruption on pull". A destro lock still needs to see
+  whether it is up.
+- **Immolate is in every spec's priority list too, conditionally.** It is core to
+  both Destruction builds; Demonology casts it "if you are not wearing a lot of
+  Shadow damage gear or if you have a Fire Mage"; Affliction casts it "if you
+  have Improved Scorch from a Fire Mage" — a common TBC raid setup. Gating it off
+  Affliction would leave an Affliction lock in a raid with a Fire Mage running a
+  DoT with no timer, which is a worse failure than one extra icon, so it stays.
+- **Death Coil stays in all three cooldown rows.** It is not a rotation button in
+  any spec, but it is the warlock's emergency button — a 30% self-heal plus a 3s
+  horror to peel something off you — and all three specs press it under pressure.
+- **Curse, Life Tap, the health/mana bars and the threat bar and its flash stay
+  ungated.** Every spec maintains a curse, every spec Life Taps (the health and
+  mana bars are the two halves of that decision), and warlock threat is dangerous
+  in all three specs.
+
+Everything else was already gated on the ability or talent that produces it, and
+the deep gates hold up: a 0/21/40 destro build has only 40 Destruction points, so
+it never loads Shadowfury (a 41-point talent), and Fel Domination loads for both
+Demonology (instant Felguard resummon) and destro-sac (the resummon half of the
+re-sacrifice loop) because both genuinely press it.
 
 ## v2 — rotation fixes
 
@@ -109,13 +170,14 @@ always means your pet died, so resummon and recast it), Fel Armor MISSING, and
 Demonic Sacrifice MISSING. The two threshold prompts require the ability to
 actually be ready, so they never nag uselessly.
 
-The Demonic Sacrifice prompt carries a second trigger — "Soul Link buff absent" —
-purely as a spec discriminator, and it needs no custom code. Demonic Sacrifice
-sits below Soul Link in the Demonology tree, so a deep Felguard build knows the
-talent but must never use it — burning the Felguard the whole spec is built on —
-and their permanent Soul Link buff suppresses the prompt. A 0/21/40 Destruction
-lock has the points for Demonic Sacrifice but not for Soul Link, so they always
-see it.
+The Demonic Sacrifice prompt is the one aura in the pack with two load gates: it
+needs Demonic Sacrifice known (18788) **and** Soul Link *not* known (19028). Every
+Felguard build spends a point on Demonic Sacrifice purely to reach Soul Link
+further down the tree and then never presses it, so "knows Soul Link" is an exact
+"keeps its demon" test — a Demonology warlock never loads this prompt. A 0/21/40
+Destruction lock has the points for Demonic Sacrifice but not for Soul Link, so
+they always see it. The aura still carries its v2 second trigger, "Soul Link buff
+absent", which is now only the fallback on clients older than WeakAuras 5.4.0.
 
 **Cooldowns** (center, below the DoT row) — a horizontal row of 32×32 icons with
 cooldown text and mouseover tooltips; icons desaturate while the spell is down
@@ -139,7 +201,7 @@ case.
 | Shadow Trance alert | 18094 (Nightfall, Affliction talent) |
 | Backlash alert | 34935 (Backlash, Destruction talent) |
 | Soul Link MISSING alert | 19028 (Demonology talent) |
-| Demonic Sacrifice MISSING alert | 18788 (Demonology talent) + no Soul Link buff |
+| Demonic Sacrifice MISSING alert | 18788 (Demonology talent) **and NOT** 19028 (Soul Link) |
 | Fel Armor MISSING alert | 28176 (trained at 62) |
 | Amplify Curse cooldown | 18288 (Affliction talent) |
 | Fel Domination cooldown | 18708 (Demonology talent) |
@@ -173,8 +235,8 @@ it (expect `changed=0`). One more re-import caveat: the Update dialog's
 dragged in game back to the string's defaults — uncheck it, or report your
 coordinates so they can be baked into the script.
 
-## Import string (v2)
+## Import string (v3)
 
 ```
-!WA:2!DVv2ZXXX5DpAfTixQdqWdzrAzbdjqtqlrTha7UGwuP2DbwWfCXbNDb4HOf2zNP3DgIzNzypZcqqBzjbDeehN4yOe5koYXIqjo5Huo24HCu5OQqhLKhus(mYrnpKRIUQ8Ck(xq(6EM9cyjafLOSiFa9ot390t393VVFFh9aHz6w(Dp4YpX6LKKNtHAAL2u3KowGabMkqOJnOv3YMgoutDDIsAvnDfkXymRUoJev3uEUEEMEojrs3r96nRyCjdPw7qbvkrYX6aBSMEYOlzRE9sMufcnL)l3QRu6Ax5ksuLEkyAQ7OzrV8KLlBtCekzjHVBhRhT(avivACWsQR3tElISDjVrsLUO3dCPvPKkAMgfw0IiwHAwZAvVEKx7kKDSMMrztAvjhShbxZRbVvUGGqG1LQ5OAsN0I1SDWs4EqzTkbPsY8kIjA7irDcwQSMHMTAWu4pobxYHQvPcHApXHP(x(2PCyVDPAuPixJvABr011uSpy3HsvdFOsw6slsOlXRpRIDWRBxRezECDMVw5YAxETztNmFHzZxiPyHgnnfLGnjMFQrYL7g1SjJCzCEL3BekkAivLyhCvfsjCeylE6jhj3uzMo3k1m8NwbxtrZ(I1mWvZ8Kis66w7rIFDbV2h3uH8h9z83UgrPcXAp5VunC7VNm1WT7ZOQ5qUMxRE717AfjdnVnZyWbYCnIKnjVdkUQ4O(aWHszyAqwxbx)SEmlBpHAtWnvf7LyDLnlHiPQkPzKbcJpaebIcdadI)(OBSMvSj6LNYuZWPu6rMOWiI9QPyT3MOlrITznQmX(gyxiudj9zW3g(EFH1ktX9gCEj5if4gsgYOiodRk27Vu(0IJmYeR6ykpVx)35u7psnnL1gn2LCkrZioZ0Ns0wwsNeyvusiYbx21XoznWTHaRYwtAEGMu6MskbxZ71WNVqILdTQncJN7mAkoQ7FvnS755t2p)Nbccdbp0)XNbYajwN3jrth((LG1EA7EM0jvYPlmzk2ZRcp2lEy4GVnUf9fGVi0RihIuYtTeR6jGEcUecsMLb3kcpj8uWHdcFj4iq)bB95GXT230yx6jTQedNtOA2oAY2(dbm5gEw4OWxgEAeLWMeZkxN0iaC8xaIdjwQKKV(0u3FOJfEqwz8eSYidgabN2som4ar9A81Mhm6CcqQJFa4qRXuvWbyw8VLpGv3oKl7mRTQKI5cN1NnyfEDScRU6dHtY4IwLVM7RpRUA5bAQuFDVARJEGtzTxEnOUUjd7kZLkPsI3EdEdOsgrHx5RUUNy8C(V9RXB)I1WDOYlcjwLYenKcyLPMyYjgboefriS(SkVJn3D8M2LrkvRUYq1UspNUMKcdp2tHcwHASMM1JBA22wyZQqKrLm9zTO4f2CKrRBn1NCRZRBbewEgQK1sNX)I1B8Q5KctoDHCzNye)9QwqPRLDIjgrCwXSJEYcw9VntjKw1qHRqlww30K6TXmpo7kPtk28vY4CFm)nX6IqR(2Mb3RYstuRAjcDE4qRGBQEABR79J)0occtQxJPVaY)w5MsF)AQp381BNLG0BWXQFNnopdusLOvr15XHrMzfMMJmAOYUyjhu13W5aIvRH2LckYR9WLS1mQOtONjPyUjtFk4voa8AftH05YhaELGPyJh7IRZr5PWbqHP(gj5WdB1fo2jvyGiIcrzCPlR6roKUPU0Edc7l4g7OgQZ)WuFvKwvFoRaeIr)Urk0y3cKQCTyBnfIixWd7hhOGWJge(CbtDftZQcRXFrNKVZCcktOvJsetRtKmeL0TuLc4nvk41I1rYYyFlljtUqAjupXOskj6fMo7Z08UNjpNwJ)yQWZJ8Tivoea2La8vciUatX7Vni8CWjGFP1Y0FHkzo1Czo7WPPAgmgAIQ)ustrHyioXiZmI4AMunugXPjx9KtkM98torHK5GHp6HfLvjYZLboyGLMxIQjHyG1BdUjoVKEnsVXc1RPvVp3jOYQsgvi2h8WWv5Cydni3Hip6SalzHERqOolcIhg(DXHDhWpyjnJ0Mvlj5axvGniN4eWQShN)CW7bVfSNG3G5MvfUAtdMjw7Xxoem6(Htw3qWFPaZqaKvagdofKZNL)pPjBT4uMlqOm25vSyxX0bfAJOEDg2TrBf7iNpm12XVdNUvADqCmpoCw5ad6TVeaYRcf85UHPx(aWmcWzUrDAz(uOV(GZX1dHZJRNxaUa8vFv4ffGzXXSiiHpxjq27nPaeOIG1rUzSd8XRfMhWeubn4IWCGoufSkA9uB9J6vh4ax6XaQG1ZU19EZSUiveudMhwaUSaSO3Q6kfHVgCm4RhaEjgVb8nkcVmtXhE1ddlbVMhVa868QEdE5Bc)YWYQWVslA6W3e1SHFv4BD7Rid)AWVERkVW3wa(nob8DGvG3ka8Bc)wWB3uv7(9u1GVBd1Sqx8YPVOUE48IZa)2QW3d(DG3b((m9hoipa8dUwRBoWv7nktFP7NZdPZbhXhSjeHboEVwurGFVTq3a(9VzAdVZ91jTHg44vD4ruWCFbzPPvioio(6m4FZgkYa5JB1LFWh51CQXPj4O(pEvnWfqcwr0oRyCT(8MvwYon0kSE6nbcB0PoGa7SsK1xClgKgG(nPP1Q2thSj3CiAtLJR7GkBBVYW8OYWAmHbY6ZcdZxZG6FlE9HHhPykQKMsXpvRUSJnPUm0roR5WPhsxkTEBQlhVH6Ykn2(qDL4CBlpVp0FmEe2XyfHBrlbFirPk4wdC1aTQPmgRJdXn)eXR82u1Qh4XMaH6)D1H6R3urbNMfH)y4hZW6)KIWFrVjcHkaOxMnWamJEsoMu2QyCyTw0EQRvCdFFdy(CY81XAFPZLC8PWWvYLm9PqhFYwi7mJWMtOqKPDVVGLQQrPMuvUI(dJ7(dhCLs19vcL7Dw6wgoujuLaD8HFp28pDvUNitvt3MSu9Wn7om)r2SONjwzIZwf)FhRJ30VLKkktAyFHZqKMljl29lmorrt6c(E4yFbVyINLho8XCQij67NpxI6vGYPedYiiqKdYrWqrFwo25TyCdlrRhIhILkm2PTNEof9XJopJSZApym6YuIdz2M96L6RKxOgQEQvWFADZm)z(QrWF(wOd9DV)DV8tacnsUdCFN3AFnJCoTjLwJNYJB0sL1qxTS6UzfzRw1uhNcwpEZ6M2W2H5rvpjlxwxJNKeR93S58AwQMg9KtRmbEayNSnJGWUHhef4pOakWFeORDWaeD7rF4PC3QyHdyzCZFE4Xpy3HQtmZ4PzaW(k2bY5NbzGE2DD7Zm4jUAjXwdBwWMjkridtcYHpifqTr0Yul8CkNtdsgasfeshaXVWibzsXLFsUrSD9T2b8qCp6wx20uhdwZi)cAOtzxR(TSSSOc5k6Tu)HEl1VzKWXJKkwKi8IOPIhBGeIHdhlEyEzeXidgnCyXiXJeogfhKjn0xSiU58J7WMd9KjfhpZ05ADl64VWnMJqSsYcxXrKHXu5wYqRwPo6Y7LBTQ3(S(q65wt7jxZluYutwOWKJdx6X9SyuMBXOJwlo9TMRtpmKJbsq3vknoT)ZANEijjer9ZG)EV5X3MB9DP67TfBWG)bw7RELmT4H1SzOw0SdJv)0(yfga4qEek(yLnuZJUPAq4ks)3kILHqquacQFRa1bbFW95dcG)LIW)6MK2V7JgzOeHsfou4bqXD44OmoE4W8Yi8YOCjDIiXcfvmAOHcJ9DGHcXAkcVBrIW6qeeIeprm8rIpu048Agks8qdGONbtWkgIpyETelfE5a8kgc(pVzyh4)QDud8F)Xlob(FUtaoMWE6ZTWGlAATq2ndoGR3ev8pc)8pHqacBja47fj6ajqrvCedm0aPIm0aC98ydYlJZltW05dnehjm4TNe74)7Rxr3CHmuYLQrmKx0ZRvVCwXA4AO)aJQ7N5SIlXQINd9P0UmrFv2T54j2D)RXUUEwNwPs9hbna6fCi3XgENQNYNuSBu5DnpptQ8zsbvn55mi22b4TKtdVEp8xukVu6)PwiwHmYLM3OS28XU4wdX(NUZbXoyd3gVo5YwAEo9uqRkbUAKWhBqVSz45ryr49yPU(yHpgBZTDO552sO5XrcNWHsGLdeAaE5Tn4Zvyh1rCUcFwxHhOORWoDf2LRqW97kSBbxHhK7QBCVqOc4k8qyDpSQRWJGx3f(3E2JRq3FIcky(AXJNKFonZzWnQ4bsE9nbvwTzN2zT3zJqMevVyHrYjoso7ZU1qM)5pjGmUc7dUQRW(3akXv4aTJo(jBj64IImRsinvIeXhIvMieVK7AsSb4gRcFxG5fMy2v4G3CrRRWH25ONBJIuhIMXWlKo0GZvBRfPWDEdnHsHroUqVtpfCFxP5rLIUGZpIGEkqLmKBZDE2jVYoi2wRJ5OEpfKSAZhEtmQkvjhm4iRd1E1y)nMRNXZMpF2jgT1gZq07jjTQjTrJpzlUttQAAOj3tEjzQwznzs9oXdra3yFO)goIZlOawwILjp0h1OcwddrRwvJ8SbZlXnL88ovusxRIbKGIbYWocubMN8Op8ndwI6DeNKI8yxsgadEBb)XbdKHfTXdFnLfnKQQjZZRbgttkBtQdezLkunVZrA3lXUKznTxXHf11QQ5SB2HZLJDL61LnzXrz4KrsgdXUKyYHZoD(sujfTA2V(dIrZSIev2Z4lIn9rvTEw7j1juh7vlxtxpTgvwNuSE0k)dcS4s2L(hHaIqKNhmJrID6lsp3ivtKCXTX1M6IhM3Ode(wkWTBddg)FcZ7BMO4VOntST8hz(rBK)OSwKtF(5Vuf1X0HGUcN4MsG4k0x7miSPZpfgKYoe9jR5WZbYA26AkKsMooMvH3pcBeysWoWTSCxRWppBgECDBhQe7SD4(LbhQKCnBCakX7WISjcccCfs5vXL9Q497om8wc8ZiJxDXUxuzxDFzHv4PHHnSlvFyzV81XRnSz5oG1K1EQ3wH6vJZmVKrvVII8XMpAf)O5IDdCy0bgkAS7u4qpxFhS(HeDxdMC5f2iM06StnUXWJU45sFQTdtE4oIjrScho6kKgEFxHHV5GqxHrCfYW2uh1v4KnHAUczBfM5kmwD8LRWPCfYXgkxHXDfMahmxHjXvYuBlk5PGtk0rqc7af(FRNsuR932ravpPND)CWpQ3OHGXHFidbXpy22oSOIWFq7Nbh8h2Y5U1iJRW72Bm2OmbhhI9cFew)NSO1EAzi9oxYIwhO9JfVXS553Ae7rVLD1oQhQnWnfWU1qSYnczAv(XLZpd0IBz4tSpaj2N(uw0KN1rBMYv292xG)TmnRNllZMQg1qZOsEm0gnhpWz6CrSiY6zsrNOJGt1MGZV09mGZMON)Q2Zr)qSC0d)1BoJ84dT8EerYu55sX(ix8axvigeQMCEvZfM0O46TD7A28FejsklYpAzEOmtivLStNvHdjYV1)Rf6Xs7NjTEMIAwHIHV3Zr4cU(T6MFApvmmPeZ5ju0LhsX1rJu65RpCR1I7KR3iWkwl8ZPJn)9uGwX3EG8CfT2l7Ac7JDR1U)re)ZzSJ6NSIBp8)B3w237qUd4jQNtcZvdymU42zdLbxHZA1xN1bssLLmi()ekSh83orQjQEYzotH(ZUDW)JCpb8VLqnpOyKbJejX6ON4YQeBpy76EW2X1SzFno3gg3)qavcVDg33ASYBw3CShH4l7HhotXnzsEScTdq2AsYrLqRduVBS9qjlKBMZxrdJPswD7qj9FVgk5OIrseoEmwzIHCf0DfQEVbQWOR2rfhElrfy83SWVRr95nYjNxBXfgp88v2oeXrVNXSPpI48IHtepbl5uXzhzcwgMxgrm6GXdfE7XiTqb5km39syQSkFyyAMYErzv0Fbz0EEvpCv)gZpajY5QyQ3)2HR(Y3nHRc5k8uW3hUVlADW6Pyj9WSSSu1sxR8I(hn(HARnwkVg2SQMbpn8wFU2AmTPrzDPkSV75M5MJ3I3MBj0v3o2q5A0f3qddtqkFCe10BKVSN((BjHzUcp9U(OMTmxHNP(x3KRWZYkcT58I5kew1pLyUcrAMmmxHOqx7WvyaiIRWG72viwVId7kehVkHQRaslFCxHVcpTwUcpxl5ZAVT(fj45IPTRWZVXuzj8XsMSYs1Zn8PLM22wKXJSfzqyzuN7fCfUGRWxfrpV4QmFosQVG0I8prExHI7CulgWuYZ)yxHsUcYypvwVn8IRq5n4IRRqfSBQ3AEY6DsipG)PH0cJraVO38jvyKe7C9s1CCmnMeDbhd16wG1i5TAkWTAYyWc5Z)FvNI(hkwSOwNEYetnNTfJo4v3Iuh81GFUkNoi5DWZ4yvtJ64On8jvveEpiFtJi36cFxHxRUqp7(6Oq)6Tte8jOu3v4n(yuuJlVwmo8M(I4yvMxo)aZmt)uPTte)1)Kqe7kS8DarBMJ2rr7ATqJFxRCfxBDqUQhDKidyOPpqKkBNC9LU7vUoY)whLRR20i8DTIvCP1bX6mvoZIkjhBHPgE4TtS(nU7vSo)P2kXkZfQ7AfR4sRdI1(h9IrTgm6OXKxC7eRV8DVI1d(gDwS20b47AfR4sRdI1fh4s5kLA4bYA0)2jwFLFHlw7UA3kDRS8xOTVQ4XGHGFggiiBY7)9(Y(wF)GD(P7V1xmgMn9596KqjFSj7p005pzh(8E72wm6Xg8yH6E(7)L()d
+!WA:2!DV123TXX5DVgwXsq(cf1fhlfhZqBQiQyldascaQy5EaabPaf4fTaKuswXel2Da2vCXURMDbPOADSnTDcRBAtdDRZPPonw0TU9HEst4d9YPxoNQu30hCB)c7LZ(qVDuoN(Cp6VG(nZU4gjePSSLJPFGd2DMzNDM5733VVlZsHP7u(Do8Yp(6fLKNtHAALYu3KoAGabMmqOtmGvNYMgoutDDIskvnDfkXyuRoMrIQBkpxxpDxNMiP7OEJgvmMKHuZDiVkLi5yDOnwtxdRlzREJIMufcnP)l3QJK6Ax9QsuLUYBAQ7OzrVYeLkztCekAjHVBhRhP2aLpzkCWsOR3volISDrVrsLUO3dC5vPKYAMg5x0IiwMAw1AvVEKt7QKDTMMrjtAfjhShbxZRbVvUGGqG1LQ6OAsNWI1SDWI4EqjTYbPsY8kIkA7irDcwSKMHMTAWK4pobxYHQvUmHAp(rP(x(wjDyVDPQuPixNvABr011uSpCNHswfFOIw6slsOlXRpJIDWByxTizECDMRAPsAxzTztLix(zZLpHy(6nnjLGnjMBY0zZEZQ2K0xbNx58gHcIgsvi2bxvHuehb2INE60zNC4PYUsvd)PvW1u0SVuvdC1mpjIKUU1(K4xN3R9Xmvi)X3J)2vALYeR9L7YvXT)UgUkUDpJQMd56ET6TxVNvKm082mJchA4RtKSj5CqXvzh17hossdtdY6k46N1Jzz7juBcUPQyVeRRSzjejzfjnJHHW4darG(G(HbWFFKnwZk2e9stAQz4umv6XZNwSBnfR93aDjsSnRsLj23e7cHAiPpn(2W37ZVwjkU3GZljhPa3uYqgfXdZQI9(lMlLy60JVQJP88E9F3tEWiv1uwBKOx2PiDyXPN6mI2Ys6KaRIscro4YUg2jJbUneyv2AsZd0Ku3usj4AEVg(8fIVCOvTry8CZOP4OEWv1WUNJpz)c3deegeEW)J7bggIVoVtIMo89lbR91Y9mPtYetLFIKSNxfE0x4OWHFlCl6lcFjOBroePONAjw1JdDfCjeKmldUvaEc4jHJge(YWXGEd28ZbJzDGPWU0vkvjgoNq1SD0KT9hcyIn8SWXHVc8uikHnjMvUgPra4KppedIVurjF9PjVVqNi8aSYyXzLrgiacoTLCyWbI615Rnpy05fGKN8qWrwJPQGdWS4FlFiRoDixXzwBvjfZfoNpBWk86yfwD0dcNKXfTkFn3tpwD00d0qP(gE1wd9aNXA)8AqDDtg2vMlvsMaV9M8gqLmIcVYxzDpX459F7xN3(LQI7qLweIVkLjAi5Xkto(eJNgocfriS(SkVJn2D8M2LqkvRogMQD1UoBvjfgESR85TcvFnnRh30STSWMvHiJkz6ZArXlS5iJM3AQn5wNx3ciSCgQK1sZ4FX61F1CsHjMkF2mJN2FVQju6AzgF80IZkMzKtN3Q3TzkH0QgkCfAXs6MMuVnM5XzxrDsHgVsgN7J6VjwteA1Z2m4EvwC8QvksOZdhzfCt1tBBDVF8N2rqysTAm9fq(3k3q67xtT5MVE7SeKEdorT7SX5zGIQeTYQopgKE6vyAoYOHk7cfDqvFdNdjwPkAxkOiV2Jw0wZOSoHotcXStK6mWlFi4vlKePZLpe8YbtYgp2f3GJYtIdGct9nsIHgYQdCStOWarefIYysxr1JCivdDP9heoqWn2rnuN)HO(QinR(CobieJ(DJuOrVniv5AX2AkerUGhoioqbHhji85dM8QMMvewJ)IonFN5uuMqRkLiMsNizikPBPkfWBQK3RfRJLHX(wssMCXusOEIr5Ks0lovMNUXDpDooTg)XuHNd5BrQCiaShb4RgqCbMI3Fxq4zHtb)sRnCV5lp8zMB4ZnukQMbJHMO6pL0uuigIJNE60IRzs1qzeNMC1tpHyMlmX45tKfg64hvuwLip3WWHdS08sunjedSElWnX5L0Rs6oAOUnT6(zpfvwvYOmX(WhfUgNdBWb4oe5rNfyjl0Bfc1zrq8OWVhoS7c(blPzKYSsrjh4AcSb5uNcwL948NdEx4nH9f8Mm3SkZvBQZmXAp2YHGroiC6Agc(ReygcGmcWOWzGS(S8)PnyRfN0CbcLXoVIf7kMoOqle1RZWU1BRqB58Hj3o(D4SntRdIJ6XHZk7FaV9LaqoviVp3nm1YhcMwaM5M1OL5tHE6bopxpeUaUEEE4IWx7vGxqaMfhZcGe(CfbzV3KcqGYcwh7wXoWhVMyEatqf0GlbZb6qfWQG1tU1pQxDGdC5hfOcwpZw37nZ6IurqvyEyb4kcWIERQRwa(LHta)kbGxKXBaF9cWlXu8Hx5OWsWR6XlaVgVQxNx(nGVjSSk8R2KMo8gOMn8RbFR7Cfz4xh(nAw5f(2cWV5PGVdSc8MbGFl43gERgQA3NNQg8DRRMf6sxj1L01dNtCA43rf(EWVl82W3NP)Wb5bGFW1BEZbUw39X0x68z9q6CWrSbAaryGJ3Tjve43Fl0nG)GBL2WBFVTtBOooEvhEefm3xqwAAzIdIJVbd(3OHcmq(ywD4h8ronNQCAcoQ)JxvdCbeNv0x7vmUEpEZklzN6Afwp1MaH17uBqGTxjY6lTfdsDq)M00Aw7Pn2KBmeTOYX1DqLTTxzyEuzynMWaz9zHH5Rzq9VfV(OWdxijvstPWNQvx21Muxg8yNZCOudQlLsVf1LtwxDzL6BFOUsmUTLNZh6pkpc7OSIWnPLGpKOuzCRbUwGM1ugL1Xb5MFI4vEhQA1f8OJJq9)(Aq91BOOGtZcWFc8Jyy9FCb4VS74Hqfa0lZ6yaMrpjhtkBvmgSwtAp10kUPVVbmFoz(6yDGuztm2Ky4kztK6mOJpzYNz60S5ekezA3hiyXkAuQjvLRO)q4U)qbxPynFLq5E7LULGJuevjqhF43Jn)twL7jYKv1TjlvlCZodZFKnl6zIvM4SzX)3X6Kn8BjHIYeg2xCgI0CjyXUFXXikAsx03dh7l6ft8S8WHpHtzjrF)85suVcuofFagbbICqocgk6ZXXoVjJByjATq8qSu(rpR9uZPOpwFZZi7S2hgJUmL4qMTrVEXEk6fQHQNAf8NvZmZFUVAe8xSf6qF37BVl)4Gq9K7a37fSoqJiNtzsPv5P84Mnvzv0vlRoBurMkvm1XPG1J1OUPmSDyEu1vIsL014jjX6GnAoNMLQPrxz1krG7h2nBZiiSx4bqb(diGc8hg6yxmarNE0hEk3nlw4awg38xaESd3zOAeZmEAgaSNcTHC(PrgONzp35mdEIRMsS1qM5TzIseYWKGC4dsbunT2WvdpNY51GebGKbHubq8lKoitkU8tWnITNV1UGhK7r36YMM6yWAg5wqdDk761ULLLfviBbVL675TuFJiHJfjz0ir4f9Lmw0(JlgoC0yH5LreJmqFHdlgjwKWrP4GmHH(IfWnNFuB2CONoH4ydpv2M3Io5ZFZ5ieReSWvCezymvULm0QvYJV8(5wR6UhRpKEU1WEY19cLm5e5ZpXyWLFmplgL4wmAR1IZE7560dbzzGe0DLIJr79C2Pguscru)m4N6np(2CRVlvBVTqDg8pW6a1QKPfpKMnd1IMDyS6N1hRWaahXJqXhRSHAEKnvdcxr6)MrSmecIcqq9BgOgi4dUxFqa8Vua(x3K0(DEKidgpuYWHc3pkUdhdLXXchMxgHx2hxshps0q9j2xObdJ9T)bdXAkcVBrIW6qeeIelEu8rInyFX41myKyH6hrpdeNvmiFW8AjAs8Y(5vmi8FERWoW)vROg4)(JxCc8)C3aCmU9uNFHbw00AHmBgCa3ObQ4Fe(5FcHae2saW3lsF9hhfvXqmWG9NmYG9Z1ZJoaVmgVmotNp0GCKWa3zsSt(VVEzDZfgMsUCvIH8IEET6LZkwdxh9hyeD)mNvyjwv8COpP2vi6RYUnlpXUhCn211Y60kLR9iObqVGd5o2W7uTu(KKDJkVR54zsLptYRQjpNbX2oaVLSA417J)Is6Ls)p1cXYpSCX5nkPnF0lT1qS)P7EqSdx3TXBqUILMNtp51QqGRfj8jgWlBgEEewaExwQRpr4tW2CBfAE(TeAEsKWjCO4yz)H6NxEhd(Cf2vneNRWNZv4(l4kSBxH94ke8GUc7vWv4b4U6gZleQaUcpiw3dP6k8W41DG)TV95k05NOGcMVw84j5NtZCgCJkEGKxBtqLvB0PDx9T3iKjELlLpDwX0zTp3wdz(N)KaY4kCa4AUchCdOexHd1k64hVLOJljYSkH0uXJhBqwz8q8sURjr7NBSk8oaZlmXSRWHV1IwxHJS7ro)gfPoenJHwivObMR6wlsH7(gAcLeJCCHUNAs4EVAJJkfDbNFebDLNkzi3I78StELDqSnxhZr9UYlz1Ip8MyuvQsoyWrwhP1QX(BmxxJLjxUmJpsZnomrVRe0kM06n(en5onPIPHMCx5KKPAL0Kj16epebCJ9b)B5ioVGcyzjwM8GFuJkynmeTQvmYXgmVe3u0Z7urjDTYgqCkgid7iqfyEYJ(W3iyjQ3rCskWJDjram4Tf8hhmqgw0gp01vw0qQIMmpVgymnjTnPoqKvkt18ohP9Ue7sM10UfhsuxRIMZEzhoxw2vQ3q2KfhLHZWsYyi2fftmuMPYvKkPOv1(1EamAMvKOYEgFrSPpQQ5ZApHoH6yVAPQ66P0OY6Kc1Iw5FqGfxYE0)ieqeI88GzmsSZEj65txjEIf3gxBQjEyEJ2F4BRa3Udmy8)jmVVzIc)I2mX2YFm8pCJ8hL0IC2lm)LlRoQoe0v4u3scexHEALbHnD(jWau2HOprvhEoqwZwxtHu00XXSc8(ryJatc2gULL7yf(5zZWJRB7qLyNTd3Vm4ifLRAJdqrEhwKnrqqGRqsVkUIxfVFNHH3uGFgz8Ql05Ik7PZRiScpnmSHDPAdl7LVoETHnl3bSMS2xT2YxRACM5LmQAvuGp28rRWhnxSRJd7R)b7l6DlCONRVdu7qI2XGjxEHnIjTo3KJzm0ilE(uNz7WKhTTyseRWHJUcPG33vyOBni0viTRWWSn1rCfoDdOMRqMMHzUcJwdF5kCgxHSSHYvymxHXXbZvycCLm52IsEs40cTfKWoqH)3APe16GTCeq1s6zNpl8d7UVqWyW7Xqq8dMTLdlQa8h26zWb)rnDUB1Z4k8oDhLnkJZXHyVWhH1)jkyTVMgsVZLSG1HA9yXRpBEUTgXE8BBxT7Zd1g4wcy3AiwP6HmTk)4Y5NbAHTm8j2hGe7tFkdAYZ64ns5k7E7lY)wMM1ZLLztwLAOzuohgAJMJh4mv2iwez9HtshVTGt1gGZV8NzaNnqp)1TMJ(bz5Oh(B2Cg5XhA59jIKPYZLK9rU4bUktmiun5CQMlmHrH1B521S5)isKuwKF0Y8qzgxQcz3oRchrKFR)xl0JMYptADnj1SmfdFVRJXfC9A1j)0EkBysjMZtOOlpKcRJgP0ZvB4wRj3jxVEGvSw4NthB(7PaTIV9a55kyTF21e2h7wZD)Ji(NZy3NFYkUZW)VvlzFVn5oGNOEojmxnGX4IBN1vgCfoNvpTxhibvwYG4)tOWEWF74jhVYPNEM89Mz7G)h7ZeW)Mc18WIrgisK4RJEIlRsS9GTR7bBhtZM914ChyC)dbuj82zCFRXkFJAMJ9ieFjp8Wmf2Kj5rZ3kazRjjhrcToq9UX2dLSq2PVqznmMkz1TdL07N1qjhxms8WXIYkJpORGURqLpBGkm6OvuXr3subg)nl87QuFEJSY50wCHXcpF5TdrC8pZy20hrCbXWXJfNLCQySJmbldZlJi23aXcfE7Xinrb5km3oam171Elrmy2nmmDAkvMixJNj7wRUU1Qz4qVmkFyiKM0Erzv0Tcz0SFfp4xVgZ3pjY5lBQ372b)(k7KGFHCfEs47d37LSoCTmXKAiwYyQyPRvAr)tq)iT0glZydzwrZGNTERpFlnMY0OKUuz2NhDJu4XBXBZTi6rCBBOuv6IBOHHiOLbCe10RNwTN6(AkVAUcp1E(OMunxHNU2hbLRWZWkcT50N5kew1pZzUcrAKZmxH(Go2LRq)qexHb2RRq0UfhYvigEvCvxbK9(KUcFvE2VCfE2Ms71(B(dxWZtuBxHNBJz8s4JLeELHQNDOZknLTTiJUzls0WYOQ5Z7kCrxHVgIEEHvzUMKqFbPf5Fj9Ucf29iwmGPKNB0UcfDfKXEQSEl4fxHsBWtyxHYy3uV9C417atUF)dnPjILaEb55Z9W4s296fR64yAmb6Pogr2Tb5sIB3mLB1GXGfzO))rpf8p7SO9zD2jIp5C2wm6GxDlYWWlc)CvoDqI7IhfYQMg1WrB4lVQa8UqUg2AU9f(UcVEnHEMd0wH(nALi4tqPURW38JrrnU8AY4WY(I4OLNxox)tpDVuPTte)1)Kqe7k8g3feTdF82kAxRjA8DSYvCT1g5QEFPJ0VHME)rkVDY1xANRCn9)wBLRR2Wi8owXkU0AJyD6YZSOsIrxyYHgA7eRV8oxX68NzReRmxO2XkwXLwBeR9oYL6ZAG(gjQ8IBNy9v25kwp8R3EXAdhG3XkwXLwBeRl2)LZwm5q9NXO3TtSU0VWfRDwPtLovw(l2YhF8OWGWpddeKn59)SGzFsWFWU)09NemgdZM(kGDIRKl6e9gAQCNUnFfWDAl23jg4eH6C(77f))p
 ```
