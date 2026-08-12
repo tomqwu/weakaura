@@ -1,5 +1,10 @@
 # Rotation-first design (start every pack here)
 
+**The job: learn the spec's rotation — its best practices and key abilities — then render it
+so the player's next button press is obvious at a glance. A pack is decision support, not a
+tracker collection.** Everything below serves that. If a pack is beautiful, complete, and
+still leaves the player reading tooltips mid-pull, it failed.
+
 A WeakAuras pack is not a list of trackers — it is the spec's rotation rendered as UI.
 Before building anything, write out the priority rotation for each SPEC and each SCENARIO
 the user plays (leveling/dungeon single-target, raid single-target, AoE, PvP). Pull the
@@ -8,6 +13,45 @@ rotations (e.g. Improved Sinister Strike changes the energy breakpoint from 45 t
 
 Then translate: every line of the rotation becomes exactly one HUD element, and any element
 that doesn't change which button gets pressed next gets cut.
+
+## Step 1: learn the rotation (not the spellbook)
+
+Pull the spec's current-phase priority list from a real guide (wowhead TBC guides,
+icy-veins.com/tbc-classic, the class discord's rotation post) — never from memory, and never
+from retail or 1.12 Classic knowledge; TBC rotations differ from both (Shadow gained Vampiric
+Touch, Arcane became Arcane Blast stack management, bears got Mangle/Lacerate).
+
+Then extract only the part worth rendering. Most of a spellbook is not a decision:
+
+- **Decisions that vary fight to fight** → these earn HUD elements. "Is my DoT about to fall
+  off?", "am I at the energy/mana breakpoint?", "did the proc fire?", "is the big cooldown
+  back?", "am I about to pull threat?"
+- **Constants** → these do not. Buffs applied once before the pull, passive talents, abilities
+  with no meaningful timing choice. A player does not need a HUD to remember to have Inner
+  Fire up before the boss.
+- **Things the default UI already answers well** → skip them unless the rotation needs them
+  *combined* with something else (health is on the unit frame; health *below 50% while a
+  defensive is ready* is a prompt worth building).
+
+A good pack for a spec is usually 5–10 elements the player actually reads, plus a cooldown
+row they glance at. If a spec's list is running past that, the extra items are almost always
+constants or default-UI duplicates that should be cut.
+
+## The usability test (apply before shipping)
+
+Every pack must pass all four, judged in combat, never from the /wa preview:
+
+1. **Does each element change a button press?** For every element, name the rotation rule it
+   serves and the decision it changes. No answer ⇒ cut it.
+2. **Can the player run the rotation from the HUD alone**, without watching buff bars,
+   recount, or the spellbook?
+3. **Is the most frequent decision the most prominent?** Every-GCD state belongs closest to
+   the crosshair and largest; once-a-minute cooldowns belong at the edge. Reactive prompts
+   should announce themselves by *appearing* (animation + glow), so they cost no attention
+   until they matter.
+4. **Is it quiet when nothing needs doing?** Out of combat and during a clean rotation the HUD
+   should be nearly still. Constant motion trains the player to ignore it, which costs the
+   alert that actually mattered.
 
 ## Rotation rule → element mapping
 

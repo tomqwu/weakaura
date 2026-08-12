@@ -5,11 +5,16 @@ description: Generate importable WeakAuras strings ("!WA:2!...") for World of Wa
 
 # TBC WeakAura Creator
 
+**Purpose: learn a spec's rotation — its best practices and key abilities — and render it as
+a HUD that makes the player's next button press obvious. The pack is decision support; an
+element that doesn't change what gets pressed next doesn't get built.** The machinery below
+exists to serve that, not the other way around.
+
 Builds real, importable WeakAuras strings programmatically: Lua factories construct the aura
 data tables, then the exact WeakAuras serialization pipeline (LibSerialize → LibDeflate →
 `!WA:2!` Base64) encodes them. Every generated string is round-trip decoded and structurally
-verified before delivery. Proven across a 37-version rogue HUD (bars, combo points, threat,
-alerts, animations) and a paladin pack, on a Chinese-language client.
+verified before delivery. Proven across a 41-version rogue HUD (bars, combo points, threat,
+alerts, animations) and seven more class packs, on a Chinese-language client.
 
 ## Setup (once per session)
 
@@ -36,10 +41,12 @@ cd scripts && ./setup.sh    # fetches LibDeflate + LibSerialize, ensures lua5.1
 ## Workflow
 
 1. **Start from the rotation, not from trackers.** Read `references/rotation-design.md`
-   first. Write out the spec's priority rotation per scenario (verify against a
-   current-phase guide, confirm with the user), then map each rotation rule to exactly one
-   HUD element using the table in that doc. An element that doesn't change which button gets
-   pressed next doesn't get built.
+   first — it is the core of this skill, not background reading. Learn the spec's priority
+   rotation from a current-phase guide (never from memory, never from retail or 1.12
+   knowledge), confirm it with the user, then map each rotation rule to exactly one HUD
+   element using the table in that doc. An element that doesn't change which button gets
+   pressed next doesn't get built. Before shipping, run the four-point usability test in that
+   doc; a pack that fails it is not done, however cleanly it imports.
 2. **Get spell IDs**: known IDs are in `references/spell-data.md`; anything else, verify on
    wowhead.com/tbc (all ranks for auras, rank 1 for cooldowns). Never trust memory for IDs.
 3. **Write a build script** modeled on `scripts/example_paladin.lua`:
