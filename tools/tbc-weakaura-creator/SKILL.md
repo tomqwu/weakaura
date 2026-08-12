@@ -55,7 +55,10 @@ cd scripts && ./setup.sh    # fetches LibDeflate + LibSerialize, ensures lua5.1
    - `F.dynGroup` for anything that appears/disappears (cooldown rows gated by
      `spellknown`, alert stacks, cloned procs) so gaps auto-collapse.
    - Talent-specific cooldowns: gate with `load.use_spellknown` + the talent spell's ID —
-     one pack then auto-adapts across specs.
+     one pack then auto-adapts across specs. Prefer the ability's own rank-1 id over the
+     spec capstone: it also hides the element while levelling. Every UNGATED element loads
+     for every spec and must be justified for all of them — audit with
+     `lua5.1 tools/spec-preview.lua <pack>`, which prints each spec's actual visible set.
    - Icon polish: `zoom = 0.3` + `F.subborder()` on every icon.
 4. **Encode + verify + deliver**: `F.assemble` → `W.encode` → `W.verify` → write `.txt` →
    present the file. Tell the user: copy all → `/wa` → Import → paste.
