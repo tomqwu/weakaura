@@ -21,7 +21,7 @@ arg = savedArg
 local PACKS = {
   { "rogue",        "tbc/rogue/all-specs.txt",       "tbc/rogue/README.md",   "v41" },
   { "paladin-tank", "tbc/paladin/tank-starter.txt",  "tbc/paladin/README.md", "v1"  },
-  { "paladin-all",  "tbc/paladin/all-specs.txt",     "tbc/paladin/README.md", "v2"  },
+  { "paladin-all",  "tbc/paladin/all-specs.txt",     "tbc/paladin/README.md", "v3"  },
   { "druid",        "tbc/druid/all-specs.txt",       "tbc/druid/README.md",   "v2"  },
   { "warlock",      "tbc/warlock/all-specs.txt",     "tbc/warlock/README.md", "v2"  },
   { "hunter",       "tbc/hunter/all-specs.txt",      "tbc/hunter/README.md",  "v2"  },

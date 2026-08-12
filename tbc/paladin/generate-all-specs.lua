@@ -72,6 +72,22 @@ local function gate(t, spellId)
   t.load.spellknown = spellId
   return t
 end
+-- Inverse gate: "load only if the player does NOT know this spell". There is no
+-- negated form of `spellknown` (use_spellknown = false means IGNORE, not "must not"),
+-- so WA exposes a separate `not_spellknown` arg — verified in Prototypes.lua's load
+-- prototype: test = "not WeakAuras.IsSpellKnownForLoad(%s, %s)". Requirements:
+--   * WeakAuras 5.4.0+ (the arg does not exist before that). On an older client the
+--     unknown field is ignored and the element simply loads for everyone — the v2
+--     behaviour — so this degrades gracefully rather than erroring.
+--   * do NOT set use_exact_not_spellknown: with `exact` falsy, IsSpellKnownForLoad
+--     resolves a rank-1 id through the spell name to the highest rank the player has,
+--     so one rank-1 id matches every rank. `exact` would only match rank 1 literally.
+-- No Modernize migration touches this field between internalVersion 45 and current.
+local function gateNot(t, spellId)
+  t.load.use_not_spellknown = true
+  t.load.not_spellknown = spellId
+  return t
+end
 local function inGroup(t)
   t.load.use_ingroup = true
   t.load.ingroup = { multi = { group = true, raid = true } }
@@ -237,7 +253,14 @@ adopt(top, gCds)
 
 -- 20-30) gated icons last so the shared part of the row keeps a stable position.
 -- Talent cooldowns gate on their OWN rank-1 id (untalented => icon unloads => row collapses).
--- { label, rank-1 id, spellknown gate or nil, press-on-cooldown? }
+-- { label, rank-1 id, spellknown gate or nil, press-on-cooldown?, hide-from gate or nil }
+-- The 5th column is the v3 inverse gate. A healing Holy paladin never presses
+-- Consecration (a threat/mana dump) or Avenging Wrath (a damage cooldown), but no
+-- positive spellknown covers "Prot and Ret but not Holy" — no spell is shared by
+-- those two and absent from Holy. `not_spellknown = 20473` (Holy Shock, a 30-point
+-- Holy talent) reads as "not deep Holy", which is exactly the set wanted, and being
+-- a single aura with a single gate it cannot double-show on a hybrid the way one
+-- copy per spec would.
 -- The 4th column marks the buttons the rotation says to press the moment they are up
 -- (Judgement 10s/off-GCD, Crusader Strike 6s, Avenger's Shield on pull + on CD). Those get
 -- the gold ready glow. Consecration and Holy Shock deliberately do NOT: Consecration is a
@@ -245,9 +268,9 @@ adopt(top, gCds)
 -- would push the wrong button. Every other icon stays a passive readout.
 local CDS = {
   { "Judgement",           20271, nil,   true },
-  { "Consecration",        26573, nil,   false },
+  { "Consecration",        26573, nil,   false, GATE_HOLY },  -- v3: hidden from deep Holy
   { "Hammer of Justice",     853, nil,   false },
-  { "Avenging Wrath",      31884, nil,   false },
+  { "Avenging Wrath",      31884, nil,   false, GATE_HOLY },  -- v3: hidden from deep Holy
   { "Divine Shield",         642, nil,   false },
   { "Lay on Hands",          633, nil,   false },
   { "Holy Shock",          20473, 20473, false },
@@ -274,9 +297,72 @@ for _, e in ipairs(CDS) do
   end
   ic.conditions[#ic.conditions + 1] = quiet
   if e[3] then gate(ic, e[3]) end
+  if e[5] then gateNot(ic, e[5]) end
   polish(ic)
   adopt(gCds, ic)
 end
+
+-- ===== 31-33) v3: Retribution seal twisting ("swing dancing") =====
+-- The twist: Seal of Command is up, and you re-seal with Seal of Blood (Horde) or
+-- Seal of the Martyr (Alliance) in the last fraction of a second before the white
+-- swing lands, so the swing procs BOTH seals. The window is ~0.4s, which is why this
+-- needs a swing runway rather than a bare prompt.
+--
+-- Gate is Seal of Command's own rank-1 id (20375). SoC is a tier-3 Retribution talent,
+-- so the gate reads "has ~10 points in Ret" — i.e. exactly "can twist", which is the
+-- right semantic here even though it is not a Ret spec detector.
+--
+-- Swing Timer trigger, verified against WeakAuras Prototypes.lua (identical at tag
+-- 3.5.0 and current, and NO Modernize migration touches it, so the current field names
+-- are what to emit): type = "unit", event = "Swing Timer", weapon selector arg is
+-- `hand` with values "main" / "off" / "ranged" (lowercase, from Private.swing_types).
+-- Its state is a normal timed state (duration + expirationTime), so an aurabar animates
+-- it, and `expirationTime` is a valid condition variable (type "timer" => the value is
+-- remaining seconds), which is the repo's field-proven condition shape.
+-- GOTCHA (from the prototype's own hidden test, `not inverse and duration > 0`): the
+-- trigger produces NO state when the swing timer is not running. Before the first swing
+-- of a fight the bar does not exist — it is not a bar sitting at zero — so it cannot be
+-- used as an always-present anchor. That is the desired behaviour here: the runway
+-- appears when you start swinging and vanishes when you stop.
+local SWING_GATE = 20375                     -- Seal of Command r1
+local SEAL_OF_COMMAND = { 20375, 20915, 20918, 20919, 20920, 27170 }
+local TWIST_WINDOW = "0.4"                   -- seconds before impact
+local function swingTrigger()
+  local tr = { type = "unit", event = "Swing Timer", use_hand = true, hand = "main" }
+  tr.names = {}; tr.spellIds = {}; tr.debuffType = "HELPFUL"
+  tr.subeventPrefix = "SPELL"; tr.subeventSuffix = "_CAST_START"
+  return tr
+end
+
+-- 31) the runway: main-hand swing draining toward impact, gold inside the twist window
+local swing = reg(F.aurabar("Paladin - Swing Timer", CLASS, 172, 10, 0, -55, gRes.id,
+  { 0.55, 0.55, 0.62, 1 }))
+swing.triggers = F.triggers({ swingTrigger() })
+swing.subRegions[2] = F.subborder("bar")
+swing.conditions = {
+  F.condition(1, "expirationTime", "<=", TWIST_WINDOW, "barColor", { 1, 0.82, 0.1, 1 }),
+}
+gate(swing, SWING_GATE)
+adopt(gRes, swing)
+
+-- 32) twist armed + NOW: shows while Seal of Command is up and you are swinging
+-- (both triggers required), and glows in the last 0.4s — the press-SoB moment.
+local twist = reg(F.icon("Paladin - Twist NOW", CLASS, 40, 40, 0, 0, gAlerts.id))
+twist.iconSource = 0
+twist.displayIcon = "Interface\\Icons\\ability_paladin_sealofblood"
+twist.cooldown = false
+twist.triggers = F.triggers({
+  swingTrigger(),
+  F.auraTrigger("player", true, SEAL_OF_COMMAND),
+})
+twist.subRegions[1] = F.subglow(false, { 1, 0.82, 0.1, 1 })
+twist.conditions = {
+  F.condition(1, "expirationTime", "<=", TWIST_WINDOW, "sub.1.glow", true),
+}
+twist.load.use_combat = true
+gate(twist, SWING_GATE)
+polish(twist)
+adopt(gAlerts, twist)
 
 -- ===== assemble (v2000 nested), encode, verify, write =====
 local transmit = F.assemble(top, byId)
