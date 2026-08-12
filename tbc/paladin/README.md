@@ -1,26 +1,59 @@
-# Paladin — TBC WeakAuras (All Specs v2)
+# Paladin — TBC WeakAuras (All Specs v4)
 
-Two independent packs with distinct fixed seeds and distinct aura names, so nothing
-collides: importing one never offers to "Update" the other, and both can run at once.
+One import string covering all three specs. Elements load through Spell Known gates, so
+the HUD adapts to your talents with no action from you.
 Toolkit setup, once: `cd ../../tools/tbc-weakaura-creator/scripts && ./setup.sh`.
 
-## Tank Starter (`tank-starter.txt`, seed 20260810)
+## All Specs — v4 (`all-specs.txt`, seed 20260811)
 
-Righteous Fury missing alarm (combat-gated) + Holy Shield / Consecration / Avenging Wrath
-cooldown row. Regenerate with `generate.lua`.
-
-### Tank Starter import string
-
-```
-!WA:2!vB1xZTXvv8OUXeNnTMAtJPXKgeUTUnHPgh74K2mKcsY2XoilRSRSvItkAV7UxT7nE1E3C3DTTYammIcyGamikL)maf0d8uFsVZl(zyMZOh6hG8riFc4C3vYKypDGPugg0dAV39EUN75E(9787Sz2ymRn37v6WS4(68yHfntpsCKlxSwqeJ7hQkAUw96H0OMDj(w47lZz(rMfwSuLf16zX5E28D813Hfqn2FW0fTDOUcIvIhUSwyerePAwN5ZcDvZJpIuBfjyoouryPPe9h(xYh1mGQrIfKz3x(Fya1ZJzhoH2SZFL3CMEnirwU0qDx(oR53lm5XQSWqMVt(y0PMbEKMurRK9TIDO6JcJnPBt9J0JRxNTB3AfYPxPMELCAvoyPYckUKME5flw8XXH0f3fJB9upyO5tAqdv7ytnrpubdpXYlwS8sRxSDSF)WwTRnl8EX(4TDB6SepVGrjjJRKU(QCB6hEShJznQWN4TbENX0YDE8wuAqomuTI0iyIYTDi1REs2fgcpWqseMcIOUDWivJ6itLt8r9C847SKGE)yQVvZYhFMPNDEyebAICH9X4)64ZcCpUWOL8vYywRmBxQxh50IuFNi3t3vo(2PaBM2od2YnuKE8IZN(VsIv3QVv5LtmsSv3I4rvscLkUmRT8PHHkjRuKHJhn5KYZf2uHRPlL54grY7Xj21BJbynlpsyOHze6e)OX1Ae7fXu7KScVHjjYqlXIPmLaRhvuoxXClSsj4QJdVTrEzgBC4QQ5dzpGkh0rKKCKx08sASzarGooy8YepInZpBfI)wzFJS6swivirljpzf00GxDfjQuNyrVRCE4DtOo1C5EnRfsjE861Jfnf72phmBmZU7CnjBn7IZDJCRwvZknRH)Y)aoVrMwdQaC7eXT2ofQhU8PNKzhCMdfpAlLD1v01xP01dEHbBRcD3OfyHetpks(iEbUefTDy2rUeiVHjgI1zoQcMV01u32eFwdj5X)YWjxQNTKWGtQjRJW1rZTdHrY7Z9P7tjHu9irc(FIwYzYmgunFdcZFjyDydyeOkCRta3gFOE43840Q)LeybHCJM6f0wCXsDKNblvPOlZVoxKgpQDRlTepqserzVzY7i470z510wzZ1kvjxXGXWngj4E4fTGlZZgdSRg8spvkQWcywAzekYQ7YOE2bN7OlxapyQv61oi7rxphwI7G0OSvrBCFKzcPmpXAlBbpi45Z7XEWdic7SvqaiIfapJkO8WNboomu3uBtRlYKjJIwyaYtojmmMRvbvv4uQWZwAk45EFmn9zHNFIXMbEb40W4QWNhEr4mWeWxWaoRk8sW5GVOkKf(sWKF4X6ICM4g(6sNPaV8DGxfgcrAMJpmKavkLsgzGxtfUIApZ(bAHb0SYkZm98IuuNAafGf0ctkgBHP3uxAMg3UDsFkLIdgv)(Xyrr2LI98Yw1LfrHC7B3ef3ywiWeh03yDSKAO8HCreuTTJGzxvs9ovl5qjOpP2cAESgSOt1clxlkh5(izDteXpAju1Jlm1WA111nfiqeh(Up7(PEoTa6KTjcRujO3DCy1(fgV4Hkmk0VyiStDmElWewE4DTMcCh4U49mkbSZ0hFwbX)if46zGkYAajBvsALKxjpEZJ8g1J8gnv4DuHVPkSC3BS9CMBC7zU5TV4C79YqMZESecrgjFa(mgWjCpk6V3OAij3AR8yBtEWOszmhQpvWSs7tz07PM2r22kN3oKMHs2s7ebNsyPYW38VcJOLmvYF0sAofCMbjJSLfChbk0M91tAoD(GXKhfsB4ckhLdqiIA0tGIw6dCz3NO4PN06domdjlvYlLS0ZQMilNClmc(CYXuztWN08)j)vszFfxjRfMYfETl8rWR3Vn0fDHl4cZQaVXPHPZaFLeDryMmyY(8WCkWxUNzCue3FnmArby4sJcZ7whgPn29kfm7L(OgpvUTp3PM1b1G9lGRTnlKHAKg9jb1Oilhchmt2zqbUCo4kBaVPb8wYUeWxDk4AWBN2eb(AjV6RN8Foipwi9DLuOL72SSPZSRo7fRUohUr6f4Bil6MdkAmGWcwWAUqzf4M4wnK0hD3(SVdPIU5)ADvjPgENjMsd)YgRTwcEoLwBtemzhGoC)bOV22eVyQYK8GjV21ewUeFhA4etbFGrRauFGkIActjPW1u(3N3cFF4ha)qdyp4hLiC9Jh25VJr2pjr(6HWpf(zgWpF)NuHf(fhI4aTnGF5NsSd49oGra)k49Za)6eih(ngWVfcHF3Nqe9wxIguTu5D2TH(hpIA)Fbef(9s0e(dWFe(G(ih8NsWm4p)Pby9TE4raRh90T7()r4IZZBAvFZl9wEl)Xdx0)hbxJ1ym7XS37CqJdAgdMxakHbFDWrEbUVlO83ggYPL0wfIhsUr30mdIYyO(F4Npacm5(Do5N8UDiwltHliH(0EQjPvm1t8xDM7TEJIvp)9aUI8tq(EkYoJxrvsnhluBUPNF6zgB7J)T)h)
-```
-
-## All Specs — v3 (`all-specs.txt`, seed 20260811)
-
-The full Holy / Protection / Retribution HUD: 30 auras in one import, arranged as a top-level
+The full Holy / Protection / Retribution HUD: 32 auras in one import, arranged as a top-level
 group at (0, -140) with four draggable sub-groups. Every trigger matches by spell ID (never by
 name), so it works unchanged on a zhCN client. `internalVersion` stays 45 / `tocversion` 20501;
 modern WeakAuras migrates that forward on import.
+
+## v4 — each spec sees only what it presses
+
+A Holy paladin reported the pack showing them buttons they never press. They were right: the
+gates asked "can this spec *cast* it", when the only question that matters is "does this spec
+*press* it as part of playing well". Three more elements now carry the inverse load gate
+(`not_spellknown` = Holy Shock 20473, "not deep Holy"). Gating only — no element was added,
+removed or moved, so re-importing is still an **Update** that keeps your dragged positions.
+
+**Holy no longer sees:**
+
+- **Judgement** (cooldown icon). Protection and Retribution press Judgement the moment its 10s
+  cooldown is up — a numbered line in both rotations, and what the gold ready-glow means. Holy
+  judges on a different clock entirely: Seal of Wisdom → Judgement of Wisdom, refreshed when the
+  **20-second debuff** expires. Because the cooldown is half the debuff, it was off cooldown
+  every time the decision came up, so the glow sat lit for most of every fight — a permanent
+  "press me" that was wrong more often than right. The decision Holy actually makes is already
+  rendered by **Paladin - Judgement Debuff** (own-only, 20s, on the boss), which stays. So this
+  removes the false prompt, not the information — Holy paladins in a raid without a Retribution
+  paladin should still keep Judgement of Wisdom up, and now watch the debuff timer to do it.
+- **Hammer of Justice**. A 6s stun. Protection uses it to interrupt casters and to pin a runner
+  while gathering a pack, Retribution carries it as its only interrupt; for a healer it is a PvP
+  button that never enters a healing decision, and raid bosses are stun-immune.
+- **Hammer of Wrath** (the execute prompt). It keeps its own `spellknown` gate on 24275 and adds
+  the inverse gate on top — WeakAuras ANDs load conditions, so it now reads "knows Hammer of
+  Wrath *and* is not deep Holy". A glowing damage button on a boss at 19% is not a healing cue.
+
+**Deliberately kept for Holy** (a false cut costs more than a marginal keep):
+
+- **Divine Shield** and **Lay on Hands** — genuine panic buttons, and bubble doubles as a debuff
+  wipe. With Avenging Wrath gone from the Holy row since v3, these are the only Forbearance-
+  burning presses left in it, which is exactly the pairing a healer needs to see together.
+- **Threat** — a healer who pulls the boss off the tank wipes the raid, and the bar self-hides
+  while you are targeting a friendly, so it costs a healer nothing when it is not relevant.
+- **Seal Active** and **Judgement Debuff** — Seal of Wisdom → Judgement of Wisdom upkeep is the
+  Holy paladin's one non-healing job when the raid has no Retribution paladin.
+
+Protection and Retribution lost nothing: Judgement, Hammer of Justice and Hammer of Wrath are
+all in their published rotations. **Seal twisting stays gated on Seal of Command (20375) rather
+than on Retribution's capstone on purpose** — a Sanctity-Aura Protection paladin who takes Seal
+of Command does so precisely to twist with a two-hander on fights they are not tanking.
+
+*Requires WeakAuras 5.4.0 or newer for the inverse gate*, same as v3: on an older client the
+unknown field is ignored and those elements simply load for everyone, exactly as before.
 
 ## v3 — seal twisting + spec-selective cooldown row
 
@@ -118,16 +151,17 @@ glowing under 5 seconds as the cue to land another Holy Light before the 0.5s di
 
 ### Alerts (dynamic group, offset (-150, 96), grows upward)
 
-Six glowing prompt icons that slide in from below and fly off on exit; the stack re-collapses
-itself as prompts come and go. All six are combat-gated, so nothing fires while you are riding
-around. **Seal MISSING** appears when no seal is up — one copy for Retribution, one for
+Seven glowing prompt icons that slide in from below and fly off on exit; the stack re-collapses
+itself as prompts come and go. All of them are combat-gated, so nothing fires while you are
+riding around. **Seal MISSING** appears when no seal is up — one copy for Retribution, one for
 Protection, because a single load gate cannot OR two talents. Holy has no copy yet; that is a
 gap, not a principle (see *Not changed in v2*), and it costs a third element to close.
 **RF MISSING** is the classic Protection failure alarm: Righteous Fury off while tanking.
 **Holy Shield NOW** requires both conditions at once — buff down *and* the ability off cooldown.
 **Hammer of Wrath** appears when a *hostile* target drops under 20% health *and* HoW is ready,
 and re-pops every time the 6s cooldown comes back, which is the "press it again" pulse; it is
-baseline, so it loads for every spec that has learned it rather than for Retribution only.
+baseline, so it loads for every spec that has learned it rather than for Retribution only —
+minus deep Holy, for whom an execute nuke is not a healing decision (v4).
 **Lay on Hands Prompt** is the panic button for every spec: your health under 25% and LoH ready.
 
 ### Cooldowns (dynamic group, offset (0, -66), grows horizontally)
@@ -135,8 +169,10 @@ baseline, so it loads for every spec that has learned it rather than for Retribu
 Eleven 32x32 icons with WeakAuras swipe text, mouseover tooltips, desaturation while the spell
 is down, and a 50% fade out of combat. **Judgement**, **Crusader Strike** and **Avenger's
 Shield** — the buttons you press the moment they are up — add a gold pixel glow while they are
-ready in combat; the rest stay passive readouts. Six are baseline for everyone — Judgement,
-Consecration, Hammer of Justice, Avenging Wrath, Divine Shield, Lay on Hands. Five are
+ready in combat; the rest stay passive readouts. Only two are baseline for everyone —
+**Divine Shield** and **Lay on Hands**, the panic buttons every spec presses under pressure.
+Four more are baseline but hidden from deep Holy by the inverse gate, because a healer never
+presses them: Judgement, Consecration, Hammer of Justice, Avenging Wrath. Five are
 talent-gated and sit at the end of the row
 so the shared part never shifts: Holy Shock, Divine Favor and Divine Illumination for Holy,
 Avenger's Shield for Protection, Crusader Strike for Retribution. The dynamic group closes the
@@ -152,6 +188,14 @@ own rank-1 ids (20216, 31842, 31935). Baseline-but-late abilities gate on their 
 on a spec — the Hammer of Wrath prompt gates on **24275**, so it exists from level 44 in every
 spec and nowhere before it. Threat pieces add an `in group / raid` gate, and every alert adds an
 `in combat` gate.
+
+Five elements go the other way with an **inverse** gate (`not_spellknown` = Holy Shock 20473):
+Judgement, Consecration, Hammer of Justice, Avenging Wrath and the Hammer of Wrath prompt load
+for everyone *except* a deep Holy paladin. There is no negated form of `spellknown`
+(`use_spellknown = false` means *ignore*, not *must not know*), and no positive gate expresses
+"Protection and Retribution but not Holy" — no spell is shared by those two and absent from
+Holy. One aura with one inverse gate also cannot double-show on a hybrid the way one copy per
+spec would. Audit any spec's real element list with `lua5.1 tools/spec-preview.lua paladin`.
 
 ### Regenerating
 
@@ -172,8 +216,8 @@ editor preview force-shows every aura with fake data and ignores load conditions
 layout there, judge the behaviour in combat. If you re-import over a pack you have dragged into
 place, uncheck **Arrangement** in the Update dialog to keep your positions.
 
-## Import string (v3)
+## Import string (v4)
 
 ```
-!WA:2!LV1w0TXX5zpgsnsWo2KuxITICmcJLcLJTmaibjOJDCbabfjnji0cqsjBftSy3byxXf7UA3fKeS5snRBcJZDwvNCsstDrt7t5CAkFO37jNQ002hsA)pmTP7Pj9MAB692u1Bj9(CzXvcjill5AZ8ahU7mZo7SZ899n)))Za089j9I3)g3)25fLws2YWmHHMH1u(85lTVGNmIzFsg6owgAAy5ekQAYwy9NYSN0IAIYQ6bE4atGf1CuUCJmMruxS5kKvXcl6yE42ZjW4AI2kMhQr(zwrvVyGSQLWwxoVHLm2kUxFYSN4AQRTMOLCGSggAoQM5nfj9ehZ3qThpB8eKMiMMwGmMyj7Tu1lyyvs0r1q3FEERPyvz2cfSXoxOQfUiPGSvmXcfTmkBwLxJmQRH372ILDumSM1K(S2(3IxeFybHq(YtgrkOw0VGTKOg2NLOeRIdly7iA54pFbvDvBf)Xj)ZX)6owQflITStDClVlFH4o03RyzlXWxIMABI10uLTpsFbJxM8q5n1eRGTwNL)KY2(VSD584LjFUzkxOG6QBTyIyzYUyMSXeYwVO0wysrczsNC6PVszBCYvj9Rm8wiNGUyjST)QY48KwG(zBnrYPtp(CtVzzDVUL)TKvTpFzDYxZY4WIAAM9kYUolV8zmKXF(BBtrDv(O6WWBy8lHfTXzCiZefDuEDWrJRBOJ3wM8nrRXI0VtlBmz8s2EDAvPVziy8sIQ6Jdpc5bGGqiimmi5)3t75Cj(apFkB)xrv3bBPlQnpPjjn(tVPnwRqAds25tKmv2Kc9RkBEGgOjbSTrzljSDvhdPL5p0(sFOTkyrgli9zrhrFxruxImvponlAFlFMecjtMAlE2SghIgUSQ8wcZK(Pkgz0ZomoQhGysDs3YxvY4VadmrgE5fKuUi2S3mxOmbHgy8Yee5ckQo4Q0HbvoMkUMHOSFRv5FBOncw1MGNxAbvzhLdvvLuZmS((rVnWpmkCxFZBdEhq0TzvsWWHn6Im7TL7PZpXJnx2zJtFEf4ipZXH34lqgqVFOF4TiWaj55SvswbG3S)1jWKfPaUCWdahdER(HbGtapO)MFoiL5bNJuLajuePiDSLQTJQKTxtaPB7zH3g8qWd)5Vn2hXIs10s8bd)0Wiq01Zl6XKsVNGNmueA6irPPHJ4JapTfDOGhSYLyFB8XNZIG4p6HHJUfLSqAGfj)TXHn7ZbVQZI2kIYgRCgVrYnz5rtm75yeWNe5JwH9nFSJz2ttpqd68L55wdmbtBEawoevadksxInRepg52RWkGqZWYSmF2T5aLZ692VeR8ZxMmcvOceTQfDQbNLKz8uZMkjCulcAHwNQSk2y0H3TlquAn7zCl11cC6YIYueAGSzndw)BArUK2IT8HTOmwIqj1w00ICHndz08qtTo32S8wHarxWs0C9f8Uy76VAMSWSZLD6jtL0BSQjEWwtMkvsHffM8utK18eDPlrKu1Lz0FHcAggw8bMLj9U8A4CnELu9271BqS2uO5X6sJZZmFQYLYJTwgo6MKbvoZBB()862HjWKA5y4nb5DRuJzFVCQ138i3lIjKyySA3zt6N(YRGvlQ4CFW4ZVjL5irw)YoxEhYIa6ohwOuzY6s(fy5E882KLY0WwPJnDSXMmf8ShgEUCXjc6shgEw)XPTh9IlZq5XjnGmL(go2yJz2dPTJjtbryzS8mIRQWfhs0Gl1NF4G(BVIQeo)DB5rrAM(CgeCsQyD7cUd1Dj4nzSyBvzSaBIhomPH8d3JF4E9hFndJsOTyVOjyJmpUfDsRSfwiHgwuxquZur0hVRKLxI5atsLXlikHpxcrcprVyCrRZn3KpCJ7E4mmzn2JPapkrZMOSd(GtHG3UpHvOeVFD)WJbpo8eBHxy(0YAdmyE5bSu1PQ8yfVUKQSmwxivY5tkSLHLkzoIjtwDIzfM8PMnv2ytdjpYXfKuWslno8g376llAPksWaRRQNWOuErhHLf1kJr9By2)J)4wskI6fX2h54qvMLrRBsmmbB5ubUiCN(Vc18PImCFDPfA1gzJGWehcMSMs(VcIQKdtHGNeMgMXtM(NRHCRqAJvWwu51nnPxrjrOwuA3Mc(QxwUokAdNUBc0GqZ6YqMPO92quL4HyQYJgXhKvbMZt7fMFJddlGGZCLAYQSEWXog8umEe80KpNZbVt4zEwyreKJ0KIqEYZjbY8xegkakiZbUASBw71KYbycQW5HLanOeOdxiN5dCTFuEEqzW6EbBK5JCTR9ovnjsjWYWkWQqfeSg)R6hih8UGXG3Tp49q59W7nh8dsjUW6hh(HGNJZRHFywwVpw67h2a(akWZ3etf(GeMj8HGp8nore(iWhTzYh8XqWh)XHnHFe4I(GFu4fGprdQYE4uf4twNMmwXjsVQ5fwBHONa(ukWNg(mWpg8zHKp4XHFCc23h8IxQ5bhOA)HdsG999yWpjfVZwSoAKglzhIao(Cqg(tVx4fHFcOQhpH)emgcPkuQb8tD1idFMBVDYqQMHXvDyokqn)GOYAve7qGXxMI(BuqokgpLzpE(uKr1PmJMZa9DdXZm7G2XIstgSZa(lDm(BZuYPoA38H2b4QEL6aYQZKdZ381OrQdM3bdQzwrhwRSrt0cvIXjiKOUdYxMaY3IoituJPUg5H4T8ULC9XHEYf3suvo3RQPb7Dh0G1MVOt2HmotiNjUk0GnRp8r4aJq5a9)o8G0tXCiEyMmztOFYdjiwKm0av91mdGPNokJSeMNYEO24db4q(FJAq(TBGUj9HCWpd8fOs3)S5GF5(JgKG1jM2vFcMU8JOJHfTlMc2Qdq(R4TGm1qpQbgMhmX0XMjnXhHPJL4jjwBmz2jNpjTprMHOuYd6pFjvlldlfg78UjdTj9Vz(AgOqMu78uxb4O5j4DI1gS7jf)LQYw(pDznB8618iSVqShzNZR05m6CvZZTBA(OnmwiMS8S62NBbS4sXOUmFUzWYQINZZSc7ZXD3ArMNwN0POOGNX18v1QT0w0iu2pbwqeaOqKVpgW4IuI)6w18RIauMo60lmCIZmqCZcufkZEjUglzHDWl2OwVNJLNBFVcm(la)cE8c4xS2keC2W7nhtWI5k)s6gRO3gN5Npx1gLTVNpHh95tUN7OnTY3LVRPwjKARMcFcfZ45FhXQfzMjaXPxbdD9ikgjsJ0Hdxxw8bzYIDrb5qCfe4R064qlF0F19n7N4vp6eVUDQtSuXtmWGjZglELw0josDk)LXRAQYX00bCOAyIDtu6)J1qTGI3c3qUOnM)9dO6bzdU9PAjoye)CceJf7fZJ0i7Pkt8jPezn6aJXcJJ590uu4m0QeiJIkwtoWCMnhSTPPwMBh4ueN3XW(G9tqt3bTR86jm87ergO7b6DV0b(dWNkjJ)hQvEyDG29bVPJ0xWAgwsbDufNJNRdgxEdpXfz)EqrYmZvA8veN89AxxLGolrjdpXwrJmwPLcpAXqRegI5dI7hsqWHj9dJ7NmRUXBHXFo1dTh4Uy2DVTKHHgXNyDcxHy68LQDlnKnkWm5A5B9fpUq4GHImKq4qbJssdgo6iS0OS0rPPJgKLgILgMLoOq4rcfjc7PO5eAyA6GbJWshMLoclnkRM0wBWrOLoAiEAuwkT9hnCqADgjOWGHIsAFsAWqS2K1or4PJqRdlNqdZEldXA)HyT8qJYkniR0HyTtK8KYgjyq()g66AcD4N(klHXMXOUW6iqb(kmbdI0q8h9RVDrnJvg3cFHYyDPkC7QItZt5senOtP5fVfLnP5LHf20Q0lNMf4WdTf96AXPGvNgo7YkRwSb4rqHMd7nMvrvAjDSTTV1z3sm1z78LDCm0NL4kOMyfwBnTkPk9YEFX5XbEJdWSSR)Jz(s07Lg2EDjE4qIpB2SZodyDFCRRkW0g7OU4PV(CF4UHzOKrcY(0tfkYYcLcFHZtOSUWVjVF8XywQUEnGBU6Qy)UMhSwM0ffht1M6llr6NQSDApcjLLDu(6ZEeY2Y5E2roe9aIeyZ6bu2xtsHW2q1(I0S2xo4Zrdl6jdDs6yovS5I(Qrf1qEur4pih8nAW5(P94C9rXPr5O4HyP8RhMHIz8POCupRukpBekUoCOqrhKvkd1hmilnelLZ)48Yrz1HZdg2ImynRUwLCekWxOduaRjIjmZ4ZnDRebx0T3m23f5Jd4Dr7rXfTxYFFF(CrVUd5I2hYfTF28MlYpb86IUdx0DsU517IUlx0D3RlQNBgGrxuV3kGGXfXdDwjhjfZO7ec6IoqdW3VNl6G3QqA(Bfa9WDg)4Pzpft0KjJgEewktKDKrVof5AzUDQBEZT23WZTKAy9M5tT3SqkVHRhKY1HrCN(xTDeZtMOyS10VWcY6X7cI5R)QfeZrOsbdo0nc(41yC)RhZY)UTpJMsQC05o1zhiTXj6Ym6V)TWz0USAJl6qEt5bJt8eFL(NlnC7RzE02mPEMjZKzYuNkWacyNtyEFxTsttCR7eMhSPDsC8AfAEVD2K7uZUqlfjwI4ewaJcbioE7O08RAAXkbm0j1qx2oa5nvY0P5nTm7kQ2o0MJzQ(P02pCx)AmSl36CAqXLWV(xUMNVfX54YL0ZqBmURF55gYiiQPwuhIAz7is3Zxe1IAIP0nCvXIV)V4Ce)LxXRboKVnlAPY3sS7G6yb1g87(sYv0flPkXIAeXhJ42gwoqW1PvLAPw)cJjOPws15oO(Pon9kL8wKXHY2p3DEzjdDsFq3zCrjhdR8cXgBY5YSPOLe3KXN7WepfQwOSMwcvljnCDyyZN8GyAylhB43cvZNbQRpeVeUHDoH7EkxF5j2kBXZSWAbhm9cjkUXdatIOUrEnTT54W3e(dH)i4pg(tG)u4YWFg8Nd)fW3c(lH)k4Vg(BG)w4Vd(7H)b4Fe(2W)eCf4Fg(xG)v4Fd(3HVd8DH)d4)e(VG)B4)b(FDr3MlcTnzEqsbBNrXyLz132M9VzuTPB90nIC2d2qoZtUAV5iYvcPvxfR1IOwlbcMkVrK)YXL(OkCCTTRTy07ZtmIldXKKQY2un2oVKRDHP6bgHimrpNc0tiXKemI5XBeIi692NJfnLfviKZfTj0AJc51mmK5IzHhCCS6fuwwy(kGFx007qnREqbCrd2MCg9Z5lbdArpgdZw2HfIRTS1uLX5niECuc(YHjTbdQ0bHUn6zt2PfH5IITJLi1RCMJqWrZlv2M0a5zvOcTRmeqE7ZXZyvEgF5(cbxeX23rw256RI8(7Bv0MSOSrB21R1S0x(2KR1T1O7(mPiZERvw2Azt6z8ynwlJCS2M1A562cR))bA3fLYfn7nrCTlkDtG6Vn6BCtdi7IoDURLTsUibZ3s74wX8QAQovw0rPSoXh18gAoCq7jekoEs85ZIhmyxbTd1zqlbmXWRUO5HVSlAHRok1fDgx0zPdtpLl6PBGfDrNRzCOl6Dwda6IEgx0I0MYfrg6ejnMlkp5kPBkWOJieoYirdUlB2)yDv1QqzRk85)qZQF6tnySOJA195)i7oM)FMgZ)t5IEBUOhYf9WUOt2Dua5b3OxbIOM0sXPhGhZEPQAfX6ylvj(cL52ULB3IVUPawuUcBx3ztfPelHPZAhvGDR3jH6Et4fHfQLBfTW22bgGDe7oHzFSDmROUHf2yzSfXghCUTjlwOLPwZTvtgmUD99eGwcBpmP9F(g1VPNUS0s5mpa9Am9O81C1FzI2Bn20VIc8FKRbWpVgMz7IrbtIf4y2PQKtbgB5OzhZQsPtV6qDLcm8UhkW3IU5omOIIHTdB5HCSnjSLZdv)HdcPakR4lSz96zXVcZ3iigWkDoozOLhoN5HB9WvvBpf77XAMr5IuDrN3fTe5JIykyjkrXfPVVN5RrhNm40dxKPl6cKAyDL2CaYf50gg3fvMuXLFzdL)23(PULIFjFGVKw2wst0KJzxyWvdLhhjYqZprxXSJS7bZwFNSDrR1pzMJJmd0co0f9Uj)9EUUGyx8T2re2LA2p6BDWl2M4piBd78DdkuwOEex3j(QTOU2nldi(8yOt3fxBoeR4A5h4PgyKcNTsSUcXIU7bI18XC732dy97WpLBq993UrmroFlEzCRYcYoUMQYTenP67DUhK5TD10Km5rczN(bpWG2JC(qND0zYl0vGZOVIfwp4RD1dRNlkm8zHB)xQXoBNySM3s8grFJLFcYWawIV)8MVPwkQXsttrpN2syZ3ylLhBzSEr6bPGh6UJ0sHJPUSQo2ZiU2ENnRi14NLc)DYT8ZqAP2EgV2BCXLnSmd0PIMutRCjvD(xY9TZEk26TAxR)C0whdSkBlswskqghl1L479pLs9q7PPak6IE09)YnAIUO3ETZpIl6XPjVJDg3qx0tqydF)0Gf6II1ikHUO4qV71fLaiZXJ1VWyUOKeg24KkFQN7oDrt4IM0fnflEFUONSrC(AkOP1Sk)wxO(MRWqIJv40HgiwgQ2eDxfUkItTTqwvQ3fX0wrSIDnBMM9r64kABwhlFnxo7L8X89LNvvVuuWIDDV9I0i95974khxrA5lKn25t5mKAmBQI0Mx99zWf9(jkskmfPy30vKE06ksvn0RHRA7K9ruMGS1RNl6t22zFLRC15Zg7d28zJLCTsZQCVKqwUOlwdrv8R2zBKAwf8vkq1n4gHDTHv0DUI7HTUHtlNLogw7YTMlDxSU2Mz9cEOULQuu1rB4mZK(mDf1TXTqu3d2kA6QH266bT(ghdLnshHqM9UJLlFnnq66uFQbcjzAZPkJNy(fg8eDfH8b2vJq2376d1riYLB1GPxZRZ4I(u19x7tF9lLK0wTW05noHtLv7kq553vduEGb6ioz7wSD(7TurwBcHNmXQlv48PNVRGJp4UAWXvjCoUO1)ElerfD5eZFw9zotMiDfr8H2DVUcrITtqIQnCA(18RP8s4ux1aIm8ztoIysZ1cp7WDfI8H3Ddrs9D6Sdonh(KD7GeYyqhajtOVsKkjKKkfZSRGKpYUC7tZ3zxyoqhIK2UDWczSOdGLlm4as4PdUqY5NQRGLp6UCWYxSZGLEApOQVgoyCxp4KVyNWjJE6PIpCu7jhm4cDfN8XEfjyCxtCYRocc3ZNOZBfEBHHF3nEQ5JPzd8Kr2ZlmV2GlftjFxXtF8Dz4P(k1NCFYB8MA9x7jmk46IMMow4TTm0FoMFL9v7NJ5Dw)NJjFFiE5(ZXKUvlr2)n(UH49ZL(oOBZJ3gSW(Ty(eBvqjH8uLSMBM8NI(7gnUF6UUW)9xsyp9zlm4jJCYG9T8EE3)F)
+!WA:2!LV1w0TXX5zpgsjsWo2IuxSTSCmcTLmLJTmaibjOJDCbabfjnji0cqsjBftSy3byxXf7UA3fKeS5MzDtvCU5WO64tAAQlAAEkNtt5d9Ep5uLM2(qs7)HPnDpnP3uBtV3MQElP3NllUsibzzjxB6h4WDNz2zNDMVVV5))FgGMRxPx(Ep39UzErPfLTmmtyOzynPpF(s7l4XIy2RKHUJLHMgwoHIQMSfw)Pm3tArnrzv9apCGXXIAokxSrgtlQl2CfYQyHfDmpq75eymnrBfZ93i)mlRQxmqw1syRlM3WsgBf3RpzUN4AQRUQOLCGSggAoQM5nfj9ehZ7O2JNnEcstettlqgtSK9gQ6fmSkj6OAO7ppV1uSQmtHc2yNZw1cxKuq2kMyHIwgLnRYRrg1vX7CtXYokgwZysFwB)BWlIpSGqiF5jJiful6xWwsud7ZsuIvXHeSDeTC8NVGQUQTI)4K)54Fnhl1IfXw2PoIL3LVyCh67vSSLy4lqtTnXAAQY2hS3GXltEO8MAIvWwRXYFczB)x0UCE8sKp3mLluqDLnwirSmzxit2yczRxuAlmPiHmPto1uxQSno5kK(vgElKtqxSe22FvzCEslq)STgp5uPhB2PwVSUx3Y)gYQ2NPSo5RzjCyrnnZEezxNLx(0gY4V4nTUOUkFuDi4og7cyrBCghYmrrhL3kCO46g64nLjFt0ASa970YgtgVKTxJwv6BgcgVKOQ(yWJqEaiieccddq()D2EoxGpWZNY29Lu1DWw6IAZrAssJ)0RBJ1kK2GKD(ejtLnPqFQYM7TbAsaBBu2scBx1XqAj(dTR07FJcwKXcsFw0r03Le1Lit1JrZI23YNjHqYKP2GNnRXHOHlRkVHW0PFQIrg5udHJ6biMqN0T8vLm(lWatKHxEbjLlIn7jZzltqObgRmbroVIQdUkDyqLJPIRzik73Af(3g6CbRAtWZloVQSJY(RQsQzgwF)q3e4hgbUTV9nbVBi6MSkjy4WgDrM90Y905N4XMn7mXPpVcCWN5iWD)IKb07f6dUpbgijpNTsYka8o8VgbMSafWLdUF4WWd4h6hok8G(B(5GuM7BwsvcKqrKI0XwQ2oQs2EnbKUTNfENWdbp8x8MyFelivtlXhm0tdddrxlVOhtk9ocESqrOPdhLMgoIpc80w0HcEWkxG9TXhFofcI)Ohao0guYcPbwG835oGzVo4vCwWwru2y5t6nsUolpAI5Eomb8jr(OvyFZh(WM7PPhObD(I8CRbMGPm3llhIkGbfPlXMvIhJC7LyfqOzyzwMp7MCGYP8E7xGv(zktgHkubIw1Io1GZsYmEQzsLeoKfbTqRtvwfBm6W72fikTM7zml1vdCIYIYueAGSzndw)BAbUK2cT8HTGmwIqj1wW0ICHndz08qtTo3MS8wMarN3s0CT59UyZ6VAMSWmZMDQjsL0BSQjEWgtKkvsHfeM44JN18ODPlrKu1Lz0FHcAggw8bMLi9U8A4CnELu927YBqS2uO5H7sJZZmFQYLYJTwco06KbvoZBt()862HjWKA5y4nb5DRuJzFVCQ138i3lGjKyy0A3zt6N(YRGvlQ4CpWyZToL5irw)YoxEhYIa6ohqOuzY6s(fy5EK82KLY0WwPJnvSrNif8ShaEUCXjc6shaEw)XPTh9IlYq5XjnGmL(go2OJAUhsBhtMcIWYy5PfxrHloKObxQx)W(83EfvjC(B3YJI0m95Ki4yuX62fChS7sWRZyX2QYyb2epCasd5hUt)WD5p(QggLqBWErJZgzECl6KwzlSqcnSOUGOMPIOpExjlVeZ(NGkJxqucF6eIeEIEX4IwNE2jE4g39WzyYAShtbEuIMnrzh8bhhbVlFcltjE)6(HhdEC4j2ap)CPL16FG8Y9BPQtv5XkEDjvzzSUqQKZLuyddlvYCetMS64ZimXtntQSXMcsEWJiiPGLwCm4U35AljAPksWaRPQNWOuErhHLe1kJr9zy23J)4wskI6fX2h8iqvMLrRzsmmbB5ubopCR(Ve18PImCFDPfA1g(CbHX3pmrnL8FfevjhMebpjmfmTNm9pxd5wH0glJTOYRRBsVIsIqTO0Ujf8vVSCDu0gor3eObHM1LHmts7THOkXdYuLhjIpiRcmRN2lm35oampco5LQjRY6bh(WWtX4rWtt(Con8EGN5zHfqqostkc5jpNeiZFryOaOGm7)YXUzTxtkhGjOcNbwe0GsGoC2CM3)v(r55bLbR7cSrMpYvU2Bv1KiLalbldRavqWQ8VQFWCW7fgfEF(G3pL3dFGCWhKsCH1oc8dbphNxd)WSS(qS0Fe4CWhwbE(MyQWhHWmHpk8XU2jIWhh(ent(GxabFYhhwh(uW59b)OWlcF6guLDWPkWlvNMmAXXtVI5zxD(Ohf(mkWpg8zHFC4ZbjFWJa)eeSVp4LVqZdoq1(chKa779XGFkkENTyD0inwYoebC85Hm8NENWld)KqvpEc)jymesvOud4N(Yrg(S3C7KHundJR6WCuGA(brL1Qi2HaJVif93OGCumEkZ945trgvNYmAod03nepZSdAhlknzGod4VWH5VntjN6ODZhAlGR6vQdiRotomFhxHgPoyElmOMzfDyTYgnrlujgNGqI6oiFjciFd6GmrnM6AKhI3Y7wY1hb2tU4wIQY5EDnnyNBHgS6CfDYoOXjd5m(LHgSE9HpchyykhOV3ThKEsMdXdXKjBc9tEibXIKHgOQVMzam90ryKLW8u2d1gFiahY)BudYVzd0nPpKd(zGVev6(Nnh8l3x0GeSoX0U6tW0LFeDmSODXuWgDaYFjVfKPg6rnWWCFjMk20Pj(imvSepjXAJjYoXCjP9jYmeLsUp)5lPAzzyPWyN3ozOnP)1ZxZafYKANN6kahkpbVtS2GDpP4Vsv2Y)PlRzJxRMhH9gI9iBDELoNrNRAEUDDZhTHXcXKLNr3(0ZJfxmg1L5tpnwwv80EMvyFAU7wlW806yofff8mUMVQwTL2IgHY(jWcIaafI8wyaJZtj(RzvZVkcqzQOtn)qjoz)XnlqvOm7H4ASKf2bVqJA9(pCEU99kWyVi8l4XlGFXARqWzdFGCmblMR8lQBSSEBCMF(CvBu2UE(eE0NxAh3sBALVxFxrTsi1gnf(ekMXZ)oIvlYmtaItVcg8QrumsKgPdfUUS4dYKf7IcY(5kiWxR1XHw(O)67AMp9RF0jERBvNyXIhT)bsMnw8kTOtCW6u(lIxXuLJPPd4q1We7MO0)hRHAbfVfUHCrBm)7fq1dYgCZt2sCWi(5eigl2lMhSr2twM4tsjYA0bgLfghZ7SPOWzOvjqgfvSMCGznBoyBtrTm3oWXjoVJHDb7MGMUfAx5Try43kImqVhONDsh43lFQKm(V)w5H1bA3d82pyVbRzyjf0rvCosUoyC518exKD7bfjZmxQXxrCY3RDDvc6SeLm8eBenYOLwm8ifdTCyiMpiUFibbhM0pmMFYS65Upg)54p0oGBJz39MsggAeFI1jCfIPZxO2T0q2OatNRLV1x(icHdgkYGcHdfmkjny4OdZsJYshHMosqwAiwAyw6acHhouKiSNIMtOHOPdemclDiw6WS0OSAsBTbgMw6iH4PrzP02FKWbP1z4GcdekkP9jPbdXAtw7eHNomToSCcne7TmiR9hK1YdocR0GSshK1orYtkB4Gb5)BWRQj0HE6lTigBgJ6cRJaf4RWemisdXF0V5Mf1mwEml8zlJ1LQWTRkonpLlq0GoUMx8wuwNMxgwytRsVCkwGd3)g0RRfNcwDA4SlRSAXgGhbfAoS3ywfvPf1X22(wJDlXuNnZx2XXqFgIRGAIvyT1uQKQ0d79fNhh4ZTxMLD9DyZxHEV0W2RlWdhs8zYMDMPbR7HBDvbM2yh1fpXvN7d3omnLmsq2NyYqrwsOu4ZEgcL1f(n59JxGzP6A1aU5QRI97AUVAzsxuCuvBQVSePFQY2j8iKuw2H4Rp7riBlN7Cl5q0disGnRhqzFnjfcBcv7nsZAF5GppnSOhl0XOJ5uXMZ7Rgvud5rfH)GCW3QbN7l4X56LItJYrXdYs5xpedfZ4tr5OEwPuE2WuCD4qHIoaRugQpyqwAiwkN)X5LJWQdNhmKfzWAgDTk5iuGVuhOawJhty6XMDQwjcUOBUzSVlYhhW7I2HIlANK)El(CrV197I2fYfTB28MlYpb86IUfx0TsU5T5IUnx0T3JlApxpaJUOEUrabJlIh8usoskMr3ke0fT3gGVFpx0(UrH083ka6H7m(XtZEsMOjtgn8WSuMi7WJCvkY1YC7Kx)MBTVMNBj1W6DWNAVEHuUJRgKYvHrCN4xTDeZtMOySv1p78Y6X7cI5B(6feZbPsbdm41c(4nyC)RgZY)(TpJMsQC0zp(P6pTXr7Ym6V)nWz0USAJlA)Et5bJt8eF5(MnnCZRAEO2mPE6jYKzIuhpq)cyNJAEpxUsttCR7OM7RPDsCSAfAExD2K7uZmFlfjwI4ewaJcbioE7O08RAkXkbm0j1qx2oa5nvY0P5nTm7YQ2o0MJzQ(X12nCB)AmSl36CAqXLWVTxTMNVbX54YL0ZqBmURF55gYiiQPwuhIAz7is3Zxe1IAIP0nCvXIV)V4Ce)Lx2Rb2VV1lAPY3sSBH6yb1g8B)cYv0flPkXIAeXhJ42gwoqW1OvLAPwFcJkOPws15wO(Pof9kL8wKXHY2p3TErjdDsFq3zmrjhdR8cXgDIzZSUOLe3KXN7aepfQwOSMwcvljnCDyyZN8GyAylhB43cvZNbQRpeVeUMDoH7EkxF5j2iBXto)Qbhi98jkEU7hMarDJ8kABZrGVn8hc)rWFm8Na)PWfH)m4ph(lGVd8xc)vWFn83a)TWFh83d)dW)i8DH)j4sW)m8Va)RW)g8VdFp47d)hW)j8Fb)3W)d8)6IUjxeAtY8GKc2oJIXYZOVPn7FtRAt36PRf5ShSHCMNC1oZrKResRUcwRfrTwcemvEJi)LJl9rv44ABxzXOpKNyexgIjjvLTPASDEjx7ct1dmcryIEofONqIjiyeZJ0ier07TpnlAklOqiNlytO1gfYRzyiZfZcpWyy1ZQSKWCva)UOP2IAw9Gc4IgOn5m6NZxbgWIEmgMPSdlexByRPkJZBq84Oe8vdtAdguPdcDNBpRZoTimxuSDSePELZCecouEPY2KgipRcvODLbbYBFwEgRWZ4R2Bi48i2(oYYoxVvK3DVRGwNfLnAZUwTML(Y3KCTUTgD3Njfz2tTYYwlBspJhRXAzKJ12Swlx3wy9)pq7UOuUOzUoIRDrPBcu)DrFRRBazx0jYDLSvYfjyEFTJBfZRQP6uzbhLY6eFuZBO5WbThvO4yjXNjlEGGDf0oyNbTeWedV6IMd(QUO5V8Oux0jDrNIom9uUONUbw0fD6MXHUO3tnaOl6zCrlqBkxezOtK0yUO8KRKUUaJoOq4idhn42Sz)d3vvRcLTQWN)dnJ(jo(aXIoIv3N)JS9y()zAm)pPl6D6IEix0d7Iow3rbKh8C9iqe1Kwmo9a8y2dvvRiwhBPkXxOm3MTC7g81nfWIYvy76oBQiLyjmDw7qcSB9oju3vcViSqTCROf22oq)SJy3rn7LTJzf1nSWglHTi24GZTjzXcTm1AUnAYGXnRVNa0sy7HjT)Z3O(190LLwmN5EPxJPhLVMR(Rs0ERXM(1uG)JCfa(51WmBxmkysSahZovLCkWOlfn7OwvkDIvgSRuGH2(qb(o0n3HbvumSDylpKJTjHTCEO6lCqifqzfFP1Rxpl(vy(gbXawPZXjdT8W5mpqRhUQA7PyVpwZmkxKQl6mUOfjFuetblrjkUi9D9mFd64KbNE4ImDrNLudRl1MdqUiN2W4UOYKkU0RAO839Mp(1g(9l0POGXG0xu3WPP9RJ4tmNC3A2EiFgM)RthhEfT6UKMOjhAp)aRekposKbNB8UcThE7d0U(gE7IwTpYemhahOf4Ql69r(79FvHep)d0rG4fA2D7BCOq2E9paBF98DnQNwOEGz3QmABbNTBgqqCnYqNUzV2CiwXvZ3)t1)WfovLyDfIfD7deR5td3VThW63HFy4G6BdEJqNCMwCg5gLHMDCPxLBil9wFl29GmVZlNMKjpGjB1D5(hWE4Ze6uJmDEHUcCg51SO)bFJlF0)CrHHphCZ)sn2a8eJ28oN3iiDS8tqggWs8TX38T3srnwbBs6X5wcBE3TuESLW6fPN3cEe(oylfoQ6sQ6ypB9A7D2SIuJF9k83j3ardPfB7z8AVXexYWYmqNkAcnTYLu15Fj3Zw7PyRhWUw)5qTogyv2wKSKuGmowQlYpIauk1dTJMI7Ol6r39R2Go6IEx1oMjUOhNM8U3A4fDrpbHn8dqJPOlkwJGj6IId9StxucGmhpAFcJ6IssyyJrQ8XFUB1fnUlAcx0KSWc6IEYgHdSPyRwZ49BCreC2cdkoAHteQ)yzOAt0nF4Yio12czvPoHetBzXk21mTAMhPJROTEDS8vC5SxXNg4xDgF9krblgFNiCrpB9f8(G0nE4kTKhn0GE)WVYX1Mw6SzJDMuodQgZMQnD(l)gt4I(WeTjfM2uSR7AtpADTPQg61qyTDuajAuq261Zf9zA7WYY1W68HP9bB(W0sUwPz9Uxrymx0lwdBv8R3zRLAwp81k4114oNDDgG5IEjpG1IvkQ6OnuMPtFYUcSE(BGaRhSvaZLdq11dF91omjBKoIsm7zlRn(MvSsY0Mtwgp(CZpWr7kw5JSTgRSR37hTJGLl2QDsVPfOyRwyQ8gh1PYkDfO8r3wduU)(7iozZwmz(n0WKRYJyvdWXQJl8KjwzXcNj9CDfC8X2wdoUmrXXf9CV5crurxoXCNsF6tMjsxreF8T3RRqKy7eKOAdFLFd)AkVcotwnGidDQKdlM0C1WZmuxHiFIT3qKuFVo7ntZrnz7oiHmg0bqY46lhPscjPsXm7ki5f2MBFA(o7mZE7qa02UdwiJfDaSC2b6xcpvW5to3KDfS8j3Mdw(YDgSSN2JL6BWJbx3WjF5oHtg5etgFOO2tmqW57koz9xtI82veN86JiU98j68gL3w033EJNA(qC2apzK9mcZPnWIXuY3v80NABgEQ3s9k3R85E7T(BbfgbCDrtrhl82ng6pwZV2UQ9J18wR)J1KV9dVA)XAs3HLi7(AFtq8(XuFl0D3XBFvy)snFInkOKqEYswZoD(Jt)vLg3pDZw4)6mjSNETfg4yrowWExAhVV)Vd
 ```

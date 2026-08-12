@@ -1,79 +1,428 @@
--- generate.lua — Protection Paladin starter pack (tank-starter.txt).
--- Run: lua5.1 generate.lua   (after ../../tools/tbc-weakaura-creator/scripts/setup.sh)
+-- generate.lua — "Paladin TBC - All Specs" (v4)
+-- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
+-- Spell Known gates. Built entirely with the wa_factory builders (zero custom code).
+--
+-- v4 — "does this spec PRESS it", not "can this spec CAST it" (gating only; not one
+-- W.uid() call added, removed or reordered, so re-import is still an Update):
+--   * Judgement, Hammer of Justice and the Hammer of Wrath execute prompt are now
+--     hidden from deep Holy via the same not_spellknown = 20473 inverse gate v3 gave
+--     Consecration and Avenging Wrath. A Holy paladin's judgement decision is "is my
+--     20s Judgement of Wisdom about to expire", which the Judgement Debuff timer
+--     already answers; the CD icon answers "is the 10s cooldown up", which for a
+--     healer is ~always yes — so its gold ready-glow sat lit for most of every fight,
+--     training the eye to ignore the row. A 6s stun and a 20%-execute nuke are not
+--     healing decisions at all.
+--   * Deliberately KEPT for Holy: Divine Shield and Lay on Hands (real panic buttons —
+--     bubble also clears debuffs, and with Avenging Wrath already gone from the Holy
+--     row nothing else on it burns Forbearance), the Threat bar (a healer who pulls the
+--     boss off the tank wipes the raid), and Seal Active + Judgement Debuff (Seal of
+--     Wisdom -> Judgement of Wisdom upkeep is the Holy paladin's one non-healing job
+--     when the raid has no Retribution paladin).
+--
+-- v2 rotation fixes (no uid() call was added, removed or reordered — Update-safe):
+--   * SEALS gains Seal of the Martyr (348700) / Seal of Corruption (348704), the 2.5.1
+--     Alliance/Horde damage seals. Without them an Alliance Ret had a blank Seal Active
+--     icon and a permanent SEAL MISSING alert.
+--   * Hammer of Wrath is no longer gated to Retribution (it is baseline at 44 and an
+--     explicit Protection priority line); it now gates on its own id and only fires on a
+--     HOSTILE target under 20%.
+--   * Judgement / Crusader Strike / Avenger's Shield — the press-on-cooldown buttons —
+--     get a gold "ready NOW" glow (condition -> sub.1.glow), suppressed out of combat.
+--   * The whole cooldown row fades to 50% alpha out of combat like the resource bars.
+--
+-- Run: lua5.1 tbc/paladin/generate.lua   (after tools/.../scripts/setup.sh)
+-- Writes: tbc/paladin/all-specs.txt (single line, no trailing newline)
+--
+-- This is the ONE paladin string. The former tank-starter.txt pack was retired: every
+-- spell it tracked is covered here behind Protection gates, and a class shipping two
+-- strings competes with itself for globally-unique aura ids.
 
--- FIXED seed per pack; append-only uid order across versions. Seeds must be UNIQUE
--- per pack: two packs sharing a seed generate identical uids, and WA matches auras
--- across imports by uid, so importing both would conflate them. Registry of seeds
--- in use is in the root README.
-math.randomseed(20260810)
+math.randomseed(20260811)  -- FIXED pack seed; uid order is append-only across versions
+
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
--- wa_factory/wa_lib resolve their own dependencies (wa_lib.lua, assets/icon_proto.lua)
--- from arg[0], so a bare relative dofile fails for scripts outside scripts/.
--- Point arg[0] at wa_factory.lua for the duration of the load, then restore it.
-local SCRIPTS = dir .. "/../../tools/tbc-weakaura-creator/scripts"
-local realArg0 = arg and arg[0]
-if arg then arg[0] = SCRIPTS .. "/wa_factory.lua" end
-local F = dofile(SCRIPTS .. "/wa_factory.lua")
-if arg then arg[0] = realArg0 end
+-- wa_factory.lua resolves wa_lib.lua and ../assets/icon_proto.lua from arg[0], so a bare
+-- relative dofile fails when the build script lives outside scripts/. Point arg[0] at the
+-- factory for the duration of the load, then hand it back.
+local factoryPath = dir .. "/../../tools/tbc-weakaura-creator/scripts/wa_factory.lua"
+local savedArg0 = arg and arg[0]
+if arg then arg[0] = factoryPath end
+local F = dofile(factoryPath)
+if arg then arg[0] = savedArg0 end
 local W = F.W
 
 local CLASS = "PALADIN"
-local TOP = "Paladin Tank - Starter"
+local TOP = "Paladin TBC - All Specs"
+
+-- spec gates: rank-1 id of each spec's signature talent (present in the spellbook when talented)
+local GATE_HOLY, GATE_PROT, GATE_RET = 20473, 20925, 35395
+
+-- ===== shared spell-id tables (every rank; F.auraTrigger stringifies them) =====
+local SEALS = {
+  20154, 21084, 20287, 20288, 20289, 20290, 20291, 20292, 20293, 27155, -- Righteousness r1-r9 (+legacy r1 20154)
+  21082, 20162, 20305, 20306, 20307, 20308, 27158,                      -- the Crusader r1-r7
+  20375, 20915, 20918, 20919, 20920, 27170,                             -- Command r1-r6
+  31892,                                                                -- Blood (Horde)
+  31801,                                                                -- Vengeance (Alliance)
+  20166, 20356, 20357, 27166,                                           -- Wisdom r1-r4
+  20165, 20347, 20348, 20349, 27160,                                    -- Light r1-r5
+  20164, 31895,                                                         -- Justice r1-r2
+  348700,                                                               -- the Martyr (Alliance, 2.5.1 — Ret's default seal at 70)
+  348704,                                                               -- Corruption (Horde, 2.5.1 — the SoV-equivalent)
+}
+local JUDGES = {
+  20185, 20344, 20345, 20346, 27162,               -- Judgement of Light r1-r5 (r5 = 27162, the debuff;
+                                                   --   27163 is the heal proc and carries no aura)
+  20186, 20354, 20355, 27164,                      -- Judgement of Wisdom r1-r4
+  21183, 20188, 20300, 20301, 20302, 20303, 27159, -- Judgement of the Crusader r1-r7
+  20184, 31896,                                    -- Judgement of Justice r1-r2 (r2 from Seal of Justice r2)
+}
+local HOLY_SHIELD = { 20925, 20927, 20928, 27179 } -- buff r1-r4 (10s, 4 charges)
+
+-- ===== assembly helpers =====
 local byId = {}
 local function reg(t) byId[t.id] = t; return t end
 local function adopt(parent, child)
   child.parent = parent.id
   table.insert(parent.controlledChildren, child.id)
 end
-
--- top-level group, anchored below the character
-local top = F.group(TOP, 0, -140, nil)
-top.uid = W.uid()
-
--- 1) Righteous Fury missing (in combat): the tank's "you forgot RF" alarm
-local rf = reg(F.icon("Paladin Tank - RF MISSING", CLASS, 48, 48, 0, 60, nil))
-rf.triggers = F.triggers({
-  F.auraTrigger("player", true, { 25780 }, { matchesShowOn = "showOnMissing" }),
-})
-rf.iconSource = 0
-rf.displayIcon = "Interface\\Icons\\spell_holy_sealoffury"
-rf.cooldown = false
-rf.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
-rf.load.use_combat = true
-adopt(top, rf)
-
--- 2) cooldown row: dynamic group, icons desaturate while on cooldown
-local cds = reg(F.dynGroup("Paladin Tank - Cooldowns", 0, -40, nil, "HORIZONTAL", "CENTER", 4))
-adopt(top, cds)
-local list = {
-  { "Holy Shield",    20925 },  -- rank-1 ids: always known, cooldown shared across ranks
-  { "Consecration",   26573 },
-  { "Avenging Wrath", 31884 },
-}
-for _, e in ipairs(list) do
-  local icon = reg(F.icon("Paladin Tank CD - " .. e[1], CLASS, 32, 32, 0, 0, nil))
-  icon.triggers = F.triggers({ F.cdTrigger(e[2], e[1], "showAlways") })
-  icon.cooldownTextDisabled = false
-  icon.conditions = { F.condition(1, "onCooldown", "==", 1, "desaturate", true) }
+local function gate(t, spellId)
+  t.load.use_spellknown = true
+  t.load.spellknown = spellId
+  return t
+end
+-- Inverse gate: "load only if the player does NOT know this spell". There is no
+-- negated form of `spellknown` (use_spellknown = false means IGNORE, not "must not"),
+-- so WA exposes a separate `not_spellknown` arg — verified in Prototypes.lua's load
+-- prototype: test = "not WeakAuras.IsSpellKnownForLoad(%s, %s)". Requirements:
+--   * WeakAuras 5.4.0+ (the arg does not exist before that). On an older client the
+--     unknown field is ignored and the element simply loads for everyone — the v2
+--     behaviour — so this degrades gracefully rather than erroring.
+--   * do NOT set use_exact_not_spellknown: with `exact` falsy, IsSpellKnownForLoad
+--     resolves a rank-1 id through the spell name to the highest rank the player has,
+--     so one rank-1 id matches every rank. `exact` would only match rank 1 literally.
+-- No Modernize migration touches this field between internalVersion 45 and current.
+local function gateNot(t, spellId)
+  t.load.use_not_spellknown = true
+  t.load.not_spellknown = spellId
+  return t
+end
+local function inGroup(t)
+  t.load.use_ingroup = true
+  t.load.ingroup = { multi = { group = true, raid = true } }
+  return t
+end
+local function polish(icon)          -- crop + 1px outline on every icon
   icon.zoom = 0.3
   table.insert(icon.subRegions, F.subborder())
-  adopt(cds, icon)
+  return icon
 end
 
--- assemble (v2000 nested), encode, verify, write
+-- uid order is sacred: one W.uid() per region, consumed by the constructor below,
+-- in exactly this creation order. Append new regions at the END in future versions.
+
+-- 1) top-level group, anchored below the character
+local top = F.group(TOP, 0, -140, nil)
+top.frameStrata = 1
+
+-- ===== 2) Resources: health / mana / threat stacked flush =====
+local gRes = reg(F.group("Paladin - Resources", 0, 56, TOP))
+adopt(top, gRes)
+
+-- 3) health
+local hp = reg(F.aurabar("Paladin - Health", CLASS, 172, 14, 0, -13, gRes.id, { 0.15, 0.78, 0.25, 1 }))
+hp.triggers = F.triggers({ F.healthTrigger(), F.unitCharTrigger() })
+hp.subRegions[2] = F.subtext("%percenthealth%%", 12, "INNER_RIGHT", "percenthealth")
+hp.subRegions[3] = F.subborder("bar")
+hp.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
+adopt(gRes, hp)
+
+-- 4) mana — the paladin resource in every spec; red below 20%
+local mp = reg(F.aurabar("Paladin - Mana", CLASS, 172, 14, 0, -27, gRes.id, { 0.10, 0.45, 0.95, 1 }))
+mp.triggers = F.triggers({ F.powerTrigger(0), F.unitCharTrigger() })
+mp.subRegions[2] = F.subtext("%percentpower%%", 12, "INNER_RIGHT", "percentpower")
+mp.subRegions[3] = F.subborder("bar")
+mp.conditions = {
+  F.condition(1, "percentpower", "<", "20", "barColor", { 0.85, 0.15, 0.15, 1 }),
+  F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
+}
+adopt(gRes, mp)
+
+-- 5) threat vs the current target (party/raid only). For prot, red = "I have aggro" = correct.
+local th = reg(F.aurabar("Paladin - Threat", CLASS, 172, 14, 0, -41, gRes.id, { 0.25, 0.80, 0.30, 1 }))
+th.triggers = F.triggers({ F.threatTrigger() })
+th.subRegions[2] = F.subtext("%threatpct%%", 12, "INNER_RIGHT", "threatpct")
+th.subRegions[3] = F.subborder("bar")
+th.conditions = {  -- severe last: a later match overwrites the same property
+  F.condition(1, "threatpct", ">=", "70", "barColor", { 1, 0.6, 0.1, 1 }),
+  F.condition(1, "aggro", "==", 1, "barColor", { 0.9, 0.12, 0.12, 1 }),
+}
+inGroup(th)
+adopt(gRes, th)
+
+-- 6) >=80% threat flash over the bar — Ret only (a tank AT aggro must not be alarmed)
+local flash = reg(F.texture("Paladin - Threat Flash", CLASS, 176, 18, 0, -41, gRes.id,
+  F.TEX_SQUARE, { 1, 0.1, 0.1, 0.85 }))
+flash.blendMode = "ADD"
+flash.triggers = F.triggers({ F.threatTrigger(80) })
+flash.animation.main = F.animPreset("alphaPulse", "1")
+inGroup(flash)
+gate(flash, GATE_RET)
+adopt(gRes, flash)
+
+-- ===== 7) Buffs: static row of timers =====
+local gBuffs = reg(F.group("Paladin - Buffs", 0, -16, TOP))
+adopt(top, gBuffs)
+
+-- 8) seal uptime — the rotation's metronome; glows under 5s so you re-seal in time
+local seal = reg(F.icon("Paladin - Seal Active", CLASS, 40, 40, -66, 0, gBuffs.id))
+seal.triggers = F.triggers({ F.auraTrigger("player", true, SEALS) })
+seal.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+seal.conditions = { F.condition(1, "expirationTime", "<=", "5", "sub.1.glow", true) }
+polish(seal)
+adopt(gBuffs, seal)
+
+-- 9) your own judgement debuff on the target (all three specs judge)
+local judge = reg(F.icon("Paladin - Judgement Debuff", CLASS, 40, 40, -22, 0, gBuffs.id))
+judge.triggers = F.triggers({ F.auraTrigger("target", false, JUDGES, { ownOnly = true }) })
+judge.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+polish(judge)
+adopt(gBuffs, judge)
+
+-- 10) Holy Shield uptime + remaining charges (Prot)
+local hs = reg(F.icon("Paladin - Holy Shield Up", CLASS, 40, 40, 22, 0, gBuffs.id))
+hs.triggers = F.triggers({ F.auraTrigger("player", true, HOLY_SHIELD) })
+hs.subRegions[2] = F.subtext("%s", 16, "CENTER")
+hs.subRegions[3] = F.subtext("%p", 11, "INNER_BOTTOM")
+gate(hs, GATE_PROT)
+polish(hs)
+adopt(gBuffs, hs)
+
+-- 11) Light's Grace (Holy) — shares the slot with Holy Shield; specs are mutually exclusive
+local lg = reg(F.icon("Paladin - Lights Grace", CLASS, 40, 40, 22, 0, gBuffs.id))
+lg.triggers = F.triggers({ F.auraTrigger("player", true, { 31834 }) })
+lg.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+lg.conditions = { F.condition(1, "expirationTime", "<=", "5", "sub.1.glow", true) }
+gate(lg, GATE_HOLY)
+polish(lg)
+adopt(gBuffs, lg)
+
+-- ===== 12) Alerts: glowing prompts flowing upward beside the character =====
+local gAlerts = reg(F.dynGroup("Paladin - Alerts", -150, 96, TOP, "UP", "BOTTOM", 6))
+gAlerts.animate = true
+adopt(top, gAlerts)
+
+local function alert(id, displayIcon, glowColor, spellKnown)
+  local a = reg(F.icon(id, CLASS, 40, 40, 0, 0, gAlerts.id))
+  a.iconSource = 0
+  a.displayIcon = displayIcon
+  a.cooldown = false
+  a.subRegions[1] = F.subglow(true, glowColor)
+  a.load.use_combat = true
+  if spellKnown then gate(a, spellKnown) end
+  a.animation.start = F.animPreset("slidebottom", "0.3", "easeOut")
+  a.animation.finish = F.animCustom("1", { y = 150, alpha = 0, scale = 0.4 }, "easeOut")
+  polish(a)
+  adopt(gAlerts, a)
+  return a
+end
+
+local RED  = { 1, 0.15, 0.15, 1 }
+local GOLD = { 1, 0.82, 0.1, 1 }
+local BLUE = { 0.3, 0.7, 1, 1 }
+
+-- 13) no seal in combat (Ret)
+local sealRet = alert("Paladin - Seal MISSING (Ret)", "Interface\\Icons\\spell_holy_sealofblood", RED, GATE_RET)
+sealRet.triggers = F.triggers({ F.auraTrigger("player", true, SEALS, { matchesShowOn = "showOnMissing" }) })
+
+-- 14) no seal in combat (Prot) — a second copy because one load cannot OR two spellknowns
+local sealProt = alert("Paladin - Seal MISSING (Prot)", "Interface\\Icons\\ability_thunderbolt", RED, GATE_PROT)
+sealProt.triggers = F.triggers({ F.auraTrigger("player", true, SEALS, { matchesShowOn = "showOnMissing" }) })
+
+-- 15) Righteous Fury off while tanking — the classic prot failure
+local rf = alert("Paladin - RF MISSING", "Interface\\Icons\\spell_holy_sealoffury", RED, GATE_PROT)
+rf.triggers = F.triggers({ F.auraTrigger("player", true, { 25780 }, { matchesShowOn = "showOnMissing" }) })
+
+-- 16) Holy Shield down AND off cooldown (disjunctive "all" = both must be true)
+local hsNow = alert("Paladin - Holy Shield NOW", "Interface\\Icons\\spell_holy_blessingofprotection", GOLD, GATE_PROT)
+hsNow.triggers = F.triggers({
+  F.auraTrigger("player", true, HOLY_SHIELD, { matchesShowOn = "showOnMissing" }),
+  F.cdTrigger(20925, "Holy Shield", "showOnReady"),
+})
+
+-- 17) execute window: HOSTILE target under 20% HP AND Hammer of Wrath ready.
+-- Baseline at 44 and a numbered Protection priority line too, so it gates on its own
+-- rank-1 id (known from 44 onward) instead of on a spec capstone. The hostility filter
+-- stops a wounded ALLY under 20% from firing a prompt for a spell you cannot cast on them.
+local howHealth = F.healthTrigger(20)
+howHealth.unit = "target"
+howHealth.use_hostility = true
+howHealth.hostility = "hostile"
+local how = alert("Paladin - Hammer of Wrath", "Interface\\Icons\\ability_thunderclap", GOLD, 24275)
+how.triggers = F.triggers({ howHealth, F.cdTrigger(24275, "Hammer of Wrath", "showOnReady") })
+-- v4: ...but an execute nuke is not a healing decision. Both load gates apply (WA ANDs
+-- them), so this is "knows Hammer of Wrath AND is not deep Holy" — Prot and Ret keep the
+-- prompt, a Holy paladin healing the pull never gets a glowing damage button.
+gateNot(how, GATE_HOLY)
+
+-- 18) panic button: own HP under 25% AND Lay on Hands ready (all specs)
+local loh = alert("Paladin - Lay on Hands Prompt", "Interface\\Icons\\spell_holy_layonhands", BLUE, nil)
+loh.triggers = F.triggers({ F.healthTrigger(25), F.cdTrigger(633, "Lay on Hands", "showOnReady") })
+
+-- ===== 19) Cooldowns: horizontal row, gaps auto-collapse when a spec's icons unload =====
+local gCds = reg(F.dynGroup("Paladin - Cooldowns", 0, -66, TOP, "HORIZONTAL", "CENTER", 4))
+gCds.animate = false
+adopt(top, gCds)
+
+-- 20-30) gated icons last so the shared part of the row keeps a stable position.
+-- Talent cooldowns gate on their OWN rank-1 id (untalented => icon unloads => row collapses).
+-- { label, rank-1 id, spellknown gate or nil, press-on-cooldown?, hide-from gate or nil }
+-- The 5th column is the inverse gate. A healing Holy paladin never presses
+-- Consecration (a threat/mana dump) or Avenging Wrath (a damage cooldown), but no
+-- positive spellknown covers "Prot and Ret but not Holy" — no spell is shared by
+-- those two and absent from Holy. `not_spellknown = 20473` (Holy Shock, a 30-point
+-- Holy talent) reads as "not deep Holy", which is exactly the set wanted, and being
+-- a single aura with a single gate it cannot double-show on a hybrid the way one
+-- copy per spec would.
+--
+-- v4 adds Judgement and Hammer of Justice to that inverse gate:
+--   * Judgement — Prot and Ret press it the moment the 10s cooldown is up (an explicit
+--     numbered line in both rotations), which is what the gold ready-glow says. Holy
+--     does judge, but on a completely different clock: Seal of Wisdom -> Judgement of
+--     Wisdom, refreshed when the 20s DEBUFF expires. Judgement's cooldown is half that
+--     debuff, so for a healer the icon is off cooldown every time the decision comes
+--     up and its glow is lit for most of the fight — a permanent "press me" that is
+--     wrong twice out of three times. The decision Holy actually makes is already
+--     rendered by "Paladin - Judgement Debuff" (own-only, 20s, on the boss), which
+--     stays ungated. Cutting the icon removes the false prompt, not the information.
+--   * Hammer of Justice — a 6s stun. Prot uses it to interrupt casters and to pin a
+--     runner while gathering a pack (an explicit line in the Prot rotation) and Ret
+--     carries it as its only interrupt; for a Holy paladin it is a PvP button that
+--     never enters a healing decision, and raid bosses are stun-immune anyway.
+-- Divine Shield and Lay on Hands stay ungated on purpose — both are genuine
+-- emergency buttons for all three specs (bubble also strips debuffs), and they are the
+-- only Forbearance-burning presses left in the Holy row now Avenging Wrath is gone.
+-- The 4th column marks the buttons the rotation says to press the moment they are up
+-- (Judgement 10s/off-GCD, Crusader Strike 6s, Avenger's Shield on pull + on CD). Those get
+-- the gold ready glow. Consecration and Holy Shock deliberately do NOT: Consecration is a
+-- mana-permitting filler for Ret and Holy Shock is a Holy emergency instant, so a glow
+-- would push the wrong button. Every other icon stays a passive readout.
+local CDS = {
+  { "Judgement",           20271, nil,   true,  GATE_HOLY },  -- v4: hidden from deep Holy
+  { "Consecration",        26573, nil,   false, GATE_HOLY },  -- v3: hidden from deep Holy
+  { "Hammer of Justice",     853, nil,   false, GATE_HOLY },  -- v4: hidden from deep Holy
+  { "Avenging Wrath",      31884, nil,   false, GATE_HOLY },  -- v3: hidden from deep Holy
+  { "Divine Shield",         642, nil,   false },
+  { "Lay on Hands",          633, nil,   false },
+  { "Holy Shock",          20473, 20473, false },
+  { "Divine Favor",        20216, 20216, false },
+  { "Divine Illumination", 31842, 31842, false },
+  { "Avenger's Shield",    31935, 31935, true },
+  { "Crusader Strike",     35395, 35395, true },
+}
+for _, e in ipairs(CDS) do
+  local ic = reg(F.icon("Paladin CD - " .. e[1], CLASS, 32, 32, 0, 0, gCds.id))
+  -- trigger 2 is the always-active state feeder that carries inCombat (disjunctive "all"
+  -- stays satisfied); trigger 1 keeps driving the swipe.
+  ic.triggers = F.triggers({ F.cdTrigger(e[2], e[1], "showAlways"), F.unitCharTrigger() })
+  ic.cooldownTextDisabled = false  -- WA swipe text; no %p subtext (OmniCC would double it)
+  ic.useTooltip = true
+  ic.conditions = { F.condition(1, "onCooldown", "==", 1, "desaturate", true) }
+  -- LAST condition: out of combat the row dims and the ready glow is forced off, so the
+  -- HUD is still while you ride around (a later match overwrites the same property).
+  local quiet = F.condition(2, "inCombat", "==", 0, "alpha", 0.5)
+  if e[4] then
+    ic.subRegions[1] = F.subglow(false, GOLD)  -- index 1 stays the glow; polish appends the border
+    ic.conditions[#ic.conditions + 1] = F.condition(1, "onCooldown", "==", 0, "sub.1.glow", true)
+    quiet.changes[2] = { property = "sub.1.glow", value = false }
+  end
+  ic.conditions[#ic.conditions + 1] = quiet
+  if e[3] then gate(ic, e[3]) end
+  if e[5] then gateNot(ic, e[5]) end
+  polish(ic)
+  adopt(gCds, ic)
+end
+
+-- ===== 31-33) v3: Retribution seal twisting ("swing dancing") =====
+-- The twist: Seal of Command is up, and you re-seal with Seal of Blood (Horde) or
+-- Seal of the Martyr (Alliance) in the last fraction of a second before the white
+-- swing lands, so the swing procs BOTH seals. The window is ~0.4s, which is why this
+-- needs a swing runway rather than a bare prompt.
+--
+-- Gate is Seal of Command's own rank-1 id (20375). SoC is a tier-3 Retribution talent,
+-- so the gate reads "has ~10 points in Ret" — i.e. exactly "can twist", which is the
+-- right semantic here even though it is not a Ret spec detector.
+--
+-- Swing Timer trigger, verified against WeakAuras Prototypes.lua (identical at tag
+-- 3.5.0 and current, and NO Modernize migration touches it, so the current field names
+-- are what to emit): type = "unit", event = "Swing Timer", weapon selector arg is
+-- `hand` with values "main" / "off" / "ranged" (lowercase, from Private.swing_types).
+-- Its state is a normal timed state (duration + expirationTime), so an aurabar animates
+-- it, and `expirationTime` is a valid condition variable (type "timer" => the value is
+-- remaining seconds), which is the repo's field-proven condition shape.
+-- GOTCHA (from the prototype's own hidden test, `not inverse and duration > 0`): the
+-- trigger produces NO state when the swing timer is not running. Before the first swing
+-- of a fight the bar does not exist — it is not a bar sitting at zero — so it cannot be
+-- used as an always-present anchor. That is the desired behaviour here: the runway
+-- appears when you start swinging and vanishes when you stop.
+local SWING_GATE = 20375                     -- Seal of Command r1
+local SEAL_OF_COMMAND = { 20375, 20915, 20918, 20919, 20920, 27170 }
+local TWIST_WINDOW = "0.4"                   -- seconds before impact
+local function swingTrigger()
+  local tr = { type = "unit", event = "Swing Timer", use_hand = true, hand = "main" }
+  tr.names = {}; tr.spellIds = {}; tr.debuffType = "HELPFUL"
+  tr.subeventPrefix = "SPELL"; tr.subeventSuffix = "_CAST_START"
+  return tr
+end
+
+-- 31) the runway: main-hand swing draining toward impact, gold inside the twist window
+local swing = reg(F.aurabar("Paladin - Swing Timer", CLASS, 172, 10, 0, -55, gRes.id,
+  { 0.55, 0.55, 0.62, 1 }))
+swing.triggers = F.triggers({ swingTrigger() })
+swing.subRegions[2] = F.subborder("bar")
+swing.conditions = {
+  F.condition(1, "expirationTime", "<=", TWIST_WINDOW, "barColor", { 1, 0.82, 0.1, 1 }),
+}
+gate(swing, SWING_GATE)
+adopt(gRes, swing)
+
+-- 32) twist armed + NOW: shows while Seal of Command is up and you are swinging
+-- (both triggers required), and glows in the last 0.4s — the press-SoB moment.
+local twist = reg(F.icon("Paladin - Twist NOW", CLASS, 40, 40, 0, 0, gAlerts.id))
+twist.iconSource = 0
+twist.displayIcon = "Interface\\Icons\\ability_paladin_sealofblood"
+twist.cooldown = false
+twist.triggers = F.triggers({
+  swingTrigger(),
+  F.auraTrigger("player", true, SEAL_OF_COMMAND),
+})
+twist.subRegions[1] = F.subglow(false, { 1, 0.82, 0.1, 1 })
+twist.conditions = {
+  F.condition(1, "expirationTime", "<=", TWIST_WINDOW, "sub.1.glow", true),
+}
+twist.load.use_combat = true
+gate(twist, SWING_GATE)
+polish(twist)
+adopt(gAlerts, twist)
+
+-- ===== assemble (v2000 nested), encode, verify, write =====
 local transmit = F.assemble(top, byId)
 local encoded = W.encode(transmit)
 W.verify(transmit, encoded)
 
-local OUT = dir .. "/tank-starter.txt"
-local cont = W.uidContinuity(encoded, OUT)  -- compare BEFORE overwriting the shipped string
+local outPath = dir .. "/all-specs.txt"
+-- compare against the previously shipped build BEFORE overwriting it: every future
+-- version gets the uid-continuity check for free (changed must stay 0)
+local cont = W.uidContinuity(encoded, outPath)
 
-local out = io.open(OUT, "w")
+local out = io.open(outPath, "w")
 out:write(encoded)
 out:close()
 
-print(("OK: %d auras, %d chars -> tank-starter.txt"):format(#transmit.c, #encoded))
+print(("OK: %d auras (1 top + %d children), %d chars -> all-specs.txt")
+  :format(#transmit.c + 1, #transmit.c, #encoded))
 if cont then
-  print(("uid continuity vs previous: stable=%d changed=%d parentSame=%s")
+  print(("uid continuity vs previous all-specs.txt: stable=%d changed=%d parentSame=%s")
     :format(cont.stable, cont.changed, tostring(cont.parentSame)))
+else
+  print("uid continuity: no previous all-specs.txt (first build)")
 end

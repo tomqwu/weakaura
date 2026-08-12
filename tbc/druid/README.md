@@ -1,4 +1,4 @@
-# Druid TBC — All Specs (v2)
+# Druid TBC — All Specs (v3)
 
 One pack covering **Feral tank (bear)**, **Restoration** and **Balance** for TBC Anniversary
 (2.4.3 / WeakAuras `internalVersion` 45, `tocversion` 20501). Built with
@@ -10,6 +10,41 @@ itself on respec with no user action; mutually exclusive elements share screen s
 
 The whole thing hangs off one draggable top-level group anchored at screen centre `(0,-140)`;
 the four sub-groups below can be dragged independently.
+
+## v3 — each spec loads only what it presses
+
+v2 gated on *"can this spec cast it"*. The correct test is *"does this spec **press** it as
+part of playing well"*, and by that test the bear inherited three elements it can never act
+on. v3 fixes exactly that; **no element was added, removed or reordered**, so every UID is
+identical to v2 and the import dialog still offers **Update**.
+
+**Feral (bear) no longer sees Barkskin, Innervate or the Innervate prompt.** Both spells carry
+the `Cannot be used while shapeshifted` flag in 2.4.3, and there is no auto-unshift — pressing
+either as a bear means dropping bear form first, i.e. giving up the armour multiplier and the
+Dire Bear health bonus mid-pull. Icy Veins' TBC feral tank guide puts it plainly: Barkskin
+"takes you out of form when used, making it only usable while you are **not actively tanking**".
+The Innervate prompt was the worst of the three: it fires at under 20% *mana*, and a bear's mana
+neither pays for nor gates a single thing it presses, so on any long fight it sat lit in the
+alert flow demanding a button that costs the tank its form. A bear's cooldown row is now Mangle,
+Enrage (out of combat) and Frenzied Regeneration — three buttons, all pressable in form.
+
+Restoration and Balance keep all three: Tree of Life form explicitly whitelists Innervate,
+Nature's Swiftness, Rebirth, Swiftmend, Barkskin and the HoTs, and Innervate is the mana
+decision of a caster druid's fight. Balance keeps Barkskin as a deliberate marginal call —
+Moonkin Form blocks it too, so it costs a form drop, but it is the spec's only damage-reduction
+cooldown and the shift-out-and-heal flow it belongs to is real, especially in PvP.
+
+**Deliberately kept everywhere.** The **health bar** stays ungated: it is the bear's paired
+state for the Frenzied Regen prompt at 40%, and for the caster specs it is the number both
+Barkskin and "stop casting and heal yourself" key off. **Clearcasting** and the **OoC Missing**
+nag stay gated on Omen of Clarity's own spell id (16864) rather than on a spec: the talent is
+melee-proc'd and so mostly a feral pick, but TBC Balance builds do spend into it (41/0/20), and
+the rule for a shared gate is the ability, not the tree — if you spent the point, the pack
+shows you the buff you forgot to cast and the free cast when it lands.
+
+**Requires WeakAuras 5.4.0+ for the inverse gate.** `not_spellknown` does not exist in older
+builds; there the field is ignored and those three elements simply load for everyone again —
+v2's behaviour — so nothing breaks, the bear just gets its three dead icons back.
 
 ## v2 — rotation fixes
 
@@ -125,8 +160,9 @@ flies up 150px while fading and shrinking to 40%. The **Frenzied Regen Prompt** 
 HP < 40% *and* Frenzied Regeneration off cooldown before it appears — appearance itself is the
 instruction. The **Maul Prompt** (bear) appears above 70 rage: Maul is off the GCD and has no
 cooldown, so excess rage is the entire decision. **Clearcasting** lights up with a gold glow
-and a 15s swipe whenever Omen of Clarity procs a free cast. **Innervate Prompt** appears for
-any druid at under 20% mana with Innervate ready. **Tree of Life Missing** nags a talented
+and a 15s swipe whenever Omen of Clarity procs a free cast. **Innervate Prompt** appears at
+under 20% mana with Innervate ready, for every druid *except* a feral one (v3: a bear cannot
+cast Innervate in form, and its mana pays for nothing it presses). **Tree of Life Missing** nags a talented
 resto druid who is in combat out of form. Those five are combat-gated; **OoC Missing** is not,
 because Omen of Clarity is a 30-minute buff you can only apply *outside* combat and while not
 shapeshifted — it nags in red whenever the buff is absent, and the fix is one cast.
@@ -141,11 +177,13 @@ instant it comes off cooldown. **Enrage** is bear-gated *and* out-of-combat-gate
 pre-pull rage generator whose armour penalty makes it a mistake mid-fight, so it simply is not
 on screen once the fight starts. Restoration sees **Swiftmend**; **Nature's Swiftness** and
 **Force of Nature** gate themselves on their own talent (so a talented hybrid correctly gets
-them alongside another spec's row); **Barkskin** and **Innervate** show for every druid. Note
-that in 2.4.3 both of those break shapeshift — a bear has to leave form to press either, so in
-bear they are situational (emergency / post-fight) rather than part of the tanking rotation.
-Per spec that renders as Feral → Mangle, Enrage (out of combat), Frenzied Regen, Barkskin,
-Innervate · Resto → Swiftmend, Nature's Swiftness, Barkskin, Innervate · Balance → Force of
+them alongside another spec's row); **Barkskin** and **Innervate** show for every druid *except*
+a feral one. Both carry the `Cannot be used while shapeshifted` flag in 2.4.3, so a bear must
+drop form — and its armour multiplier and Dire Bear health — to press either; v3 gives them an
+inverse load gate (`not_spellknown` = Mangle (Bear), 33878) so they no longer take up two slots
+in a tank's cooldown row. Tree of Life whitelists both, and a moonkin can drop form for them.
+Per spec that renders as Feral → Mangle, Enrage (out of combat), Frenzied Regen ·
+Resto → Swiftmend, Nature's Swiftness, Barkskin, Innervate · Balance → Force of
 Nature, Barkskin, Innervate.
 
 ## Spec gating
@@ -159,13 +197,21 @@ Nature, Barkskin, Innervate.
 | Omen of Clarity, 11 pts | 16864 | Clearcasting proc, OoC Missing alert |
 | Nature's Swiftness | 17116 | Nature's Swiftness cooldown |
 | Force of Nature | 33831 | Force of Nature cooldown |
+| **Inverse** — *not* Mangle (Bear) | not 33878 | Barkskin cooldown, Innervate cooldown, Innervate prompt (v3: hidden from feral) |
+
+The last row is an inverse gate: `use_not_spellknown = true, not_spellknown = 33878`, which WA
+compiles to `not WeakAuras.IsSpellKnownForLoad(33878, false)`. `use_exact_not_spellknown` is
+deliberately left unset so the rank-1 id resolves through the spell *name* and matches every
+rank of Mangle (Bear) — and only Mangle (Bear), since Mangle (Cat) is a different name. It
+needs **WeakAuras 5.4.0+**; older builds ignore the unknown field, which just restores v2's
+"loads for everyone" behaviour rather than erroring.
 
 Combat gates on top of those: the Frenzied Regen, Maul, Clearcasting, Innervate and Tree of
 Life prompts load **in** combat only, and the Enrage cooldown icon loads **out** of combat
 only (WeakAuras load booleans are tri-state — `use_combat = false` means "must not be in
 combat"). OoC Missing carries no combat gate at all.
 
-Ungated (every druid): Health bar, Barkskin and Innervate cooldowns, Innervate prompt.
+Ungated (every druid, every level): the Health bar, and nothing else.
 All 34 element children additionally carry the `DRUID` class load gate; the four sub-groups
 and the top group carry no load conditions of their own (they inherit visibility from what
 they contain — the same arrangement as the field-proven rogue pack).
@@ -183,13 +229,17 @@ Named here so nobody assumes they were forgotten:
 - **Cat-form Feral.** Mangle (Cat) comes from the same 41-point talent as Mangle (Bear), so
   `spellknown 33878` cannot tell the two apart and a cat currently loads the bear HUD. Fixing
   it properly means form-aware gating on every bear element.
-- **Levelling.** A druid without a 31/41-point talent loads only the health bar, Barkskin,
-  Innervate and the Innervate prompt. Pre-70 coverage is a separate gating pass.
-- **The Innervate prompt is not spec-gated.** It fires for a bear at under 20% mana too, which
-  is a button they would have to leave form to press. `use_spellknown` takes a single spell id
-  and cannot express "resto **or** balance", so covering both caster specs cleanly means
-  splitting the prompt into two gated copies — a change worth making deliberately, not as a
-  drive-by.
+- **Levelling.** A druid without a 31/41-point talent loads the health bar plus the three
+  inverse-gated pieces (Barkskin, Innervate, Innervate prompt — a levelling druid does not know
+  Mangle (Bear), so the "not feral" gate passes). Pre-70 coverage is a separate gating pass.
+- **Balance keeps Barkskin knowing Moonkin Form blocks it.** Pressing it costs a moonkin its
+  form, so in a raid rotation it is close to dead weight; it is kept as the spec's only
+  damage-reduction cooldown and because the PvP shift-out-and-heal flow it belongs to is real.
+  A genuinely 50/50 call, kept rather than cut.
+- **Clearcasting / OoC Missing are gated on the talent, not on a spec.** Omen of Clarity procs
+  from melee attacks, so it is overwhelmingly a feral pick, but TBC Balance builds do spend into
+  it (41/0/20) and a shared element gates on the ability, not on the tree. If you took the
+  point you see the proc and the "you forgot to buff it" nag; if you did not, you see neither.
 
 ## Importing
 
@@ -200,6 +250,9 @@ in that dialog if you have dragged the groups somewhere you like, otherwise your
 snap back to the defaults above. Note that v2 moves the four bear buff icons onto a four-slot
 row, so a bear who unticks Arrangement will keep v1's three-slot spacing and see Demoralizing
 Roar land on top of Faerie Fire — tick it once for that upgrade, then drag the group back.
+v3 changes load conditions only, so it is a clean Update over v2 with no layout consequences —
+but a bear on **WeakAuras older than 5.4.0** will still see Barkskin and Innervate, because the
+inverse gate that hides them is a field those builds do not know about.
 
 One warning about the editor: selecting a group in `/wa` force-shows **every** aura with
 fake data — both mana bars, both threat bars, all three specs' buff rows and every rage
@@ -219,13 +272,15 @@ the four sub-groups, then Resources → Buffs → Alerts → Cooldowns, then the
 bottom of the file), which is what makes a re-import offer *Update* instead of duplicating the
 pack. Keep that seed and never reorder or remove an existing element's construction; new auras
 append their constructor calls at the end and are re-parented into the right group there —
-which is why the v2 additions are built last and not next to their siblings. The script round-
-trip verifies with `W.verify` before writing and reports `W.uidContinuity` against the
-previously shipped `all-specs.txt` (v2 reports `stable=31 changed=0`); a re-run with no source
-change reproduces the file byte for byte.
+which is why the v2 additions are built last and not next to their siblings. v3 added no
+constructors at all — it only set load fields on three existing elements — so the uid stream is
+untouched. The script round-trip verifies with `W.verify` before writing and reports
+`W.uidContinuity` against the previously shipped `all-specs.txt` (v3 reports
+`stable=38 changed=0 parentSame=true` against v2); a re-run with no source change reproduces
+the file byte for byte.
 
-## Import string (v2)
+## Import string (v3)
 
 ```
-!WA:2!TZ1E8XXXD9S5IBTVK0yjBR0ysAKvRDKcjU3dD6UlT2T3D60BP78ENKFe3QBVBN72vAVDxp7E6KCFgv3IB4vraH02eAr9rGqb(GGpqbk8bmLc0w(WpoiL9deGIHc8HhPGPq5XhkmZS3EpK0DwYwHyNM)WJ2D25MDNFF)(7X8BMXCZ0zUp(rU49xjRqU5fXA6X0u0WJ5YLRKU8C0a6DMtt1eRPOGeJjjRiIrQp7LhexswS7hU7rqckMsxY5wEHci997C3KcQcD3lpYWuRp9UAU2OckcQ5q9PFaN6tlHrcMKNGeW9PF3RV6ycgMiYdETn(U6EczveThlOGQ)gA8jLu0V3w9lixBQFWn)xrF2LZQHfr4OvLl67nQI85pVawS70AAkMY64ftKpVbYKlRUarSy6myshngPdJOO0DkDuoJS29JeEj7MFUvXOcYAQPxshXxaRvsFv7wKs(8ODTMSAEnCrbtslCVM9dSHeoooxvekzkPHtOtFSH7SeWjVCb3yHCSkgG3WuaB6oBEzvzdj3rj)X09YMy5cfqyJPocU6Lprut6BxOewW3LOLg6iffzrJd2PNOLi)OS6kclHWlZQFurd3x2Ouw0cKrzQs5ZlV4AZglsQ0ZMkDe(01EusmI8i(ujJpXexPKbk(IKVRu29qgEvHIid3RkIYs6b6Ghps8jso00tSsj1QFwUxtu2yUsQKrZciFckk6DiWUoT9ZNute9zULQIR4Ie2whPoxjIWV7Hkre3Nus2eDj7NAlR3ZkcQY2cZbG7DOlHemqPmjGvbtPxnCOOQAQOkIKXpTfZsLjyderOkASmTP0Vsiu0IcYQdbbj)aieegEe4nr(79T(AwXaPKpPMSQz2yXNkDC(EKf17Og)czOvcNdzCfsdqyvbLziVlYB9rxlpMiziFvcMcUUcrTGaWdrRI(2ZMkgF84tTQPwUfSB)UtEaFKUCTfgo9zgFcT4tm3j5nYjOGCTkbh4zuldhMZOQeHGRvPJizBktufnbr3Rz)AyFTWXVONvniu45pPSOP0bwvM08uSp279wG7Id23ZFlWeWXRWAdVMjtyXP3rt3tHMOrMoDIO0FUeC)V9JaD)ee5ZBaEaGyfGYpYABVGu1HHJ4Ezcdzwkxld0h8GWd5gEy4OWB0DJ)oiL((NM0KUJjjqj5iSSHPCoJQDbm96(TGhWl4JqrOFeZMZXuMl4T(OWXGJVCwHQktjVnph1BaAzWq0sFbCryMgcMuUas6sSXMnh60CWipsxWHwJQNq6Gzj)7IDP3PjArZznKee1kFQQgcwHvhTqFVhMWLYrg0sSX8HpS(EB4huxJ(Y216qDGtOVpwnefDnkXnhduIgHC7vypGOHHezv(yvSrXtx9TFj2ZNRercLFj44RIPqdknPYOtLyQ4WHWeccTnRYAyDPJ9NDEIHE99oew(8DFIscIu6y3PtR7P2yAwBdtZ20aBwruoIgMYS6yYfgmMrJIgNpUkS6ktyLNelOV8jRErLAVAMfHetNEIrNkEvzvdK01gDQPIZpl)OdpsA9(UkFseBQQImTz(8kAAyBbZcKVUSkOm1FLudU3tvHOdeQF4RsNBxz2PkvmlcVaCOvicvBLTk2)P6NTpcnXPgTQau1BZvh9RwJZ3wv12zreBBq)o3zq(oDLvcjxqY8(GXNzfQMtofbdJmznjA(QMDXxSeXLKBEwThjRHm1dh)G8tp6GWhOl4dMjkXsEUUGpG7O0EJEXLzC8OKFUiv51xKbhuFVKEoIiLcHerItkSOeSx4TyBDiwDTP7X96BPmrLF)4QAiWbD3Oc0P4wHPoAilI4ziima1A86TO(MV62yHVdYp0nCFUHxN71yVIrysLJHPawjmIpMcsqLxqrxsWL9hrA7NO37OudV5fYHolnAcIekQa(Stp6dx)UhofZKg7Njbdsm1sSHdUIEEnTICqex8LP6DFE3quigeFTZNtcpL5asJCgbSSk1(msQ6xLSOisLFQ4ZeNFnnSmbIywjxDKe8JEMetLoYeWyh8i85Kq5MFiO7DT8cKUqGqbwwwnMwXScM8liOucX1JMEph7y4CsKywqgh8iWZWIlBzDsijiS5sWtc3T7RqdERaJ2xZYcTzbVOhyYdatv1o(NJJAhhsWbjHta8vns)lu3ylFsTYim146k60ROQqUAYoBfk1R2ZYSPMSHzUAMNHt2Ovz4umZXHcu3OS3aUGtlbNPQPx4rV4(GZYbVTEoSomltZbYqgccqwi3JbICaI0n5HcKMkbY2D(CW8ab1ubnqhohGbdO89alYblKHO2cVd4DcVl4DZbVh7(79MbEmOFyzxW7JOJTaCHmxMowzbanVQwz1mW7NQ2apoR876iWfHpOTU1Q1B0UVWmW3nRbFpW3l89XuFGVFhTg4dr0sGFaI(bSch8dc)q7ikcWp8XGNa(rGN0f8HHpc8rRZCVn4PO0w4PRrz1kKn2zMtX3PsKg(ysWhh(XGvHpbLlcFskpe(uWNgEMQSo4hVgFd(jyen4zVwPwWpjJu8z4AMx8tTJsH8fG9XslcVEcuxmc0vCClZ4Wh(WBt2KEVTY7aR)AWZduQjM3cz0FdT)NAxhCEBsQ(BS9TEJED3ACA4NU10y4Nz3JS8nqS3DTb2B4tC6egcOu(Ip93wYEHF2TR1V12ape(5C4yWp)odPr4G3arAEvBG007mlGto4zgmE2X2rjnp1TUEsZunsdw1KL6c6SxibPHlGmj0aMlL6pidLJKsFVvZYrkzZsSWeyKMTmJjeTW)MZyU0HTFB65mRzSt)H2GTLAnAtmSS5Cn9d1MoPMTS26oEtc1UEx0KL0TNF7RcD9gkp0V6nqxhEWYjtQgfhCPGBgD1f8P4fkqI1BDu2XyMnyXo5ZU0fHaFQRdcm8lcFwQLRFjBwk8lVZXkHFfh7yFUwqVGF1Rg7b(12Pjg3qzhB3BGyKoR60fgyIXtmMzteJhSgXyLAQpWZ0tqpu6XXDOhS05oaTWlJyu7hb)6WZ4A7ZK6MkEUs1zDrNjpDoK67p2erMmz6erNisSXjtOC00JotCBE1M4n1vl8MwJDD3Kj0wlDn(yZmimRSFwzGaeGjBrzmwdlX8IVFI08GUxjRZKA5Jor8PgegZ91mAP3HOSromYenl2j1xnHGpH(JuFILreftOAC2tIeMpcnRQNDsKOSWzRofuJZANTYzzjQ8OMfeyWnv7HG0efikWVh4UMWfLqCAPLR)gJVMVEhSuIWg(9oVaJqqvDFFhkRDsEK2Ew(E6DzJFWVj85VEqh43IWRO5qJPX7RgMaFHgHd43g(DUEGa43DDsC4lUjYn3WDf3wSbFjQ8kFV6PuMy6KtT0GniVGFVRBr1FJJO6Y2HItNhUGPgMORTsTzhNXroYZUThFE2Qc0ns1D1wjAE4qzjoRniXx8MW0KwNOKjvawjRHewwD(LDsVDuA)YKPBImN0lqf2L0FA08cIi458r(fSMSLaGBVoX1gb8wOCzPr8fAY0bRJahE7Ja7PLia87tnWb1e2WFaXS31cZ9QkIzcN)qMWb(JGNd(kBnbj8htAR1wxgEhRJelMBCHsX8nuSGXVofH3pWvBr9GB9z13RZctmbXUfnN31xkUQlp2GSfQP(kKnKaclJ6EizmYzz6QT6gtiNhLvrtRy9L)JhnxPfqQmQx93gpIe6sztP6TJUef5iX(wwaxSE7MuJUYwyK(9T5VEN1p8ECE8GOIAybf5ZlRwOBEnbmCNWRHgMZEHoGoji7Dqr2daDTlk6)ATdrGa6eKUryPwiq9aV(d2PhN5Xr5Au203zMnzUC(jrzeypx7M3SX(koJKOePUrvAbfZzSK4RD6e9Ma7FCLKdRcd7cgXnmQlkbDC3uwXfF9SW6idO9XMlBLCAAkIALvtvwwhL5so3sx0mPnoI)0vhX8(9hS)aeesnHQYszid)p7Mm8XJeHFYHMEIgfcV1h9kZJq6rOPz2KNI6sSqcjm5rg7RuPGIw5HWOZvcPMBjBtCrP1jDjIjZHvQUIisRqRlL9QzrVCc2k1DG1Ox7SscS2upz0SN5K9E714Gwd7nMwso38QiddxlZULmBIkzlzAQPMybewryjwFrx1xJoyVVO2lvBTSnACTNTXJdLpKDWP7a5U8s2l)r0ePtNysO8DB3X5zr9UPr8EITNbI9d8efLVgCxp0TrNXS3WrtezGt0BejQDs6h0tXIMFzhAuMAXP(NQVFNkPr5mOSbnl2IzOwXEAYSkYq1WiHRARDqP8hY22yvTJ1vZ9THAOQaneJBwdtHCZBaptNbibT25B2oM1mKiupDT2Cz0I6Y2o9slxevTT98MpwTgtxQ0J69OuiNAoiIR1R)a)TzG)UwRO8iefLqbdrkdhAawzq4VVvQlW)qZkkW)yDvJh5Ra)t2QdWlibFDj4F2f8VCa4kCW)QTG)Bq40W)g8V7c(MW)b8F2b8FjTtKl8)BO899IgjsH66AbXtnw8CX93BXantIG)N6SNNh(w7Wmf3Bp8SQP(N1xWGEi)lu0Wb7pC0WH9eK33aHd7N37aHceK3Bq)H9Wk9Yk9X7lOhVEFfa3gWFycExCG(km84Zi2F6(BnE)NTJJ31tlIf3TSjA6wCCxtA4mxHd4VnA1hT1G8yxpG8nk(COuMDkhn1wxHAuMV8TsNt7CJGfv0h0C8HBnN5pFhNZu3Bc8)sOm(BPJeBkLVDik1FcXat)r96jqOOE73VNO(8eMv4nQ)b8fmAOWE9enCi)eZpH6NEv)E59fWx4WulrH8Yk9DTXhFzGrNnYGOozqs9jnPV8N(KgPBnb6V4fDJo(3HyiplHe4FaAriArysbHjqk8s8lfGYjcmaTiiTieJr45vye1yeNMWio5sQLKWf9oVyVTMr8vVPHrmx0abc6H3x)K4syLbyLdWkdYIcX)32g5zTe23Sxf(sz9pwCf5Ep35Anf4V8L6ipRcWFrI6TpV0I(PfbOfulamhc(OMb8rDi43pTOFAraMEpl(0qHEfSVj)b9UOppdMCItU4cYTg6V8niq)ZAX9QS4E1wC72IBpwCUT4UDlU7WI7oT4EnwC31RaTnzyF8KNZNV8cbetP2AO9V6g)5xuDgNZ1t4WrjtLmq0W9tcdKyEN6upmZPE4qVYelTb(3pb4tLijUSr)tFYP92AG)V(LqG3tuAoT7z6KWToxd5RgJupVmsKMYBKA3jXAf1nRN2B6(ufNZENNQVpNAtOfR7jLnOBF36h1Lrvvr4femroDY(QNP(skovw7CUKgJqDRLNLtENoJLmCk183GrnTt)nDFUMdDNxV5)ETCAkLkQMI2z27eGS25PKxqrUGkCCSHPa90BWrtA94UByHiW2Nodugww6h21Ye5y1(PtjwE13)LexsvOOCo2bLb6Axrn0WMqOvkGLT3f83(Y0lPP2Th(b5vKlkBE70JwWe0RKUConvYRx1CiHCMA4S8rgC0PtLflikxY4c3beypRqGb70mFHUCOt1oGtruqytJvZxsrjMmoNc5lTAw5)sC08VFxkxh59NWsT9CeFT(7pLzwT0sZiM4IVbykU2BgHU50(coRbwLM2E690VhifKMHBeKIaDuyB6m6DWwAYgBAg9UAENT7SqMK5cxBxTDXo4nXc5Mpk98iy3je2mclNlLKw5eQzQ00TRzW(dpsqCj22iMTZyNsOiA3NMOIXZUT6b74EIvnVXugCbmYWO7EzhwO(07K(EiChnmsBbeMGVOmvWKVYuoDN(bAw)czNU3k12YU0gX24k0HI9cbYwDw2OjJ((OxJONpPgBElnU(G1nUsTH(1ZaFt(KYlIuQzI1E3Uql7NzQ9fYqnatm2Ym02EtJFaBtJRY2w)Sn)9w2mj9atrpQwJs456DxFJiqV34SczLvKnxA2Se(lUKHeSxlUzTJuk)4NASzgyuH5hEX1BvT2MqXIBKwywT5veDndfccLvZ0uRiBvJ97S6OR3u7f37kSZQeBLymiybDZ7ZwVh4qzZvYG0bzznyjMKK(gSVFr77FUo9cpjhdizvNPZLe3tNlYTcBd)t71LD6v67Uc5Avdf6PGH8i9oCEwANQjFyvQYkSRidRVz9wMRNekFqAIJdU1w)Ww6h3HQzXzu3vE1TkV9QwVbI2)F6rVkT1IR901iF1g9QxJaMDbVNyGjZQp9KTE9bS4gDlraT4weEolULAnTZI78wCVd4qwCVtlU3vnYLf37UrILf37XHrzX9ET4EmApzXTSf37J0xwCxGmyF)RJxC1nx3uwLj0Ib6VcXPxojKHTrZk2gnDCvV9Pmp4wGYu)CvSnnoTfIBRre2IRuJN0gB7qmtSZQspDDelC4LiEKvYkq8euNo0xSzYhl5CY(1s3g7rJ9Ya6WBVXDWI(bAAB9x3f8LASE62hQ6wCHDWRA6SaKPTBl9l2HfhYIlVfxbYxRKfNmTxS4MB3N7fOJ)5T9gBXPyXvK0c1vQfUPfN(68GAXDostWzUMPImPlBde6ABteZtjImwiZIttCqBAztKWJ0wsOc1nGkvDRofmXPInwPyP94z65AdfC8xMyr66EtuT9TbnW1QnOTONMgdmIsb6PvXdjsdVF2IKzp1a8lHcNi4a6j9AW3g4FIxU5qYV)qH9AX9bT4E8DExp0h5FDBMXxKW(CxfFqnJ9MKjjRLxHmf5gyaN3SpFZnKr(W91oFqtEdpdWJf3WWNaU1h3zd6fBWABRVMQkUkM(Fzh3tdv180QCYxb7rPklN3Sisv0jjhSANIzq9bmSFmDZw5SLbT7pnINkA6iSBNtUlyplQaEEJ5LB(TuZ9tTCw8q3wdjTWIBQ9C9MXclUeohzblUtql43yUjS4s5KwclU01tiHf30qx7YIBgiKf3jVDlUt1d)GwCNMC1ziUxFulUZAX92yPwWI7TxpNc13SKoZ71WIlZ6ZNa3os6eI5Ryoe)uArJ4JAoyRmVL1fNWQ0ysJOuwyjdN4fiwx3S4fQuD7IAVLqFriMbx2BR8gDDiTfnFe5AiTJwCFC6eXR()XlzSTmCIZJoxKs9jO17GTzYkpj8TKywgISZVtfwvt1H3SUZRX63YcR)WS1uUkV2ydwCR6Wc2FXnLfK12uY1j8VLtCD7X86UmK2w4Uf3NSkE3lkWuQ5IhDgj12G3F4DC8(GnJJBeN3PGrA242ey0It7gdi8ArTTo8v8eJKCPYdwyyPHBd89rU5f(gz5nFUB1CrFtdk28U4OjuC8LgiWIbLkVu(iTbf)O38IIrF(nff17CJXuDtdEsgtTcpnsLybfuEtdCVTbpFQBEXZl8aBkEEL1fd8npwyFGwILNzGYZV0GNy4WA93gS8PVj2b59UPy5YoZz5gdqCMA5eRT5dBDGx)YN7m6twCHSXZ1gW7h9MxWRfP20I7dDZmSDcpQthyeH5hYdQnW2h7LkyRZIDk2P4fFDnDqdhdElWxZIBwYaX5a5rpmEF5DFJ9HXJmT)nCa8cLtFX4rKhjsHr2KdGxNg8(pAGJ6PZfUT31)h
+!WA:2!TZxF4XXXD9NnxCR9L0glzBLgtCRSATJCiX9ErNU7sJD7DNo9U0jV3jjBh3OBVBN72vAVDxp7E6KCBABuEb1WBTciuAtOTQVKsOapi4bkqHh(zkfOT8WxeKY(afOyOap8sly4hLxEOWmZE79M0DwwsHANM)WJ2D25MDN5ZNVF(oZ3zgZnv7z)ihF53W6zeYoNiwtpMMIgEyxUCnHlpNmGE7z1unXAkkiXysYkIyK6lCL(WfLf78b6CqKGIP0LDULxips)Go3nMGQqNDZJmm1oHEh1NBubfb1SOtOFiN8tjHrcMKNGeWNq)UAm7ycgMiYdED1(U6CuzveTgZRGQ(gQ9jfv0VNM9lixBQF4n)xrF2vYOHfr4OL7x03Fuf5lDjbSyNP00umL1XlKixodKjxgDbs3IPtJjv0yKkmIIsNj1rznYyxps4fTl(fxfJYlRPMArDeFESwr9vTlrs5lH2ZAYQ50WfemjLW9A2pWgs444CTUqrtjnCcD6JnCNHao5KZ7glKLLrV8gMcyt3zYjRkBi5ok5pMUxYelNppcBm(XXLV8zIAsF7cfXc(Umn1qhPOilAC429eTi5hLrxryreEjw(djA4(kgfZGMN0ktwmxo5fwBMyrsMAMKPIWNQYJMaJipIp5eXhD0Rw0afFbY3vs7AinVQqbKH7vfrzi1aTXJhm(Ot0)KJUsr1YFwUxtu2y2IQKwZ8iFckk6TjWUoL9Zhtte9PVLYDxXfjST2sEXIKo)o7ViP7EAjzt0LTFQDF9(wrqv2UZSx4E6)YibdustcyL3u6vdhnQQMkADrs7NwIzO9jydePtv0yjArPFLqOOfeKv7hcs(bqiim8GWBH83J0yoRyGuYnHMSQzMyXhpvC(UKf1BRc)czOveNfzCvsbqyvbLPiVlYB9HxlhM0Zq(QemfCDvIzbbG7NMf9TNjzm(4XhFvtTSZBx(9oXH8rQY1MFGuNFKr1Ip6StZBKvqb5AvcoWZOwgomNHujDcUwL2IKTPmrv0eeDVM9RH91cNEzpRAqOWZnTSOP0HwvMu8KSp275wG7KdoWx5wGrHtVoRm8AMSolo92Q7Ek0enYKPseL(ZLG3WJCCOZNH0)8MG7fiQau(rgB9cswhdoU7LimKzOCT0WjG7dUF3WdaNeEZUR93bj1p4KKI0zmjbkjhHLnmLZAuUkGjB43cEaVGpcfH(rmtwhPmxWB7HHtbNEPmcLnMM428CsVbOPbdrt9fWfHzAiys5ciPlZAB2COZXbd(GDahDnQDcPcMH8VL7qVDt0cMZyijiQv6SLfcwHLhnrF)hJWLYsA0sS28XoM((R5hu1I(k256qDGZOFawoedDnkXnlduIgHC7vzpGyHHezz(yRBJINR8B)YSNpBrspuUfHtVkMcnOuKmJoEIXJdhftii0YSkRGv7DS)SZre613F)y5l15zkkisPJDMkLUNkTPzSfMMPUg2mIOSelmLz0XKlmymJA7AC(4wNLxjcRCASG(stx(I1R8QzkcjMm1OdnE8Y9v1qsxBOXhpo)m8dnWGP0pX14tIOPQkYSM5ZPOPHT7yMN81LrbLU6RKk4E3L7eDGq9JDnQC7mZmEXczq45HJUcPt12yBD7)u(Z2hHM4KJwzaQ8TzRI(LZX5BRSz7miI2g0JZDgKVtxzKqY5LmpcmYuRqTCYQiyyKoJjXYx1Sd(cfjUKCZZY94zmKPE447JFYH6dEQoG3B6OeL8SDapL7O0AJEXvyC8OKFUi141xK(6tF)KAoIiLcHerIJjSGeSF4TARoeRQ10D7UXsktm5piUSfcCy31AaDwUvyMJgYIiEgcc9svJBur9HU2ASW3f5h6goIB417En2RyqwVYPWuaRigXhtbjOYlOOlj4Y(JiL9t07EiQWBoHSOlqhnbPhkQa(cto0du9UhijtsJ9ZKG(isTenCWv0lPPvGdI4IVe1U7Z5gIcXG4RDPSs4Xn7vAWZlGLvP6ZiPYFvYIIiv(XJpvC(10WYeiIPsU6Gj4h68jgpvKrHHp8X5ZkHYox)qN7zP5jvHaHcSKSAmTczem5NxqPiIRln9Uo1PWzLiJzbzC4JdppBCzlPtgsccBUi8bG7Y9vPdElpJ2xrzHwSGl7bg7qW4L1X)SCuDCibhmbCgGVSi9VqvXw(j0kHWuX1v0PxrnHCvNo76uQxLNLEtLSHPUwYZW01QkdNLjhhkqvrzVbCbNtcoFzPx4Hx(aWf4G3ExhthMHz5aPjnbbidK9XaroarQMCqEsrLaz7kFwyoGGAQGgOdxeWGbu6UHf4G5ttmBH3b8oHhfExCW72U(EpPHhd6bwYf84eBS5HNi9vOTv2aGMtvRKAA4jPMnWtZs)EooSm8ETTTwTAH27tmf89YkW3h89d)amZh4h0XQbEFeRe49tSpGv4GFi4hExXqa(rof8mWpk8bCb)yWhe(qvzU3g8SuAl8CvOSA5Ze78ZQ47SjsbFyj4JaFuyv4Jr5IWhNYdHpb8jHNVmRd(uv4BWpbJObVW2LAb)KmsXNMREEXp1UkfYxa2hlnjCJeOoyeOR64wMXHp2XUozt6D3mVdS6RgppqX6yEZNw)n16FQDEWLSjP6V5wx6n61DRXPHF6MtJHFM9o4s3aXE3ZgyVHpZ5syiGs6l(KFhj7f(zVEv)wBd8q4NZHJb)87oKgHdFdeP5vTbst3tnpEI(oFFXZm8UkP5zV1gjnJxlnyvtwOlOZEHminCEKjHgWCPu9bPPCKK67VCuoskBwKnmbgPzlZycrt8V5mMlFm73MEwZkID63)g0wQuOnryzZ5A6hTfvsfTSw6oEtgQD1QOoL0Rp)2xd66nuEOF1BGUoqFLMyc1O4GlgCZORUGpbVqEYy9AGYomt2Gn2jF2PUie4ZUdiWWVi8zOkx)s2Su4xE3Jvc)ko6yF2MqVGF1Rf7b(12Tjg3qPJT3nqmsLrDY89o6ijg2SoIX9vHySsfZh457kOhk940o0dw4C7LM4LrmQ8JGFD45DD9ZK6K29C1YZ6IotE6Ci1pySrJm2ePseD0iXgHmHYHsn0uXT5vBI3uxnXBAf21DrMqBLW14JnZGWS0EyPbcqaMmfKXynSeZl(bj9Mh29kzCMulF0rJpEFWWU32OLEBIYgzXit0myNqFvhc(m6py1jwgrumHQXfMgjmxeAuvVWyirzHluEkOgxWoALZWcu5jnZlWGBQ1dbPjgquGFFWDoQlkH4Cslv9ngFnFD3xXeHn87DobgHGA6(4hnJDqEKU(u(EU9yJFWVb852jOd8Bs4v0yOXS49vbtGpFTWb8Bb)27eia(DAOhh(cBs)MB4oJB3TbFrA)vUU1tQm6Ktm(I9vt)f87UJ7Q(RD6QUI9qXPZdxWudtS1wPYSJt70pYZUTlFE2QDOBKQ7QL9O5GJMH4S2Gm(I3cMg06efnPDGRNXqclRo3soH3okTEz9PBsFoPwG1zxs)PrZjiIGx0h5xWkYwcaU9QexBeWB(sLKg0xOXsfSkcCSRFeyFnfbGFpQahuPZg(9jYEBhM71SlM158hW6CG)q4fHV8wRJe(JiL1AR3hEhnqIfZoIqXy(6pwW47WUW3aWvzr9GB9f03VZctmkr3IgZ7Qlfx5LhRp2c1uDfY6xaHLrD2Vmg5SmDvwDJrLZHYOOPvO6Y)XJMT48ivg1R6BJhrg6sjtPQLJUefzjJ9TKaUq1YnMgDLTWi9JS5VEN1p8UDECFOcAybf5ljRMVtEnbm8AGxlDyo7hAdANGS3bfzpe0XEOO)RZEiceqNG01clvgcuxWB8WT7XzECuUgLn9DNEtMlNFYOmcSVTV8Mn2VUtljkPx3OmTGI5mws81oxIUtG9pIYedOcd4cg0nmKlkbDe3uwXYVr2W6inOdWMl76z10ue1kPMSKSok9LDULUOzsBSf)jl3I597pypbiiKAcvLfttA(FMnP5Jhmc)y9p5O12j82E4RohcPhHgMztEkQlXgsiHjp4WF51ZROvQFm6IfrQzx0wIlknpPltKmhqP8kIiTcnVK2RMf9YrzRu3HwJETZkjWkt1GrZEMt07TxJdAoS3ykj5SZPImmCTe7wYSjwptrttn1eZJWkclYQl6Q(A0g79f1EPAReTrJTF0gpnu6O2doDxi2Lx2E5pIMivQeJbLUl7kohBuVB6iEpZ1NaXbbEIHYxdUZ7)2OZy2B4OjI07z6oIevNK(b9SSrZVKdnkDLXP(NOFqNmPJYPpzdAuSfttvXEoYSkstTWidx126Gs5pQT2yzRJgY5iBihQjqnJXnJHPq25mGNV9aKbT2(dzpM10KrOEUkL5kOf0LTD6LsUaQCz76HovLctxQ0t69KuiNkheXvJ2pWFtA4VT5gkpiXqjuWqK0WH6LLge(7AM5c83xVHc8pu104b)YW)OT5a81LGVHe8p5c(NpeCvo4FXUJ)FLWPH))W)Ml4Bc)7W)rBW)P0UrSW)VGsh5LmsKc1118IND44zJ7V7cbQNeb)3vzpFf4BTlZuCF9HNLL6FbFbd6H8VqrdhSNWrdh2tqEF9goSFEV9gkqqEVb9h2dl1ll1hVVGE869vaCBa)bi4DHEpr(bgzkXEs1tZX7)0DD8UAyrS4ULnXs3IJBBzHZCf2R)wyvFYMdYdVta5Bu85qPm7woAQSUcvOmFPBLoN2zhelQO3N5id0CoZF2UoNPQ3e4)Hqz83uhj2ukF7suQ)yIatpr96jqOOE7XVNO(8eML4nQ)E9fmAOWE9enCi)e5Nq9qVQhV8(c4lCyQsuiVSuFBp(4ldeD2idI6KbjDcPX8L7CtBKQ5eO)8xYfD8VlXqEbcjWFV0Kq0KWKectGK4L4xkaLteOxAsqAsigJWZRWiQWiohHrm9IQfLWf8oNy3nNr8vVPHrmB0abc6H3xpKXLWsdWs7LLgKnke)Fh7ipReW(69QWxmJ)HJRi39fVyZPa)fF7EKNLb4VaX82NxAsp0Ka0eQcaZHGpQmGpQdb)(Pj9qtcWS7zJpnuOxb7RZFq3l4ZtFtm60lmVCZH(RCdc0)cwCVklUxTf3ET42NfNBlUB3I7oS4EnwCVwlU78vG26e2hzIl6ZxoHaIjvBo0(xEJ)8lkpJZz7kC4OKPsgiA4EiddKiVtDQhM5upCOxzIL2a)tsa(KjMaxYONjNEsVnh4)R(2iW7jknM2Dn5eWToBnXRgJuVKmsKgYBKANtG1kOBwnS309PkoR9opv)ao5MqlwNJjBq3(UvpQldPQIWZlyICQKduns9fvCYSY5CjfgH6ulhlM8ovgly4uQ5)pg10o83095Aw0RzNg)71YQPuSGAsALzVtaYyhNsEbf58QWPXgMc0tVbhnO1J4UMfIaBF6mqPzrPFaxlr6hlxpTlXIR(bVS4IQcfKZYoOmqh7jQHg2ecTsESS9UG)2xIEjn0UDX3hVICbzZBNE0cgLEL0vYQPsE9QM9lK1udNHpsFdnzYmybr5IgpXDab23keyWomZprho0PkhWPikiSPXQ5kQOetgNvH8LwoQ8FroA83VtLDqC)jSuBphXxRNEsAMrlL0uIjw(nbJZ1Aze6Mt7Z7SgyRx32tVRE8ajHumCJGueOJcBtMwVn2stwBrtR3r97SDNfYKmx4k7QTLBJ3elKDUO0ZJGDLqyZiSC2KsALsOME96UDnd2F4rcIlY2gXSDg74cfq79CetmE2TLpyh3DSYXnMYGZJrggD2n7WcDc92PVhc3rdJ0MhHj4lk96yYxzsNQt)q1BFHSd376v2YU0cX24k0MI9cbYwDwwRjT(bOxJONpPAlEtfxVVQIRun0VrA4BYpH8ciLksS272fAApmP2VEAQamrSLj02APXNYwACv226NT5V3YYK0dmf9OAneHNR3z1nIa9EJliKrwr2CXzYq4V4IgsW(T4MXEKs5g5SdpvVdjm3al0OQALnHIf3GnrwT(veDndfccLrZ0uRaBvJ97S6Onk1U8(xHDwLyReJbblOBEF269ahnt2IgKkidRalY6jPVb77xW((xSDVWhGJbKSSt3(II7R9f4wHTH)P16so1k9DVo5Avdf6PGH8i92CEwkNSjFyRxMvyNrAwDZQT07KakFyAGJdU1w)WM6h3HQzXzu1vE5TkV9QwVbI2)x6rVmT1IR101iF1A9QxHaMzEVNP3XYOp5ynF9bS4gAlraT4waErlUfBoTZI7swCVd4OwCVtlUhTc5YI7DvlXYI7D7WOS4EpwCpgTMS4wYI7Xj1Lf3tqASpzd8IRTCDDrvMql6TN1jo9YkHmSfnx3w00Xv91pL5(2cuMQNRIRtXPTW42QfHT4kw7jTXwhIjXoJk901ru4Wls8iRKrG4jOkD4eXMkxSjMv2VwQwOhn8ldOdpsT7Gf9dv326VQl4lxB(0Tpu5T4c7Gxv3zbiDl3w6l3MfhYIlNfxEYxRKfNmTwS4MDVx8RtB)Zz7n2ItXIRaPeQRuz4MwC6n4b1I7IKIGtVTPISEx2gi012YlP9idu1mR9C5CL6VN6FKrwzct1rvTzV1XvpEl5QkuVfQuRYQm1eNn2WfJLYJNjNTfm1rEzIW1oEVwD9lv172vQAl6qQ2XprPaD1SHnjsNfWmfitYQg4xcforWE1NWRbFlG)rF5MFl)(df2Rf371I7P399qrFK)g2ZJVeH9zVgUQQh7njZLwlNczM01WaUK5j8nB)g5cFIw5QASB4zaES4ga(yWT(0o7JVy9vz3)vxwXvX0)N94URjR6N9Ltynypkzj5CMfqQIoXcHL74mb171W(X09KLZol0U(0io0OrTWUCoH4G9SOc45mMtU(3sfVuvcTX9FB1eBdlUX33onWgwCjCozdwCNHMWVXqyyXL0j6fwCPQg3clUjHo2Jf3uqilUPVDlUZ2fFFwCNJC15jEHFylUlyX92zrGWI7rQg6HQ7PsNPhByXLUXWoWTRe1Hy(kKfXpUw0i(OYbBLP30WWjwLo01ikLew0Wzyfe11nByfRxExLAVZrFjyOfUS395166qAlkFezBeDslUvPZxV8)vWK2wz4mxcDXifpHGw391I508bHVLetziYU)gAyvnvhEtdhRJg3zdFQgoar1fsZThBWI7J7WcoyHnLfKXwkzhc)B54B3AmVQldPRlC3I7twgV7gfyC1SXJoLKAlW7p0UoEF46XXnIZ7wWinODBcmAXPDJbeUDmBRcFfoZGtSyP(YpG0aTa(E2BEHVbxAZNIxfx030GI1VzpQdfhzXEdSqqPslMlslqXN7Mxum6xztrr9234yQUPbpjTPMHNgjtmVckNPbU7wGN)438INpX9UP45vBymW38OWEVnflpFVLMBX(oZaH16Pfy5h(MyhK3ZMILl5mNLBCarlU3FAN4ITc1RyRImwdWypYx886Jvy(mXZ2cy8JCZlm2KyHAX9(E5baEgpQtgyqH563dQfa4h9Bxay7fAxSDXLF91DgfhgERWxZIBgsdX5S8rphFFP9EJ954dABJNDVqz1xiEe5bJKFWn5S71UbV)tg4KEAF(B7r)Fp
 ```

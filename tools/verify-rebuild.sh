@@ -18,8 +18,7 @@ ln -s "$ROOT/tools" "$SANDBOX/tools"
 
 # build script -> shipped string, relative to the repo root
 PACKS="
-tbc/paladin/generate.lua:tbc/paladin/tank-starter.txt
-tbc/paladin/generate-all-specs.lua:tbc/paladin/all-specs.txt
+tbc/paladin/generate.lua:tbc/paladin/all-specs.txt
 tbc/druid/generate.lua:tbc/druid/all-specs.txt
 tbc/warlock/generate.lua:tbc/warlock/all-specs.txt
 tbc/hunter/generate.lua:tbc/hunter/all-specs.txt

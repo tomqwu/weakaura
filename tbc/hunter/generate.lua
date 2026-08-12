@@ -1,4 +1,4 @@
--- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v2).
+-- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v3).
 -- Run: lua5.1 tbc/hunter/generate.lua   (toolkit libs must be fetched once:
 --      tools/tbc-weakaura-creator/scripts/setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game.
@@ -17,6 +17,14 @@
 --   * Rapid Fire and Bestial Wrath icons now own their ACTIVE window as well
 --     as their cooldown (first-active trigger mode: buff first, cooldown second).
 --   * Viper threshold 15% -> 20%; Kill Command also opens on a melee crit.
+--
+-- v3 spec audit (see README "v3 — spec-selective loading"): gating only, no new
+-- elements, no removals, no uid changes. BM and SV run the same shots (Steady Shot
+-- weave, Multi-Shot on cd, Kill Command on crit, Serpent/Arcane on the move, one
+-- pet, Viper for mana), so the shared core is legitimately large and stays shared.
+-- The single leak was Expose Weakness: a Survival-talent debuff sitting in the
+-- ungated set, i.e. loading for Beast Mastery, which cannot apply it. It is now
+-- inverse-gated off Bestial Wrath.
 --
 -- Every spell id was verified on wowhead.com/tbc. Aura triggers carry EVERY
 -- rank as strings; cooldown triggers carry the numeric rank-1 id; spellknown
@@ -187,12 +195,20 @@ tbw.load.spellknown = BWRATH
 adopt(gBuffs, tbw)
 
 -- 11. Expose Weakness — the SV raid mandate: keep this 7s debuff at ~100%.
---     No spellknown gate: the talent is passive, so the aura itself gates display.
+--     The talent is passive, so there is no positive id to gate on. v3 gates it the
+--     other way instead: use_not_spellknown = Bestial Wrath hides it from Beast
+--     Mastery, the one spec that can never apply it (the proc is a Survival talent,
+--     and the trigger is ownOnly). That also makes the shared x=44 slot single-
+--     occupancy by LOAD rather than by talent arithmetic — BM sees The Beast Within
+--     there, everyone else sees Expose Weakness. Needs WA 5.4.0+; older clients
+--     ignore the field and load it for everyone, i.e. exactly the v2 behaviour.
 local expose = reg(F.icon("Hunter - Expose Weakness", CLASS, 40, 40, 44, 0, nil))
 expose.triggers = F.triggers({ F.auraTrigger("target", false, { EXPOSE }, { ownOnly = true }) })
 expose.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
 expose.zoom = 0.3
 table.insert(expose.subRegions, F.subborder())
+expose.load.use_not_spellknown = true
+expose.load.not_spellknown = BWRATH
 adopt(gBuffs, expose)
 
 -- ===== 12. Alerts: glowing prompts flowing upward beside the character =====

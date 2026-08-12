@@ -1,4 +1,4 @@
--- generate.lua — Warlock TBC All-Specs HUD (v2).
+-- generate.lua — Warlock TBC All-Specs HUD (v3).
 -- Run: lua5.1 generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import).
 --
@@ -22,8 +22,21 @@
 --   * Refresh glow moved 2s -> 1.5s (real cast time of Immolate w/ Bane and UA);
 --     the three instant-recast DoTs lost their inert, unreachable glow layer.
 --   * spellknown gates added to Death Coil, Shadow Trance and Backlash.
--- UID ORDER IS SACRED: the two new auras are built at the BOTTOM of this file so
--- every pre-v1 uid() call keeps its position in the seeded stream.
+--
+-- v3 (per-spec load audit — "does this spec PRESS it", not "can it CAST it"):
+--   * Demonic Sacrifice MISSING is now INVERSE-gated on Soul Link (19028), so it
+--     never loads for a Felguard Demonology lock. Demonic Sacrifice is a 1-point
+--     prerequisite tax on the way to Soul Link in every Felguard build — the
+--     talent is known and the button must never be pressed. v2 leaned on the
+--     live "Soul Link buff absent" trigger for that, which inverted at the worst
+--     moment: when the Felguard died, the buff dropped and the HUD told a
+--     Demonology lock to burn the pet the whole spec is built on. The trigger
+--     stays as the graceful pre-WA-5.4.0 fallback (see gateNot note below).
+--   * No other element changed: the three ungated DoTs were audited against the
+--     current guides and all three appear in all three specs' priority lists.
+-- UID ORDER IS SACRED: the two v2 auras are built at the BOTTOM of this file so
+-- every pre-v1 uid() call keeps its position in the seeded stream. v3 is a
+-- load-gate-only change: no aura added, removed, renamed or reordered.
 
 math.randomseed(20260813)  -- FIXED pack seed; append-only uid order across versions
 
@@ -319,10 +332,18 @@ felarmor.load.use_spellknown = true
 felarmor.load.spellknown = GATE.felArmor
 
 -- Demonic Sacrifice buff gone -> resummon and re-sacrifice (this is what the
--- Fel Domination icon is FOR). Trigger 2 is the discriminator: a Felguard
--- Demonology lock keeps Soul Link up and must never burn the pet, so their
--- Soul Link buff suppresses this prompt entirely, while a 0/21/40 SM-Ruin lock
--- (21 demo points reaches Demonic Sacrifice but not Soul Link) always sees it.
+-- Fel Domination icon is FOR). Two gates, positive AND inverse:
+--   + knows Demonic Sacrifice (18788, Demonology 21) — you can do it at all;
+--   - does NOT know Soul Link (19028, deep Demonology) — you should.
+-- Every Felguard build spends 1 point on Demonic Sacrifice purely as the
+-- prerequisite for Soul Link and then never presses it (sacrificing the pet
+-- deletes Soul Link, Demonic Knowledge, Demonic Tactics and Master Demonologist
+-- at once), so Soul Link is an exact "keeps its demon" discriminator. A 0/21/40
+-- SM-Ruin lock reaches Demonic Sacrifice but not Soul Link, and still sees it.
+-- Trigger 2 ("Soul Link buff absent") is left in place: it is the pre-WA-5.4.0
+-- fallback, where the unknown not_spellknown field is ignored and the prompt
+-- loads for everyone again. The load gate is strictly better than the trigger,
+-- because the trigger inverts exactly when the Felguard dies.
 local demonsac = alertIcon("Warlock - Demonic Sacrifice MISSING", { 1, 0.15, 0.15, 1 }, false)
 demonsac.triggers = F.triggers({
   F.auraTrigger("player", true, IDS.demonicSacrifice, { matchesShowOn = "showOnMissing" }),
@@ -334,6 +355,16 @@ demonsac.cooldown = false
 demonsac.load.use_combat = true
 demonsac.load.use_spellknown = true
 demonsac.load.spellknown = GATE.demonicSacrifice
+-- Inverse gate. There is no negated form of use_spellknown (use_spellknown =
+-- false means IGNORE, not "must not know"), so WA exposes a separate arg —
+-- verified in Prototypes.lua's load prototype:
+--   test = "not WeakAuras.IsSpellKnownForLoad(%s, %s)"
+-- Needs WeakAuras 5.4.0+; older clients ignore the unknown field and fall back
+-- to v2 behaviour. use_exact_not_spellknown is deliberately NOT set: with exact
+-- falsy, IsSpellKnownForLoad resolves the rank-1 id through the spell name to
+-- whatever rank the player actually has.
+demonsac.load.use_not_spellknown = true
+demonsac.load.not_spellknown = GATE.soulLink
 
 -- ===== assemble (v2000 nested), encode, verify =====
 local transmit = F.assemble(top, byId)

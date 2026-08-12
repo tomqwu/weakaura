@@ -1,4 +1,4 @@
--- generate.lua — Priest TBC All-Specs HUD (v2).
+-- generate.lua — Priest TBC All-Specs HUD (v3).
 -- Run: lua5.1 tbc/priest/generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import -> paste).
 --
@@ -24,6 +24,16 @@
 --     moved to 50% mana; Fade prompt is combat-gated; Prayer of Mending no longer
 --     loads for Shadow; the health bar turns red at the Desperate Prayer threshold;
 --     the always-on icon layer fades to 50% alpha out of combat.
+--
+-- v3 (per-spec load audit — "does this spec PRESS it", not "can it CAST it"):
+--   * Holy Procs is no longer ungated: not_spellknown = 15473 (Shadowform). Surge of
+--     Light and Holy Concentration are 25- and 30-point Holy talents, so the icon was
+--     dead weight in the only spec that could still load it. That leaves exactly four
+--     ungated elements (health, mana, threat, Inner Fire), each verified below.
+--   * Everything else was audited element-by-element per spec and deliberately kept —
+--     see the "Spec gating" section of README.md for the reasoning on the close calls
+--     (threat bar + Fade prompt for healers, Fear Ward + Desperate Prayer for Shadow).
+--   No element was added, removed or re-ordered, so every uid is unchanged.
 
 math.randomseed(20260815)  -- FIXED pack seed; the uid() call order below is append-only forever
 
@@ -340,9 +350,18 @@ adopt(top, gProcs)
 local procs = reg(F.icon("Priest - Holy Procs", CLASS, 32, 32, 0, 0, nil))
 procs.triggers = F.triggers({
   -- 33151 Surge of Light (free instant Smite), 34754 Clearcasting (Holy Concentration).
-  -- No load gate: the icon exists only while one of those buffs does.
   F.auraTrigger("player", true, { 33151, 34754 }, { showClones = true }),
 })
+-- v3: inverse-gated off Shadow. Surge of Light sits at tier 6 of the Holy tree (25 points
+-- in) and Holy Concentration at tier 7 (30 points in), so a Shadowform build — 31 points
+-- into Shadow, 23 into Discipline in the standard 23/0/38 — can never own either proc.
+-- The trigger already made this icon impossible for Shadow; the gate makes it impossible
+-- to LOAD, which is what "an ungated element must be justified for every spec" asks for.
+-- Discipline keeps it loaded on purpose: a 41/20 Disc build stops at tier 5 of Holy and
+-- also never procs it, but no single spell id separates "deep Holy" from "deep Disc"
+-- without risking a false cut on a Holy build that skipped one of the two talents.
+procs.load.use_not_spellknown = true
+procs.load.not_spellknown = 15473  -- everyone except Shadowform
 procs.subRegions[1] = F.subglow(true, { 1, 0.85, 0.2, 1 })
 procs.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
 procs.animation.start = F.animCustom("0.5", { alpha = 0, alphaType = "alphaPulse", scale = 1.5 }, "easeOut")
