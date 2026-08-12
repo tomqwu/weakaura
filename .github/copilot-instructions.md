@@ -13,6 +13,11 @@ commit directly on `main`.
 2. **Build, don't hand-edit**: `!WA:2!` import strings are only ever produced by Lua build
    scripts through `tools/tbc-weakaura-creator/scripts/wa_lib.lua` (run `setup.sh` there once
    to fetch LibDeflate/LibSerialize; needs lua5.1).
+   **One string per class**: a class folder ships exactly one importable `all-specs.txt`,
+   built by one `generate.lua`. Never add a starter, minimal, or per-spec variant — a second
+   string for the same class competes for globally-unique aura ids, forces the player to
+   choose, and doubles maintenance. Spec differences are load gates inside the single pack,
+   which is what lets it auto-adapt on respec.
 3. **Test before every commit** — always run the repo suite, which must pass:
 
    ```bash
