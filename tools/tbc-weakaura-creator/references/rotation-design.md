@@ -81,6 +81,38 @@ one or two universal buffs), then gate every spec-specific element with `spellkn
 spec's signature talent. Mutually-exclusive spec elements may share a screen slot. The
 result auto-adapts on respec with zero user action — verified across Combat/Mutilate/Subtlety.
 
+**The pack is not a superset — each spec must get a HUD that looks purpose-built for it.**
+The test is per spec, never on the pack as a whole: load the pack as one spec and ask the
+four usability questions again. A pack that is perfect in aggregate and cluttered for Holy
+has failed for Holy.
+
+Two rules make that concrete:
+
+- **An ungated element loads for every spec, so it must be justified for every spec.**
+  Ungating is the default failure mode, because it is invisible while you build: nobody
+  notices that the healer's cooldown row inherited the tank's threat dump. If one spec never
+  presses it, gate it — an element only that spec sees is worth more than an element everyone
+  sees and two specs ignore.
+- **Gate on ability, not only on spec.** `spellknown` on an ability's own rank-1 id is usually
+  better than on the spec's capstone: it hides the element while levelling (before the ability
+  exists) and shows it to every build that actually has it, including hybrids. Reserve
+  capstone gates for elements that only make sense inside that spec's rotation.
+
+There is no negated `spellknown`, so "show for Prot and Ret but not Holy" cannot be written as
+one gate. Either gate each shared element on its own ability id (preferred), or ship one copy
+per spec with positive gates — but check the hybrid case first: a 21-Prot/40-Ret paladin knows
+both capstones and would see a duplicated element twice.
+
+Audit the result rather than trusting the build script:
+
+```bash
+lua5.1 tools/spec-preview.lua <pack>
+```
+
+It decodes the shipped string and prints, for every spec gate, exactly which elements that
+spec adds — plus the ungated list (read it critically) and the levelling case, which is what
+a player sees before any capstone talent exists.
+
 ## Scenario variants
 
 If two scenarios disagree (raid rotation vs PvP), prefer load-gating over duplicate packs:
