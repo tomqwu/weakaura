@@ -1,4 +1,4 @@
--- generate.lua — Warlock TBC All-Specs HUD (v1).
+-- generate.lua — Warlock TBC All-Specs HUD (v2).
 -- Run: lua5.1 generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import).
 --
@@ -8,6 +8,22 @@
 -- Every spell ID verified on wowhead.com/tbc (aura triggers carry ALL rank
 -- ids as strings; cooldown triggers use the numeric rank-1 id) -> zhCN-safe.
 -- Zero custom code anywhere in this pack.
+--
+-- v2 (rotation review fixes):
+--   * NEW Demonic Sacrifice MISSING prompt — the 0/21/40 SM-Ruin loop's first
+--     line, and the only thing that turns the Fel Domination icon into a press.
+--   * NEW Fel Armor MISSING prompt — priority line 1 of every spec's guide.
+--   * Soulshatter prompt moved from threat 70% to 90%: at 70% a good caster is
+--     just doing their job, so the old prompt was lit for most of a fight.
+--   * Threat bar gets the party/raid gate + out-of-combat fade its siblings and
+--     its own flash overlay already had (solo you are always at 100%).
+--   * Health bar flips amber at 60%, the other half of the Life Tap decision.
+--   * Curse slot also feeds on Curse of Recklessness / Curse of Tongues.
+--   * Refresh glow moved 2s -> 1.5s (real cast time of Immolate w/ Bane and UA);
+--     the three instant-recast DoTs lost their inert, unreachable glow layer.
+--   * spellknown gates added to Death Coil, Shadow Trance and Backlash.
+-- UID ORDER IS SACRED: the two new auras are built at the BOTTOM of this file so
+-- every pre-v1 uid() call keeps its position in the seeded stream.
 
 math.randomseed(20260813)  -- FIXED pack seed; append-only uid order across versions
 
@@ -35,12 +51,14 @@ end
 local IDS = {
   corruption = { 172, 6222, 6223, 7648, 11671, 11672, 25311, 27216 },
   -- one slot for "your curse on the target": a target can only carry one of
-  -- your curses, so all four chains share a single trigger.
+  -- your curses, so all six chains share a single trigger.
   curse = {
     980, 1014, 6217, 11711, 11712, 11713, 27218,  -- Curse of Agony r1-7
     603, 30910,                                   -- Curse of Doom r1-2
     1490, 11721, 11722, 27228,                    -- Curse of the Elements r1-4
     17862, 17937, 27229,                          -- Curse of Shadow r1-3
+    704, 7658, 7659, 11717, 27226,                -- Curse of Recklessness r1-5
+    1714, 11719,                                  -- Curse of Tongues r1-2
   },
   immolate = { 348, 707, 1094, 2941, 11665, 11667, 11668, 25309, 27215 },
   unstableAffliction = { 30108, 30404, 30405 },
@@ -48,11 +66,20 @@ local IDS = {
   shadowTrance = { 17941 },  -- Nightfall proc (10 s)
   backlash = { 34936 },      -- Backlash proc (8 s)
   soulLink = { 25228 },      -- Soul Link buff aura (drops when the pet dies)
+  felArmor = { 28176, 28189 },  -- Fel Armor r1-2 (30 min, lost on death)
+  -- Demonic Sacrifice grants ONE of five buffs, depending on the demon burned:
+  -- Imp/Burning Wish, Voidwalker/Fel Stamina, Succubus/Touch of Shadow,
+  -- Felhunter/Fel Energy, Felguard/Touch of Shadow(10%). All 30 min.
+  demonicSacrifice = { 18789, 18790, 18791, 18792, 35701 },
 }
 local GATE = {
   unstableAffliction = 30108,  -- Affliction 41 signature (rank-1 castable)
   siphonLife = 18265,          -- Affliction talent (rank-1 castable)
   soulLink = 19028,            -- Demonology talent (castable Soul Link)
+  demonicSacrifice = 18788,    -- Demonology talent (castable, 1 rank)
+  felArmor = 28176,            -- trained at 62 (rank-1) -> doubles as a level gate
+  nightfall = 18094,           -- Affliction talent rank 1 (passive)
+  backlash = 34935,            -- Destruction talent rank 1 (passive)
 }
 local CD = {
   amplifyCurse = 18288, felDomination = 18708, conflagrate = 17962,
@@ -75,7 +102,12 @@ local health = reg(F.aurabar("Warlock - Health", CLASS, 172, 14, 0, -13, gRes.id
 health.triggers = F.triggers({ F.healthTrigger(), F.unitCharTrigger() })
 health.subRegions[2] = F.subtext("%percenthealth%%", 12, "INNER_RIGHT", "percenthealth")
 health.subRegions[3] = F.subborder("bar")
-health.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
+-- amber at or below 60%: the Life Tap prompt's health input, so both halves of
+-- the "can I tap?" decision are readable on the bars themselves
+health.conditions = {
+  F.condition(1, "percenthealth", "<=", "60", "barColor", { 0.95, 0.5, 0.15, 1 }),
+  F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
+}
 adopt(gRes, health)
 
 -- mana tints violet under 30%: the visual pair of the Life Tap prompt
@@ -90,15 +122,20 @@ mana.conditions = {
 }
 adopt(gRes, mana)
 
--- threat vs target: green -> orange at 70% -> red on aggro (most severe last)
+-- threat vs target: green -> orange at 70% -> red on aggro (most severe last).
+-- Party/raid only, like its flash overlay: solo you are the tank on your own
+-- target, so the bar would otherwise sit permanently full and red.
 local threat = reg(F.aurabar("Warlock - Threat", CLASS, 172, 14, 0, -41, gRes.id,
   { 0.25, 0.8, 0.3, 1 }))
-threat.triggers = F.triggers({ F.threatTrigger() })
+threat.triggers = F.triggers({ F.threatTrigger(), F.unitCharTrigger() })
 threat.subRegions[2] = F.subtext("%threatpct%%", 12, "INNER_RIGHT", "threatpct")
 threat.subRegions[3] = F.subborder("bar")
+threat.load.use_ingroup = true
+threat.load.ingroup = { multi = { group = true, raid = true } }
 threat.conditions = {
   F.condition(1, "threatpct", ">=", "70", "barColor", { 1, 0.6, 0.1, 1 }),
   F.condition(1, "aggro", "==", 1, "barColor", { 0.9, 0.12, 0.12, 1 }),
+  F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
 }
 adopt(gRes, threat)
 
@@ -120,31 +157,38 @@ adopt(gRes, flash)
 local gDots = reg(F.group("Warlock - DoTs", 0, -16, nil))
 adopt(top, gDots)
 
+-- glowColor is passed ONLY for the icons whose conditions drive sub.1.glow: a
+-- subglow no condition can ever reach is dead config, so the instant-recast
+-- DoTs simply do not get the layer.
 local function dotIcon(id, x, ids, glowColor)
   local icon = reg(F.icon(id, CLASS, 40, 40, x, 0, gDots.id))
   icon.triggers = F.triggers({ F.auraTrigger("target", false, ids, { ownOnly = true }) })
   icon.zoom = 0.3
-  icon.subRegions[1] = F.subglow(false, glowColor)  -- glow off; conditions flip sub.1.glow
-  icon.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+  icon.subRegions = {}
+  if glowColor then icon.subRegions[1] = F.subglow(false, glowColor) end  -- conditions flip sub.1.glow
+  table.insert(icon.subRegions, F.subtext("%p", 14, "INNER_BOTTOM"))
   table.insert(icon.subRegions, F.subborder())
   adopt(gDots, icon)
   return icon
 end
 
--- instant recast: disappearance is the whole signal, no lead-time glow
-dotIcon("Warlock - Corruption", -88, IDS.corruption, SHADOW)
-dotIcon("Warlock - Curse", -44, IDS.curse, SHADOW)
+-- instant recast: disappearance is the whole signal, no lead-time glow and no
+-- glow layer at all (TBC has no pandemic window — an early cue trains clipping)
+dotIcon("Warlock - Corruption", -88, IDS.corruption)
+dotIcon("Warlock - Curse", -44, IDS.curse)
 
--- 2s hardcast: glow at 2s left so the refresh lands as the DoT falls off
+-- hardcast: glow one CAST TIME out so the refresh lands as the DoT falls off.
+-- Immolate is 1.5s with Bane 5/5 (every build that maintains it), UA is 1.5s
+-- base — the old shared 2s literal fired half a second early on both.
 local immolate = dotIcon("Warlock - Immolate", 0, IDS.immolate, { 1, 0.45, 0.1, 1 })
-immolate.conditions = { F.condition(1, "expirationTime", "<=", "2", "sub.1.glow", true) }
+immolate.conditions = { F.condition(1, "expirationTime", "<=", "1.5", "sub.1.glow", true) }
 
 local ua = dotIcon("Warlock - Unstable Affliction", 44, IDS.unstableAffliction, SHADOW)
-ua.conditions = { F.condition(1, "expirationTime", "<=", "2", "sub.1.glow", true) }
+ua.conditions = { F.condition(1, "expirationTime", "<=", "1.5", "sub.1.glow", true) }
 ua.load.use_spellknown = true
 ua.load.spellknown = GATE.unstableAffliction
 
-local siphon = dotIcon("Warlock - Siphon Life", 88, IDS.siphonLife, SHADOW)
+local siphon = dotIcon("Warlock - Siphon Life", 88, IDS.siphonLife)
 siphon.load.use_spellknown = true
 siphon.load.spellknown = GATE.siphonLife
 
@@ -167,13 +211,17 @@ local function alertIcon(id, glowColor, withTimer)
   return icon
 end
 
--- Nightfall proc -> free instant Shadow Bolt (aura only exists if talented)
+-- Nightfall proc -> free instant Shadow Bolt (Affliction talent)
 local trance = alertIcon("Warlock - Shadow Trance", SHADOW, true)
 trance.triggers = F.triggers({ F.auraTrigger("player", true, IDS.shadowTrance) })
+trance.load.use_spellknown = true
+trance.load.spellknown = GATE.nightfall
 
 -- Backlash proc -> free instant Shadow Bolt / Incinerate (Destruction talent)
 local backlash = alertIcon("Warlock - Backlash", { 1, 0.55, 0.15, 1 }, true)
 backlash.triggers = F.triggers({ F.auraTrigger("player", true, IDS.backlash) })
+backlash.load.use_spellknown = true
+backlash.load.spellknown = GATE.backlash
 
 -- mana < 30% AND health > 60% -> Life Tap window, in combat only
 local lifetap = alertIcon("Warlock - Life Tap", { 0.3, 0.55, 1, 1 }, false)
@@ -189,10 +237,12 @@ lifetap.displayIcon = "Interface\\Icons\\Spell_Shadow_BurningSpirit"
 lifetap.cooldown = false
 lifetap.load.use_combat = true
 
--- threat >= 70% AND Soulshatter ready -> dump threat now (party/raid only)
+-- threat >= 90% AND Soulshatter ready -> dump threat now (party/raid only).
+-- 90 is the "about to pull" tier, not the "doing your job" tier: a 5 min, one
+-- shard, 8%-base-health button must not be prompted for half the fight.
 local shatter = alertIcon("Warlock - Soulshatter", { 1, 0.35, 0.1, 1 }, false)
 shatter.triggers = F.triggers({
-  F.threatTrigger(70),
+  F.threatTrigger(90),
   F.cdTrigger(CD.soulshatter, "Soulshatter", "showOnReady"),
 })
 shatter.iconSource = 0
@@ -245,8 +295,45 @@ addCD("Fel Domination", CD.felDomination, true)   -- Demonology (15 min)
 addCD("Conflagrate",    CD.conflagrate,   true)   -- Destruction fire (10 s)
 addCD("Shadowburn",     CD.shadowburn,    true)   -- Destruction (15 s)
 addCD("Shadowfury",     CD.shadowfury,    true)   -- Destruction 41 (20 s)
--- baseline CD, always shown
-addCD("Death Coil",     CD.deathCoil,     false)  -- all specs (2 min)
+-- baseline, but still gated: Death Coil is trained at 42, and the icon used to
+-- render (permanently ready) for warlocks who cannot cast it yet
+addCD("Death Coil",     CD.deathCoil,     true)   -- all specs (2 min)
+
+-- =====================================================================
+-- v2 maintenance-buff prompts. Built LAST on purpose: every uid() call above
+-- keeps its place in the seeded stream, so re-importing offers "Update".
+-- They are re-parented into the Alerts flow, which is free.
+-- =====================================================================
+
+-- Fel Armor dropped (death, or never cast) -> line 1 of every spec's priority.
+-- Gated on the rank-1 id, which is trained at 62, so it never nags a leveller.
+local felarmor = alertIcon("Warlock - Fel Armor MISSING", { 1, 0.15, 0.15, 1 }, false)
+felarmor.triggers = F.triggers({
+  F.auraTrigger("player", true, IDS.felArmor, { matchesShowOn = "showOnMissing" }),
+})
+felarmor.iconSource = 0
+felarmor.displayIcon = "Interface\\Icons\\Spell_Shadow_FelArmour"
+felarmor.cooldown = false
+felarmor.load.use_combat = true
+felarmor.load.use_spellknown = true
+felarmor.load.spellknown = GATE.felArmor
+
+-- Demonic Sacrifice buff gone -> resummon and re-sacrifice (this is what the
+-- Fel Domination icon is FOR). Trigger 2 is the discriminator: a Felguard
+-- Demonology lock keeps Soul Link up and must never burn the pet, so their
+-- Soul Link buff suppresses this prompt entirely, while a 0/21/40 SM-Ruin lock
+-- (21 demo points reaches Demonic Sacrifice but not Soul Link) always sees it.
+local demonsac = alertIcon("Warlock - Demonic Sacrifice MISSING", { 1, 0.15, 0.15, 1 }, false)
+demonsac.triggers = F.triggers({
+  F.auraTrigger("player", true, IDS.demonicSacrifice, { matchesShowOn = "showOnMissing" }),
+  F.auraTrigger("player", true, IDS.soulLink, { matchesShowOn = "showOnMissing" }),
+})
+demonsac.iconSource = 0
+demonsac.displayIcon = "Interface\\Icons\\Spell_Shadow_PsychicScream"
+demonsac.cooldown = false
+demonsac.load.use_combat = true
+demonsac.load.use_spellknown = true
+demonsac.load.spellknown = GATE.demonicSacrifice
 
 -- ===== assemble (v2000 nested), encode, verify =====
 local transmit = F.assemble(top, byId)
