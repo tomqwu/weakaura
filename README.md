@@ -24,7 +24,7 @@ use GitHub's copy button on the block to grab the whole string in one click.
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
 | Rogue — All Specs | Combat · Assassination · Subtlety | v41 | 45 | [string](tbc/rogue/README.md#import-string-v41) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v2 | 30 | [string](tbc/paladin/README.md#import-string-v2) · [raw](tbc/paladin/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v3 | 32 | [string](tbc/paladin/README.md#import-string-v3) · [raw](tbc/paladin/all-specs.txt) |
 | Paladin — Tank Starter | Protection (minimal) | v1 | 6 | [string](tbc/paladin/README.md#tank-starter-import-string) · [raw](tbc/paladin/tank-starter.txt) |
 | Druid — All Specs | Feral tank · Restoration · Balance | v2 | 39 | [string](tbc/druid/README.md#import-string-v2) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v2 | 27 | [string](tbc/warlock/README.md#import-string-v2) · [raw](tbc/warlock/all-specs.txt) |
