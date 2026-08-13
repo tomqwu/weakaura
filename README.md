@@ -26,10 +26,10 @@ use GitHub's copy button on the block to grab the whole string in one click.
 | Rogue — All Specs | Combat · Assassination · Subtlety | v45 | 56 | [string](tbc/rogue/README.md#import-string-v45) · [raw](tbc/rogue/all-specs.txt) |
 | Paladin — All Specs | Holy · Protection · Retribution | v6 | 43 | [string](tbc/paladin/README.md#import-string-v6) · [raw](tbc/paladin/all-specs.txt) |
 | Druid — All Specs | Feral tank · Restoration · Balance | v5 | 46 | [string](tbc/druid/README.md#import-string-v5) · [raw](tbc/druid/all-specs.txt) |
-| Warlock — All Specs | Affliction · Demonology · Destruction | v4 | 37 | [string](tbc/warlock/README.md#import-string-v4) · [raw](tbc/warlock/all-specs.txt) |
-| Hunter — BM & Survival | Beast Mastery · Survival | v4 | 45 | [string](tbc/hunter/README.md#import-string-v4) · [raw](tbc/hunter/all-specs.txt) |
+| Warlock — All Specs | Affliction · Demonology · Destruction | v5 | 38 | [string](tbc/warlock/README.md#import-string-v5) · [raw](tbc/warlock/all-specs.txt) |
+| Hunter — BM & Survival | Beast Mastery · Survival | v5 | 46 | [string](tbc/hunter/README.md#import-string-v5) · [raw](tbc/hunter/all-specs.txt) |
 | Priest — All Specs | Shadow · Holy · Discipline | v5 | 40 | [string](tbc/priest/README.md#import-string-v5) · [raw](tbc/priest/all-specs.txt) |
-| Mage — Arcane & Frost | Arcane · Frost | v4 | 41 | [string](tbc/mage/README.md#import-string-v4) · [raw](tbc/mage/all-specs.txt) |
+| Mage — Arcane & Frost | Arcane · Frost | v5 | 42 | [string](tbc/mage/README.md#import-string-v5) · [raw](tbc/mage/all-specs.txt) |
 
 Every pack is class-gated and auto-adapts to your spec through `spellknown` talent gates —
 import the one pack for your class and it shows the right elements after a respec, with no
