@@ -23,7 +23,7 @@ use GitHub's copy button on the block to grab the whole string in one click.
 
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
-| Rogue — All Specs | Combat · Assassination · Subtlety | v42 | 46 | [string](tbc/rogue/README.md#import-string-v42) · [raw](tbc/rogue/all-specs.txt) |
+| Rogue — All Specs | Combat · Assassination · Subtlety | v43 | 46 | [string](tbc/rogue/README.md#import-string-v43) · [raw](tbc/rogue/all-specs.txt) |
 | Paladin — All Specs | Holy · Protection · Retribution | v4 | 32 | [string](tbc/paladin/README.md#import-string-v4) · [raw](tbc/paladin/all-specs.txt) |
 | Druid — All Specs | Feral tank · Restoration · Balance | v2 | 39 | [string](tbc/druid/README.md#import-string-v2) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v2 | 27 | [string](tbc/warlock/README.md#import-string-v2) · [raw](tbc/warlock/all-specs.txt) |
@@ -37,8 +37,8 @@ further action.
 
 ## Packs
 
-- **tbc/rogue/all-specs.txt** — full HUD, v42 of a 42-iteration build: health/energy/threat
-  bars with 35/40 energy threshold lines, combo pips (green→orange gradient, left to right),
+- **tbc/rogue/all-specs.txt** — full HUD, v43 of a 43-iteration build: health/energy/threat
+  bars with 35/40 energy threshold lines, combo pips (always-visible sockets, green→orange gradient),
   spec-adaptive cooldown row
   (15 spells, talent-gated, tooltips + keybind labels), animated alert flow (SnD missing,
   Riposte window, Feint-at-70%-threat, Evasion-below-50%-HP), weapon enchant proc tracker
