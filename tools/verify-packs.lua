@@ -19,7 +19,7 @@ arg = savedArg
 
 -- pack dir, string file, README, version label used in the "## Import string (vN)" heading
 local PACKS = {
-  { "rogue",        "tbc/rogue/all-specs.txt",       "tbc/rogue/README.md",   "v41" },
+  { "rogue",        "tbc/rogue/all-specs.txt",       "tbc/rogue/README.md",   "v42" },
   { "paladin",      "tbc/paladin/all-specs.txt",     "tbc/paladin/README.md", "v4"  },
   { "druid",        "tbc/druid/all-specs.txt",       "tbc/druid/README.md",   "v3"  },
   { "warlock",      "tbc/warlock/all-specs.txt",     "tbc/warlock/README.md", "v3"  },
