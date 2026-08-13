@@ -34,9 +34,23 @@
 --     stays as the graceful pre-WA-5.4.0 fallback (see gateNot note below).
 --   * No other element changed: the three ungated DoTs were audited against the
 --     current guides and all three appear in all three specs' priority lists.
+--
+-- v4 (PvP layer — arena and battleground only):
+--   * NEW "Warlock - PvP" column (mirrors Alerts on the other side) plus two
+--     new prompts in the Alerts flow. Nine auras, EVERY one of them carrying
+--     its own instance-size load gate, so a PvE warlock sees the v3 HUD
+--     unchanged — nothing new loads in a raid, a dungeon or the open world.
+--   * The fear economy is the layer's centre of gravity: your own damage
+--     breaks your own Fear, so "my CC out, per opponent, with remaining" is
+--     the highest-press-frequency element in the pack.
+--   * This is NOT diminishing-returns tracking. DR does not exist anywhere in
+--     WeakAuras (no prototype, no library), and an 18 s "DR timer" models the
+--     reset window rather than the category state, so it is wrong the moment
+--     two spells share a category. Nothing here pretends otherwise.
 -- UID ORDER IS SACRED: the two v2 auras are built at the BOTTOM of this file so
 -- every pre-v1 uid() call keeps its position in the seeded stream. v3 is a
--- load-gate-only change: no aura added, removed, renamed or reordered.
+-- load-gate-only change: no aura added, removed, renamed or reordered. v4's
+-- nine auras are built after them, at the very bottom, for the same reason.
 
 math.randomseed(20260813)  -- FIXED pack seed; append-only uid order across versions
 
@@ -365,6 +379,186 @@ demonsac.load.spellknown = GATE.demonicSacrifice
 -- whatever rank the player actually has.
 demonsac.load.use_not_spellknown = true
 demonsac.load.not_spellknown = GATE.soulLink
+
+-- =====================================================================
+-- v4 PvP layer. Built LAST for the same reason v2's prompts were: every
+-- uid() call above keeps its place in the seeded stream, so a v3 user gets
+-- "Update" instead of a duplicate group.
+--
+-- Gating: the load arg is `size` ("Instance Size Type"). use_size = false is
+-- NOT "off" — multiselect load args are live at both true and false and inert
+-- only at nil; false selects multi mode, which ORs the listed instance types.
+--   PVP   = arena OR battleground
+--   ARENA = arena only. Anything reading arena1..arena5 MUST be arena-only:
+--           those unit ids do not exist in a battleground, so a BG-loaded
+--           arena element is a permanently blank slot.
+-- Every child below carries its own gate; a group's load is not a child gate.
+-- =====================================================================
+local PVP   = { use_size = false, size = { multi = { arena = true, pvp = true } } }
+local ARENA = { use_size = false, size = { multi = { arena = true } } }
+
+-- GenericTrigger stub fields the factory adds to its own builders.
+local function gTrig(tr)
+  tr.names = {}; tr.spellIds = {}
+  tr.subeventPrefix = "SPELL"; tr.subeventSuffix = "_CAST_START"
+  tr.debuffType = tr.debuffType or "HELPFUL"
+  return tr
+end
+
+-- ===== verified PvP game data (wowhead.com/tbc, fetched individually) =====
+local PVP_IDS = {
+  -- MY crowd control, all ranks. ownOnly also matches my pet's, which is why
+  -- Seduction belongs in the same slot: it is one more "do not damage that
+  -- unit" timer. Death Coil is here because Horror is a separate DR category
+  -- and Fear -> Death Coil is the standard extension; the icon says which.
+  myCC = {
+    5782, 6213, 6215,           -- Fear r1-3 (10/15/20 s)
+    5484, 17928,                -- Howl of Terror r1-2 (6/8 s)
+    6789, 17925, 17926, 27223,  -- Death Coil r1-4 (3 s horror)
+    6358,                       -- Seduction (succubus, 15 s)
+  },
+  -- Spell Lock r1 (19244) and r2 (19647) BOTH trigger aura 24259, a real
+  -- Silence debuff with a real duration — so the go-window is read from the
+  -- game rather than guessed with a combat-log timer.
+  spellLock = { 24259 },
+  fearWard  = { 6346 },         -- Fear Ward (3 min buff, 3 min cd)
+  -- Hard stops only: buffs that make your next cast worthless. Blessing of
+  -- Protection is deliberately absent — it is physical-only, and shadow
+  -- damage goes straight through it.
+  immunities = {
+    642, 1020,                  -- Divine Shield r1-2 (10/12 s, immune all)
+    498, 5573,                  -- Divine Protection r1-2 (6/8 s, immune all)
+    45438,                      -- Ice Block (10 s, immune all)
+    31224,                      -- Cloak of Shadows (5 s, 90% spell resist)
+  },
+}
+-- Item ids, not names: C_Container.GetItemCooldown("...") returns nil for a
+-- name and the trigger then never fires. Warlock-relevant trinkets only.
+local TRINKETS = {
+  30343, 30348,   -- Medallion of the Horde / Alliance, warlock (2 min)
+  37865, 37864,   -- Medallion of the Horde / Alliance, any race (2 min)
+  18852, 18858,   -- Insignia of the Horde / Alliance, warlock (5 min)
+}
+local WOTF = 7744          -- Will of the Forsaken (undead racial, 2 min)
+local HOWL = 5484          -- Howl of Terror rank 1 (40 s cooldown)
+local PVP_TRINKET = "42292"  -- "PvP Trinket", the spell every medallion casts
+local GOLD = { 1, 0.85, 0.2, 1 }
+local RED  = { 1, 0.15, 0.15, 1 }
+
+-- The PvP column: mirrors the Alerts flow on the other side of the character,
+-- so the PvE layout is untouched. Must be a dynamic group — three of its
+-- children are clone sources (one row per opponent).
+local gPvp = reg(F.dynGroup("Warlock - PvP", 150, 96, nil, "DOWN", "TOP", 6))
+adopt(top, gPvp)
+
+local function pvpIcon(id, w, glowColor, withTimer)
+  local icon = reg(F.icon(id, CLASS, w, w, 0, 0, gPvp.id))
+  icon.zoom = 0.3
+  icon.subRegions = {}
+  if glowColor then icon.subRegions[1] = F.subglow(true, glowColor) end
+  if withTimer then table.insert(icon.subRegions, F.subtext("%p", 14, "INNER_BOTTOM")) end
+  table.insert(icon.subRegions, F.subborder())
+  adopt(gPvp, icon)
+  return icon
+end
+
+-- --- CC ON ME (prompt) -------------------------------------------------
+-- Which break works, and whether to spend it now: the icon IS the identity of
+-- the effect (stun -> trinket only; fear -> trinket / Death Coil / WotF; root
+-- -> never the trinket) and the countdown answers "ride it or spend it".
+-- No combat gate: the opener Sap lands out of combat.
+local ccme = alertIcon("Warlock - CC ON ME", RED, true)
+ccme.width, ccme.height = 44, 44
+ccme.triggers = F.triggers({ gTrig{ type = "unit", event = "Crowd Controlled" } })
+ccme.load = F.load(CLASS, PVP)
+
+-- --- TARGET IMMUNE (prompt) -------------------------------------------
+-- Stop the burst: casting into Divine Shield / Ice Block / Cloak of Shadows
+-- burns your whole DoT investment for nothing. Any caster, all ranks.
+local immune = alertIcon("Warlock - TARGET IMMUNE", RED, true)
+immune.width, immune.height = 44, 44
+immune.triggers = F.triggers({ F.auraTrigger("target", true, PVP_IDS.immunities) })
+immune.load = F.load(CLASS, PVP)
+
+-- --- Trinket DOWN (state) ---------------------------------------------
+-- Is my get-out-of-jail available. Visible ONLY while on cooldown, so absence
+-- means ready and the column stays empty in the normal case. One trigger per
+-- item id (itemName has no multiEntry), OR-combined.
+local trinket = pvpIcon("Warlock - Trinket DOWN", 32, nil, false)
+local trinketTrigs = {}
+for i, itemId in ipairs(TRINKETS) do
+  trinketTrigs[i] = gTrig{
+    type = "item", event = "Cooldown Progress (Item)",
+    use_itemName = true, itemName = itemId,
+    use_genericShowOn = true, genericShowOn = "showOnCooldown",
+  }
+end
+trinket.triggers = F.triggers(trinketTrigs, { disjunctive = "any" })
+trinket.iconSource = 0
+trinket.displayIcon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
+trinket.cooldownTextDisabled = false   -- swipe number; no %p, OmniCC doubles it
+trinket.desaturate = true              -- reads as "unavailable" at a glance
+trinket.load = F.load(CLASS, PVP)
+
+-- --- Will of the Forsaken DOWN (state) --------------------------------
+-- Undead only, gated on the ability rather than the race. On 2.4.3 WotF does
+-- not share a cooldown with the medallion, so an undead warlock genuinely
+-- carries two breaks and the second one decides whether to spend the first.
+local wotf = pvpIcon("Warlock - Will of the Forsaken DOWN", 32, nil, false)
+wotf.triggers = F.triggers({ F.cdTrigger(WOTF, "Will of the Forsaken", "showOnCooldown") })
+wotf.cooldownTextDisabled = false
+wotf.desaturate = true
+wotf.load = F.load(CLASS, PVP)
+wotf.load.use_spellknown = true
+wotf.load.spellknown = WOTF
+
+-- --- Enemy Trinket (clone row) ----------------------------------------
+-- Their trinket is down for two minutes: this is when the real fear chain
+-- goes in. An INFERENCE, not a read — no API on 2.5.x exposes another
+-- player's cooldowns, so the countdown starts from the cast you saw.
+local etrinket = pvpIcon("Warlock - Enemy Trinket", 32, nil, false)
+etrinket.triggers = F.triggers({ gTrig{
+  type = "event", event = "Spell Cast Succeeded",
+  unit = "arena", use_unit = true,           -- one clone per opponent
+  use_spellId = true, spellId = { PVP_TRINKET },
+  duration = "120",                          -- medallion cooldown, verified
+} })
+etrinket.iconSource = 0
+etrinket.displayIcon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
+etrinket.cooldownTextDisabled = false
+etrinket.load = F.load(CLASS, ARENA)
+
+-- --- Fear Out (clone row) ---------------------------------------------
+-- The highest press-frequency element in the layer: your own DoTs break your
+-- own Fear, so this is a live "do not press that button, and do not re-apply
+-- Corruption on that unit" timer. One row per feared opponent.
+local fearout = pvpIcon("Warlock - Fear Out", 40, SHADOW, true)
+fearout.triggers = F.triggers({ F.auraTrigger("arena", false, PVP_IDS.myCC,
+  { ownOnly = true, showClones = true, combinePerUnit = true, perUnitMode = "affected" }) })
+fearout.load = F.load(CLASS, ARENA)
+
+-- --- Spell Lock ON (clone row) ----------------------------------------
+-- The go is open: the felhunter's silence is running on that opponent. Read
+-- from the debuff itself, so the remaining time is exact for either rank.
+local slock = pvpIcon("Warlock - Spell Lock ON", 40, GOLD, true)
+slock.triggers = F.triggers({ F.auraTrigger("arena", false, PVP_IDS.spellLock,
+  { ownOnly = true, showClones = true, combinePerUnit = true, perUnitMode = "affected" }) })
+slock.load = F.load(CLASS, ARENA)
+
+-- --- Fear Ward UP (clone row) -----------------------------------------
+-- Your fear plan is dead on that unit: open with Death Coil / Howl, or bait
+-- the ward first. Every priest has carried it since 2.3.
+local fward = pvpIcon("Warlock - Fear Ward UP", 36, RED, false)
+fward.triggers = F.triggers({ F.auraTrigger("arena", true, PVP_IDS.fearWard,
+  { showClones = true, combinePerUnit = true, perUnitMode = "affected" }) })
+fward.load = F.load(CLASS, ARENA)
+
+-- --- Howl of Terror in the cooldown row --------------------------------
+-- A 40 s AoE fear is an arena button, not a raid button, so it joins the row
+-- only in arena or a battleground.
+local howl = addCD("Howl of Terror", HOWL, true)
+howl.load.use_size = false
+howl.load.size = { multi = { arena = true, pvp = true } }
 
 -- ===== assemble (v2000 nested), encode, verify =====
 local transmit = F.assemble(top, byId)

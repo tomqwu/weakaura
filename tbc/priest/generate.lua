@@ -1,4 +1,4 @@
--- generate.lua — Priest TBC All-Specs HUD (v3).
+-- generate.lua — Priest TBC All-Specs HUD (v4).
 -- Run: lua5.1 tbc/priest/generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import -> paste).
 --
@@ -34,6 +34,25 @@
 --     see the "Spec gating" section of README.md for the reasoning on the close calls
 --     (threat bar + Fade prompt for healers, Fear Ward + Desperate Prayer for Shadow).
 --   No element was added, removed or re-ordered, so every uid is unchanged.
+--
+-- v4 (PvP layer — nine gated elements plus their container group):
+--   * Every v4 element carries load.use_size = false with size.multi = { arena, pvp }
+--     (or { arena } alone where it reads arena1..arena5). Nothing new loads in a
+--     raid, a dungeon or the open world, and no v3 aura was touched, so a PvE
+--     player sees exactly the v3 HUD.
+--   * Alerts gains four prompts: CC ON ME (any loss of control, with the
+--     countdown), FEAR WARD MISSING, MASS DISPEL NOW (target immunity + Mass
+--     Dispel ready) and SILENCE NOW (target casting + Silence usable, Shadow).
+--   * New "Priest - PvP" column mirrors Alerts on the right with five state
+--     read-outs: my trinket down, Will of the Forsaken down, an enemy trinket
+--     clock per opponent, Unstable Affliction on a team-mate, and my own CC on
+--     each opponent.
+--   * NOT built, deliberately: diminishing-returns tracking (no prototype and no
+--     library exists — an incomplete DR tracker gets trusted and gets you killed),
+--     enemy cooldowns beyond the trinket inference, enemy spec, an interruptible
+--     filter (WA disables the arg on TBC), enemy mana (the Power prototype's arena
+--     unit support is unverified), and the inverse "hide the threat bar in arena"
+--     gate (its open-world behaviour is unproven and it would change a PvE aura).
 
 math.randomseed(20260815)  -- FIXED pack seed; the uid() call order below is append-only forever
 
@@ -394,6 +413,220 @@ adopt(gBuffs, renew)
 
 -- the buff row is the other always-on layer, so it fades out of combat as well
 for _, a in ipairs({ swp, vt, ve, wsoul, innerfire, renew }) do fadeOutOfCombat(a) end
+
+-- =====================================================================
+-- v4 additions — the PvP layer. Every aura below carries an instance-type
+-- load gate, so NOTHING here loads in a raid, a dungeon or the open world:
+-- a PvE player sees exactly the v3 HUD. Created after every earlier W.uid()
+-- call and re-parented into the rows they belong to, so all 29 v3 uids keep
+-- their positions in the seeded stream.
+-- =====================================================================
+
+-- Load gates (references/pvp.md §1.1). `use_size = false` is NOT "off": a
+-- multiselect load arg is active for both true and false and only inert at nil,
+-- and false selects MULTI mode, which ORs the listed instance types.
+--   pvpLoad(false) -> arena OR battleground
+--   pvpLoad(true)  -> arena only. Mandatory for anything that reads arena1..5:
+--                     those unit ids do not exist in a battleground, so a
+--                     BG-loaded arena element is a permanently blank slot.
+local function pvpLoad(arenaOnly, extra)
+  local l = F.load(CLASS, {
+    use_size = false,
+    size = { multi = arenaOnly and { arena = true } or { arena = true, pvp = true } },
+  })
+  for k, v in pairs(extra or {}) do l[k] = v end
+  return l
+end
+
+-- GenericTrigger stub: the inert companion fields every non-aura2 trigger table
+-- carries in WeakAuras' own exports (they only do anything behind their use_*
+-- flag). The factory applies these inside its builders; these triggers are
+-- hand-written from the prototypes, so they get the same treatment.
+local function gTrigger(t)
+  t.names = {}; t.spellIds = {}
+  t.debuffType = t.debuffType or "HELPFUL"
+  t.subeventPrefix = "SPELL"; t.subeventSuffix = "_CAST_START"
+  return t
+end
+
+-- ===== the PvP column: state read-outs, mirroring Alerts on the right =====
+-- A dynamicgroup, because three of its children are clone sources (clones
+-- inside a STATIC group all stack on one spot). It grows upward from the same
+-- y as the Alerts column so the two read as a matched pair, and it collapses
+-- to nothing whenever no PvP state is live.
+local gPvP = reg(F.dynGroup("Priest - PvP", 150, 96, nil, "UP", "BOTTOM", 6))
+adopt(top, gPvP)
+
+-- ---- prompt: something is controlling me --------------------------------
+-- The Crowd Controlled trigger is the only non-custom-code way to see CC
+-- generically WITH its real duration, and the only way to see a Kick /
+-- Counterspell school lockout at all (a lockout is not an aura, so no aura
+-- trigger can ever find one). No controlType filter: it matches every loss of
+-- control effect. iconSource stays -1, so the icon IS the identity of the
+-- effect — stun, poly, fear or a locked school — and %p is the countdown that
+-- answers "ride it or spend the trinket". NOT combat-gated: the opening Sap
+-- and the pre-gate fear land before you are in combat.
+local ccOnMe = reg(F.icon("Priest - CC ON ME", CLASS, 44, 44, 0, 0, nil))
+ccOnMe.triggers = F.triggers({
+  gTrigger{ type = "unit", event = "Crowd Controlled" },
+})
+ccOnMe.cooldown = false
+ccOnMe.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
+ccOnMe.subRegions[2] = F.subtext("%p", 16, "INNER_BOTTOM")
+ccOnMe.load = pvpLoad(false)
+alertAnimations(ccOnMe)
+adopt(gAlerts, ccOnMe)
+
+-- ---- prompt: Fear Ward is off you AND off cooldown ----------------------
+-- Fear Ward is consumed by the first fear, so "missing" is a live state in
+-- every arena, not a pre-pull constant. Both triggers must hold, so the prompt
+-- is exactly the moment the press exists: re-ward before the next go, and know
+-- that until it is back up the first fear costs the trinket.
+local fward = reg(F.icon("Priest - FEAR WARD MISSING", CLASS, 44, 44, 0, 0, nil))
+fward.triggers = F.triggers({
+  F.auraTrigger("player", true, { 6346 }, { matchesShowOn = "showOnMissing" }),
+  F.cdTrigger(6346, "Fear Ward", "showOnReady"),
+})
+fward.iconSource = 0
+fward.displayIcon = "Interface\\Icons\\spell_holy_excorcism"
+fward.cooldown = false
+fward.subRegions[1] = F.subglow(true, { 0.4, 0.8, 1, 1 })
+fward.load = pvpLoad(false, { use_spellknown = true, spellknown = 6346 })
+alertAnimations(fward)
+adopt(gAlerts, fward)
+
+-- ---- prompt: the target went immune AND Mass Dispel is up ---------------
+-- Every other class treats Divine Shield / Ice Block / Blessing of Protection
+-- as a stop sign; the priest is the one class that can answer it, so this is a
+-- press, not a warning. Trigger 1 is first and therefore owns the dynamic
+-- info: %p counts down the bubble, which is the whole decision (dispel it now
+-- or you burn the kill window waiting it out). Divine Shield 642/1020,
+-- Ice Block 45438 (27619 is the older id, kept for safety), Blessing of
+-- Protection 1022/5599/10278 — all ranks, all verified on wowhead.com/tbc.
+local mdispel = reg(F.icon("Priest - MASS DISPEL NOW", CLASS, 44, 44, 0, 0, nil))
+mdispel.triggers = F.triggers({
+  F.auraTrigger("target", true, { 642, 1020, 45438, 27619, 1022, 5599, 10278 }),
+  F.cdTrigger(32375, "Mass Dispel", "showOnReady"),
+})
+mdispel.iconSource = 0
+mdispel.displayIcon = "Interface\\Icons\\spell_arcane_massdispel"
+mdispel.cooldown = false
+mdispel.subRegions[1] = F.subglow(true, { 1, 0.85, 0.2, 1 })
+mdispel.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+mdispel.load = pvpLoad(false, { use_spellknown = true, spellknown = 32375 })
+alertAnimations(mdispel)
+adopt(gAlerts, mdispel)
+
+-- ---- prompt: the target is casting AND Silence is castable (Shadow) -----
+-- No spell-id filter, on purpose: WeakAuras disables the "interruptible" arg
+-- on TBC clients outright (enable = not IsTBC()), so there is no way to ask
+-- "can I interrupt this", and a whitelist of every enemy heal is unmaintainable.
+-- The second trigger is Action Usable, which folds cooldown, mana AND range
+-- into one boolean — that is what stops the prompt from screaming while
+-- Silence is down. %p is the remaining cast time.
+local silence = reg(F.icon("Priest - SILENCE NOW", CLASS, 44, 44, 0, 0, nil))
+silence.triggers = F.triggers({
+  gTrigger{ type = "unit", event = "Cast", unit = "target", use_unit = true },
+  gTrigger{ type = "spell", event = "Action Usable",
+            use_spellName = true, spellName = 15487, realSpellName = "Silence",
+            use_exact_spellName = true, use_ignoreoverride = true },
+})
+silence.iconSource = 0
+silence.displayIcon = "Interface\\Icons\\spell_shadow_impphaseshift"
+silence.cooldown = false
+silence.subRegions[1] = F.subglow(true, { 0.55, 0.35, 1, 1 })
+silence.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+silence.load = pvpLoad(false, { use_spellknown = true, spellknown = 15487 })
+alertAnimations(silence)
+adopt(gAlerts, silence)
+
+-- ---- state: my own PvP trinket is DOWN ----------------------------------
+-- Visible ONLY while on cooldown, so an empty column means "your break is
+-- ready" — the normal case stays silent. One trigger per item id, OR-combined:
+-- the equipment-slot trigger would read whatever sits in slot 13/14, so a PvE
+-- on-use trinket would report "trinket down" while the medallion is ready, and
+-- that false negative is a death in the one decision this element exists for.
+-- Priest-usable ids, both factions (wowhead.com/tbc): 18862/18851 Insignia
+-- (5 min), 30349/30346 Medallion (2 min), 37864/37865 the 2.4 epic Medallion.
+local trinket = reg(F.icon("Priest - Trinket DOWN", CLASS, 32, 32, 0, 0, nil))
+local trinketTrigs = {}
+for i, itemId in ipairs({ 18862, 18851, 30349, 30346, 37864, 37865 }) do
+  trinketTrigs[i] = gTrigger{
+    type = "item", event = "Cooldown Progress (Item)",
+    use_itemName = true, itemName = itemId,          -- NUMERIC id; a name never resolves
+    use_genericShowOn = true, genericShowOn = "showOnCooldown",
+  }
+end
+trinket.triggers = F.triggers(trinketTrigs, { disjunctive = "any" })
+trinket.cooldownTextDisabled = false  -- swipe numbers; no %p subtext (OmniCC double-number trap)
+trinket.desaturate = true             -- greyed = unavailable, readable without reading
+trinket.load = pvpLoad(false)
+adopt(gPvP, trinket)
+
+-- ---- state: Will of the Forsaken is DOWN (Forsaken only) ----------------
+-- On 2.4.3 WotF does not share a cooldown with the medallion (that arrived in
+-- 3.3), so an undead priest genuinely carries two breaks — and whether the
+-- second one is up is what decides if the first gets spent on a Sap. Gated on
+-- the racial's own id, so it simply never loads for anyone else.
+local wotf = reg(F.icon("Priest - Will of the Forsaken DOWN", CLASS, 32, 32, 0, 0, nil))
+wotf.triggers = F.triggers({ F.cdTrigger(7744, "Will of the Forsaken", "showOnCooldown") })
+wotf.cooldownTextDisabled = false
+wotf.desaturate = true
+wotf.load = pvpLoad(false, { use_spellknown = true, spellknown = 7744 })
+adopt(gPvP, wotf)
+
+-- ---- state: an opponent's trinket is on cooldown (arena) ----------------
+-- There is no API that reads another player's cooldowns on 2.5.x. This is the
+-- sanctioned inference: see the cast, start your own 2-minute clock. One clone
+-- per opponent (unit = "arena" clones, hence the dynamicgroup parent). Spell
+-- 42292 "PvP Trinket" is what every medallion and insignia casts (verified on
+-- the item pages); the 120s duration is the medallion, which is what everyone
+-- wears at 70 — an opponent still on the 5-minute vanilla insignia will show a
+-- clock that ends early.
+local etrinket = reg(F.icon("Priest - Enemy Trinket", CLASS, 32, 32, 0, 0, nil))
+etrinket.triggers = F.triggers({
+  gTrigger{ type = "event", event = "Spell Cast Succeeded",
+            unit = "arena", use_unit = true,
+            use_spellId = true, spellId = { "42292" },
+            duration = "120" },  -- REQUIRED on a timedrequired trigger; missing = 1s flash
+})
+etrinket.cooldownTextDisabled = false
+etrinket.load = pvpLoad(true)
+adopt(gPvP, etrinket)
+
+-- ---- state: Unstable Affliction on a team-mate (arena) ------------------
+-- Dispel Magic is the highest-frequency button a TBC priest owns, and this is
+-- the one state that must interrupt the habit: dispelling UA costs ~1050
+-- damage and a 5s silence, which is the warlock's whole game plan. One clone
+-- per affected ally, all three ranks (30108/30404/30405), not own-only.
+-- Arena-gated on purpose: in a 40-man battleground this would be a permanent
+-- wall of icons for people you will never dispel.
+local uaAlly = reg(F.icon("Priest - UA on Ally", CLASS, 36, 36, 0, 0, nil))
+uaAlly.triggers = F.triggers({
+  F.auraTrigger("group", false, { 30108, 30404, 30405 },
+    { showClones = true, combinePerUnit = true, perUnitMode = "affected" }),
+})
+uaAlly.cooldown = false
+uaAlly.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
+uaAlly.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
+uaAlly.load = pvpLoad(true)
+adopt(gPvP, uaAlly)
+
+-- ---- state: my control effects on the enemy team (arena) ---------------
+-- One clone per controlled opponent, own-only, with the remaining duration:
+-- Psychic Scream (8122/8124/10888/10890) and Mind Control (605/10911/10912)
+-- say HOLD DAMAGE — a tick breaks them; Silence (15487) on their healer says
+-- GO, and counts down exactly how long the kill window lasts. No glow: this is
+-- a state read-out, and in this pack glow means "press something".
+local myCC = reg(F.icon("Priest - My CC Out", CLASS, 36, 36, 0, 0, nil))
+myCC.triggers = F.triggers({
+  F.auraTrigger("arena", false, { 8122, 8124, 10888, 10890, 15487, 605, 10911, 10912 },
+    { ownOnly = true, showClones = true, combinePerUnit = true, perUnitMode = "affected" }),
+})
+myCC.cooldown = false
+myCC.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+myCC.load = pvpLoad(true)
+adopt(gPvP, myCC)
 
 -- ===== icon polish: crop + 1px outline on every icon =====
 for _, icon in ipairs(icons) do

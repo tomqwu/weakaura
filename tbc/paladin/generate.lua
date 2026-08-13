@@ -1,6 +1,20 @@
--- generate.lua — "Paladin TBC - All Specs" (v4)
+-- generate.lua — "Paladin TBC - All Specs" (v5)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code).
+--
+-- v5 — the PvP layer (arena + battleground). Ten new elements plus the dynamic group
+-- that holds them; every ELEMENT carries its own instance-type load gate (the group
+-- does not, like every other group here), and all eleven regions are appended AFTER
+-- every existing W.uid() call so the re-import is still an Update:
+--   * new dynamic group "Paladin - PvP" mirroring the Alerts column on the other
+--     side of the character; holds the PvP state readouts and the two clone rows.
+--   * prompts (Alerts column): CC ON ME, HAMMER NOW, TARGET IMMUNE.
+--   * state (PvP column): Trinket DOWN, Enemy Trinket (arena), Forbearance (arena),
+--     CLEANSE (arena).
+--   * cooldown row: Blessing of Freedom, Blessing of Protection, and a Holy-only
+--     Hammer of Justice copy (v4 hid the shared one from deep Holy, which is right
+--     in a raid and wrong in an arena).
+--   A PvE player sees ZERO change: nothing above loads outside arena/battleground.
 --
 -- v4 — "does this spec PRESS it", not "can this spec CAST it" (gating only; not one
 -- W.uid() call added, removed or reordered, so re-import is still an Update):
@@ -403,6 +417,262 @@ twist.load.use_combat = true
 gate(twist, SWING_GATE)
 polish(twist)
 adopt(gAlerts, twist)
+
+-- ===== 34-44) v5: the PvP layer — arena and battleground only =====
+-- Everything below is gated on WeakAuras' `size` load arg (UI label "Instance Size
+-- Type"), verified in references/pvp.md against WA source:
+--   * `use_size = false` is NOT "off". Multiselect load args are live for both true
+--     and false and inert only at nil; false selects MULTI mode, which ORs entries.
+--   * TBC's legal keys are none/party/ten/twenty/twentyfive/fortyman/pvp/arena.
+--     `ratedarena`/`ratedpvp` are deleted for Classic flavors and can never match.
+--   * anything that reads arena1..arena5 must be arena-ONLY: those unit ids do not
+--     exist in a battleground, so a BG-loaded arena element is a permanently blank
+--     slot.
+-- Every PvP child carries its own gate. A group's load is not a child gate, and
+-- per-child gates are also what lets the dynamic groups close their own gaps.
+--
+-- NOT built, because WeakAuras cannot express them without custom code (pvp.md §4):
+--   * DIMINISHING RETURNS. There is no DR prototype, type table or bundled library
+--     in WA, and faking it with an 18s timer models the reset window rather than the
+--     category — wrong the moment two spells share one. Nothing in this layer is a
+--     DR tracker; the CC readouts show the effect that is running right now, and
+--     that is all they show.
+--   * enemy spec/talents, reading an opponent's cooldowns (only the "saw the cast,
+--     start my own countdown" inference below), and "only show casts I can
+--     interrupt" — WA disables the interruptible filter on TBC outright, so the
+--     stun prompt keys off "target is casting" plus "the stun is actually usable".
+local function pvpLoad()    -- arena OR battleground
+  return { use_size = false, size = { multi = { arena = true, pvp = true } } }
+end
+local function arenaLoad()  -- arena only (arena units, or rows that would flood a BG)
+  return { use_size = false, size = { multi = { arena = true } } }
+end
+local function applyLoad(t, extra)
+  for k, v in pairs(extra) do t.load[k] = v end
+  return t
+end
+
+-- trigger stub identical to the factory's private one (names/spellIds/subevent
+-- defaults every generic trigger table carries)
+local function trig(t)
+  t.names = {}; t.spellIds = {}
+  t.subeventPrefix = "SPELL"; t.subeventSuffix = "_CAST_START"
+  t.debuffType = t.debuffType or "HELPFUL"
+  return t
+end
+
+-- Crowd Controlled: the ONLY non-custom-code way to see CC generically, with a real
+-- duration and without enumerating ids — and the only way to see a school lockout at
+-- all (a lockout is not an aura, so no aura trigger can find it). Omitting
+-- use_controlType matches ANY loss-of-control effect.
+local function ccTrigger()
+  return trig{ type = "unit", event = "Crowd Controlled" }
+end
+-- item cooldown by NUMERIC item id; genericShowOn is REQUIRED or the aura never shows
+local function trinketCdTrigger(itemId)
+  return trig{ type = "item", event = "Cooldown Progress (Item)",
+    use_itemName = true, itemName = itemId,
+    use_genericShowOn = true, genericShowOn = "showOnCooldown" }
+end
+-- "Action Usable" folds cooldown + mana + (as a state var) range into one boolean:
+-- the prompt exists only when the button can actually be pressed.
+local function usableTrigger(spellId, name)
+  return trig{ type = "spell", event = "Action Usable",
+    use_spellName = true, spellName = spellId, realSpellName = name,
+    use_exact_spellName = true, use_ignoreoverride = true }
+end
+-- enemy cast. No spell filter: TBC has no interruptible flag (WA disables the arg),
+-- and an id whitelist of every enemy heal is unmaintainable. `remaining` narrows it
+-- to the end of the cast, which is the window where a stun is worth spending.
+local function castTrigger(unit, remaining)
+  local tr = trig{ type = "unit", event = "Cast", unit = unit, use_unit = true }
+  tr.use_remaining = true; tr.remaining = remaining; tr.remaining_operator = "<"
+  return tr
+end
+-- aura2 hostility filtering is silently ignored on target/arena units (it only
+-- applies to group/nameplate), so hostility needs its own Unit Characteristics
+-- trigger AND-ed alongside.
+local function targetHostileTrigger()
+  local tr = F.unitCharTrigger()
+  tr.unit = "target"; tr.use_hostility = true; tr.hostility = "hostile"
+  return tr
+end
+
+-- PvP trinkets a PALADIN can equip, verified on wowhead/tbc (numeric item ids; a
+-- name string reaches GetItemCooldown() -> nil and never fires):
+--   37864 Medallion of the Alliance / 37865 Medallion of the Horde — 2 min, 2.4.3
+--   18864 Insignia of the Alliance (Paladin) / 29592 Insignia of the Horde (Paladin)
+--         — the 5 min level-60 pair, still on plenty of alts
+-- The equipment-slot trigger is deliberately NOT used: it tracks whatever sits in
+-- slot 13/14, so a PvE on-use trinket would report "medallion down" while it is up.
+local PVP_TRINKETS = { 37864, 37865, 18864, 29592 }
+local PVP_TRINKET_CAST = "42292"   -- "PvP Trinket", the spell the medallion casts
+local FORBEARANCE = { 25771 }      -- 1 min; blocks Divine Shield / BoP / Avenging Wrath
+-- Hard stops only. Mitigation cooldowns (Barkskin, Shield Wall, Pain Suppression)
+-- do not change your next press and are deliberately absent.
+local IMMUNITIES = {
+  642, 1020,            -- Divine Shield r1-r2
+  1022, 5599, 10278,    -- Blessing of Protection r1-r3 (physical immunity)
+  45438,                -- Ice Block
+  31224,                -- Cloak of Shadows
+  34471,                -- The Beast Within (fear/stun immune — your HoJ is wasted)
+  19752,                -- Divine Intervention
+}
+-- The short list worth a GCD in an arena, all ranks. NOT filtered by debuffClass:
+-- that is UnitAura's dispel type, non-retail maps nil to "none", and physical CC has
+-- no dispel type at all — a magic filter silently misses half of this and fires on
+-- every trivial magic debuff besides.
+local CLEANSABLE = {
+  118, 12824, 12825, 12826, 28271, 28272,   -- Polymorph r1-r4 + turtle/pig
+  5782, 6213, 6215,                         -- Fear r1-r3 (warlock)
+  8122, 8124, 10888, 10890,                 -- Psychic Scream r1-r4
+  5484, 17928,                              -- Howl of Terror r1-r2
+  339, 1062, 5195, 5196, 9852, 9853, 26989, -- Entangling Roots r1-r7
+  13218, 13222, 13223, 13224, 27189,        -- Wound Poison r1-r5 (healing -10%/stack)
+  3409, 25809,                              -- Crippling Poison r1-r2
+  3034, 14279, 14280, 27018,                -- Viper Sting r1-r4 (mana drain)
+}
+
+-- 34) the PvP column: mirrors the Alerts column on the other side of the character,
+-- so the PvE layout never moves. Must be a dynamicgroup — two children are clone
+-- sources, and clones inside a STATIC group stack on one spot.
+local gPvP = reg(F.dynGroup("Paladin - PvP", 150, 96, TOP, "DOWN", "TOP", 6))
+gPvP.animate = true
+adopt(top, gPvP)
+
+-- 35) CC ON ME — which break works, and whether to spend it now. Stun: the trinket
+-- (you cannot bubble while stunned). Fear: trinket, then bubble. Root/snare:
+-- Blessing of Freedom, NOT the trinket. School lockout: your Holy spells are gone
+-- for the duration, so the answer is the trinket or distance, never another cast.
+-- The icon is the effect's own (iconSource -1) and the number is the time left,
+-- which is the whole "ride it or spend it" decision. NO combat gate: the opening
+-- Sap lands before you are in combat.
+local ccMe = alert("Paladin - CC ON ME", "Interface\\Icons\\spell_nature_polymorph", RED, nil)
+ccMe.iconSource = -1
+ccMe.triggers = F.triggers({ ccTrigger() })
+table.insert(ccMe.subRegions, F.subtext("%p", 14, "INNER_BOTTOM"))
+ccMe.load.use_combat = nil
+applyLoad(ccMe, pvpLoad())
+
+-- 36) Trinket DOWN — is my get-out-of-jail available. Shows ONLY while on cooldown,
+-- so absence means ready and the column stays empty in the normal case. One trigger
+-- per item id (itemName has no multiEntry), OR-ed.
+local trinketTriggers = {}
+for i, itemId in ipairs(PVP_TRINKETS) do trinketTriggers[i] = trinketCdTrigger(itemId) end
+local trinket = reg(F.icon("Paladin - Trinket DOWN", CLASS, 32, 32, 0, 0, gPvP.id))
+trinket.iconSource = 0
+trinket.displayIcon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
+trinket.triggers = F.triggers(trinketTriggers, { disjunctive = "any" })
+trinket.cooldownTextDisabled = false   -- swipe numbers; no %p (OmniCC would double it)
+trinket.desaturate = true              -- reads as "unavailable" at a glance
+trinket.useTooltip = true
+applyLoad(trinket, pvpLoad())
+polish(trinket)
+adopt(gPvP, trinket)
+
+-- 37) Enemy Trinket — their medallion is down for two minutes: THIS is when the real
+-- CC chain goes in. An inference, not a read (no API on 2.5.x reports another
+-- player's cooldowns): the countdown starts when the cast is seen, so an opponent
+-- who trinkets out of sight starts nothing. unit = "arena" makes one clone per
+-- opponent, which is why the parent is a dynamic group and why this is arena-only.
+local enemyTrinket = reg(F.icon("Paladin - Enemy Trinket", CLASS, 32, 32, 0, 0, gPvP.id))
+enemyTrinket.iconSource = 0
+enemyTrinket.displayIcon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
+enemyTrinket.triggers = F.triggers({ trig{
+  type = "event", event = "Spell Cast Succeeded",
+  unit = "arena", use_unit = true,
+  use_spellId = true, spellId = { PVP_TRINKET_CAST },
+  duration = "120",     -- REQUIRED on a timedrequired trigger; missing = a 1s flash
+} })
+enemyTrinket.cooldownTextDisabled = false
+applyLoad(enemyTrinket, arenaLoad())
+polish(enemyTrinket)
+adopt(gPvP, enemyTrinket)
+
+-- 38) Forbearance — one icon per affected team member (yourself included), with the
+-- time left. It answers the paladin question nothing else in the UI answers: who can
+-- still be given Divine Shield, Blessing of Protection or Lay on Hands. BoP-ing a
+-- partner locks your own bubble out of them for a minute, so "which of us survives"
+-- is decided the moment you press it. Arena-only: in a 40-man battleground every
+-- other paladin's bubble would push a clone into this column.
+local forbear = reg(F.icon("Paladin - Forbearance", CLASS, 36, 36, 0, 0, gPvP.id))
+forbear.triggers = F.triggers({ F.auraTrigger("group", false, FORBEARANCE,
+  { showClones = true, combinePerUnit = true, perUnitMode = "affected" }) })
+forbear.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
+applyLoad(forbear, arenaLoad())
+polish(forbear)
+adopt(gPvP, forbear)
+
+-- 39) CLEANSE — one icon per team member holding an effect worth a global, showing
+-- WHICH effect (iconSource -1) and how long is left, because with the strongest
+-- dispel in the game the decision is ordering, not speed. Gated on Cleanse's own id:
+-- Purify (the level 8 version) cannot touch magic, which is most of this list.
+-- Arena-only for the same reason as Forbearance.
+local cleanse = reg(F.icon("Paladin - CLEANSE", CLASS, 36, 36, 0, 0, gPvP.id))
+cleanse.triggers = F.triggers({ F.auraTrigger("group", false, CLEANSABLE,
+  { showClones = true, combinePerUnit = true, perUnitMode = "affected" }) })
+cleanse.subRegions[1] = F.subglow(true, BLUE)   -- the one row here that means "press it"
+cleanse.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
+gate(cleanse, 4987)
+applyLoad(cleanse, arenaLoad())
+polish(cleanse)
+adopt(gPvP, cleanse)
+
+-- 40) HAMMER NOW — a paladin has no interrupt, so the stun is the interrupt. Both
+-- triggers must be true: the target is inside the last 1.5s of a cast AND Hammer of
+-- Justice is genuinely castable (Action Usable covers cooldown and mana). A prompt
+-- that fires while the stun is down teaches you to ignore it. Hammer is 10 yards, so
+-- out of range the icon desaturates: the prompt then reads "walk in first", which is
+-- a different decision from "press it".
+local hammerNow = alert("Paladin - HAMMER NOW", "Interface\\Icons\\spell_holy_sealofmight", GOLD, 853)
+hammerNow.triggers = F.triggers({
+  castTrigger("target", "1.5"),
+  usableTrigger(853, "Hammer of Justice"),
+})
+table.insert(hammerNow.subRegions, F.subtext("%p", 12, "INNER_BOTTOM"))
+hammerNow.conditions = { F.condition(2, "spellInRange", "==", 0, "desaturate", true) }
+hammerNow.load.use_combat = nil
+applyLoad(hammerNow, pvpLoad())
+
+-- 41) TARGET IMMUNE — stop. Judging, Crusader Striking or burning Avenging Wrath
+-- into Divine Shield / Ice Block / Blessing of Protection / Cloak of Shadows spends
+-- the whole set for zero damage; The Beast Within means the stun is wasted too.
+-- Trigger 2 keeps it off a friendly target (aura2 cannot filter hostility here).
+local immune = alert("Paladin - TARGET IMMUNE", "Interface\\Icons\\spell_holy_divineintervention", RED, nil)
+immune.iconSource = -1
+immune.triggers = F.triggers({ F.auraTrigger("target", true, IMMUNITIES), targetHostileTrigger() })
+table.insert(immune.subRegions, F.subtext("%p", 12, "INNER_BOTTOM"))
+immune.load.use_combat = nil
+applyLoad(immune, pvpLoad())
+
+-- 42-44) cooldown row, PvP-only additions. Same language as the rest of the row
+-- (swipe numbers, desaturated while down, 50% alpha out of combat) and deliberately
+-- NO ready-glow: these are held for a moment, not pressed on cooldown.
+local function pvpCd(label, spellName, spellId, gateSpell)
+  local ic = reg(F.icon("Paladin CD - " .. label, CLASS, 32, 32, 0, 0, gCds.id))
+  ic.triggers = F.triggers({ F.cdTrigger(spellId, spellName, "showAlways"), F.unitCharTrigger() })
+  ic.cooldownTextDisabled = false
+  ic.useTooltip = true
+  ic.conditions = {
+    F.condition(1, "onCooldown", "==", 1, "desaturate", true),
+    F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
+  }
+  gate(ic, gateSpell)
+  applyLoad(ic, pvpLoad())
+  polish(ic)
+  adopt(gCds, ic)
+  return ic
+end
+-- Freedom is the answer to every root and snare — including the ones a trinket
+-- should never be spent on — so "is it up" decides whether the trinket has to go.
+pvpCd("Blessing of Freedom", "Blessing of Freedom", 1044, 1044)
+-- BoP is the peel, and it burns Forbearance: read it next to the Forbearance row.
+pvpCd("Blessing of Protection", "Blessing of Protection", 1022, 1022)
+-- v4 hid the shared Hammer of Justice icon from deep Holy, which is right in a raid
+-- (bosses are stun-immune) and wrong in an arena, where the stun is a healer's main
+-- peel. This copy is the exact inverse gate — Holy Shock known — plus the PvP gate,
+-- so it can never double up with the icon above it.
+pvpCd("Hammer of Justice (PvP)", "Hammer of Justice", 853, GATE_HOLY)
 
 -- ===== assemble (v2000 nested), encode, verify, write =====
 local transmit = F.assemble(top, byId)

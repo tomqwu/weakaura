@@ -27,6 +27,15 @@
 -- mana gems, Clearcasting (both raid builds take Arcane Concentration), Counterspell,
 -- Blink, Invisibility and Ice Block, and every spec-specific piece was already gated on
 -- the ability that defines it.
+--
+-- v4 (PvP layer — nine NEW auras, no existing aura touched): a second HUD that exists only
+-- inside arenas and battlegrounds. Every one of the nine carries its own Instance Size Type
+-- load gate (arena + battleground, or arena alone where it reads arena1..arena5), so a raid
+-- or dungeon mage sees byte-for-byte the v3 HUD. One new dynamic group, "Mage - PvP", holds
+-- the state read-outs opposite the Alerts column; three new prompts join the Alerts flow.
+-- No custom code: every composite is a multi-trigger AND, an OR (disjunctive "any"), or a
+-- condition. What is NOT in it — diminishing returns, enemy cooldown reads, enemy spec,
+-- "only interruptible casts" — is listed with its reason at the top of the v4 section.
 
 math.randomseed(20260816)  -- FIXED pack seed; uid() call order is append-only forever
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -437,6 +446,216 @@ shatter.load.use_not_spellknown = true
 shatter.load.not_spellknown = 12042
 alertAnims(shatter)
 adopt(gAlerts, shatter)
+
+-- ===== v4 additions: the PvP layer ==========================================
+-- NEW auras only from here down, appended after the whole v2/v3 uid stream: the 32
+-- existing auras keep their uid, so a re-import still offers "Update".
+--
+-- EVERYTHING below is gated on Instance Size Type, so a PvE player sees no change at all:
+--   PVP   = arena OR battleground
+--   ARENA = arena only, for anything that reads arena1..arena5 — those unit ids do not
+--           exist in a battleground, where such an element would be a permanently blank slot
+-- `use_size = false` is not "off": multiselect load args are inert only at nil; false
+-- selects MULTI mode, which ORs the listed instance types. Load is per aura on purpose —
+-- a group's load is not a child gate, and per-child gates are what let the dynamic groups
+-- collapse their gaps.
+--
+-- Deliberately NOT built (each would be a lie, not a feature):
+--   * diminishing returns. WeakAuras has no DR prototype and no bundled DR library, so any
+--     DR read-out here would be a hand-rolled 18 s timer that models the reset window rather
+--     than the category state — wrong the moment two spells share a category, and worse than
+--     nothing because it gets trusted. The Polymorph row below is a plain remaining-duration
+--     timer on MY OWN poly and nothing more.
+--   * "only show casts I can interrupt". WeakAuras disables the Cast prototype's
+--     interruptible arg on TBC clients outright (enable = not IsTBC()), so emitting it does
+--     nothing; the prompt is built from "target is casting" AND "Counterspell is usable".
+--   * enemy cooldown reads and enemy spec detection. No 2.5.x API exposes either. The enemy
+--     trinket row is an inference started by SEEING the cast, not a read.
+--   * hiding the threat bar/flash inside arena. The only spelling is the inverse size gate
+--     (every non-PvP instance type listed), and WeakAuras only assigns `size` at all inside
+--     `if inInstance or instanceType ~= "none"` — in the open world the value is not proven
+--     to be "none", so that gate can silently unload the bars everywhere outside instances.
+--     A PvE regression is a worse trade than two dead bars in arena; left alone until the
+--     open-world value is confirmed in game.
+local function pvpLoad(arenaOnly)
+  local l = F.load(CLASS, { use_size = false })
+  l.size = arenaOnly and { multi = { arena = true } }
+                      or { multi = { arena = true, pvp = true } }
+  return l
+end
+
+-- The PvP column: state read-outs, mirroring the Alerts column on the other side of the
+-- character (Alerts sits at -150 and grows up; this sits at +150 and grows down). It must
+-- be a dynamic group — two of its children are clone sources, one row per arena opponent,
+-- and clones inside a static group stack on a single spot.
+local gPvP = reg(F.dynGroup("Mage - PvP", 150, 96, nil, "DOWN", "TOP", 6))
+adopt(top, gPvP)
+
+-- CC ON ME. Which break works is the decision, not "am I CC'd": root -> Blink (Blink breaks
+-- roots, never stuns), stun -> trinket, fear -> trinket, polymorph -> ride it out (any damage
+-- breaks it), school lockout -> Ice Block / Nova / Barrier are all Frost and all gone, so
+-- trinket EARLIER than you would otherwise. The Crowd Controlled trigger is the only
+-- non-custom-code way to see this generically with a real duration, and the only way to see
+-- a Counterspell/Kick school lockout at all (a lockout is not an aura, so no aura trigger can
+-- ever find it). Colour carries the category and %p the countdown — under a stun a player
+-- parses colour, never text. No combat gate: the opener Sap lands out of combat.
+local ccme = reg(F.icon("Mage - CC ON ME", CLASS, 44, 44, 0, 0, nil))
+ccme.triggers = F.triggers({ { type = "unit", event = "Crowd Controlled" } })
+ccme.cooldown = false
+ccme.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })   -- red default = "trinket food"
+ccme.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+ccme.conditions = {
+  F.condition(1, "controlType", "==", "STUN", "sub.1.glowColor", { 1, 0.15, 0.15, 1 }),
+  F.condition(1, "controlType", "==", "STUN_MECHANIC", "sub.1.glowColor", { 1, 0.15, 0.15, 1 }),
+  F.condition(1, "controlType", "==", "FEAR", "sub.1.glowColor", { 0.7, 0.3, 1, 1 }),
+  F.condition(1, "controlType", "==", "FEAR_MECHANIC", "sub.1.glowColor", { 0.7, 0.3, 1, 1 }),
+  F.condition(1, "controlType", "==", "CONFUSE", "sub.1.glowColor", { 0.4, 0.95, 0.5, 1 }),
+  F.condition(1, "controlType", "==", "ROOT", "sub.1.glowColor", { 0.3, 0.7, 1, 1 }),
+  F.condition(1, "controlType", "==", "SILENCE", "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+  F.condition(1, "controlType", "==", "PACIFYSILENCE", "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+  F.condition(1, "controlType", "==", "SCHOOL_INTERRUPT", "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+}
+ccme.load = pvpLoad(false)
+alertAnims(ccme)
+adopt(gAlerts, ccme)
+
+-- COUNTERSPELL NOW. The highest-value press a mage owns: 8 s school lockout on a 24 s
+-- cooldown, and a healer locked out of Holy for 8 s is a kill window with zero CC spent.
+-- Three triggers ANDed: target is casting, Counterspell is genuinely castable (Action Usable
+-- folds cooldown + mana into one boolean, so the prompt is never a lie), and the target is
+-- hostile (aura/unit triggers do no hostility filtering of their own — that is a separate
+-- Unit Characteristics trigger). No spell whitelist: interruptibility does not exist on TBC
+-- and an id list of every enemy heal is unmaintainable, so junk casts are the player's read.
+-- The prompt simply does not exist while Counterspell is down, which is what stops it
+-- training the player to ignore it. Desaturates when the target is out of the 30 yd range.
+local csnow = reg(F.icon("Mage - COUNTERSPELL NOW", CLASS, 44, 44, 0, 0, nil))
+csnow.triggers = F.triggers({
+  { type = "unit", event = "Cast", unit = "target", use_unit = true },
+  { type = "spell", event = "Action Usable", use_spellName = true, spellName = 2139,
+    use_exact_spellName = true, use_ignoreoverride = true },
+  { type = "unit", event = "Unit Characteristics", unit = "target", use_unit = true,
+    use_hostility = true, hostility = "hostile" },
+})
+csnow.iconSource = 0
+csnow.displayIcon = "Interface\\Icons\\Spell_Frost_IceShock"
+csnow.subRegions[1] = F.subglow(true, { 1, 0.85, 0.2, 1 })
+csnow.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")   -- remaining cast time
+csnow.conditions = { F.condition(2, "spellInRange", "==", 0, "desaturate", true) }
+csnow.load = pvpLoad(false)
+csnow.load.use_spellknown = true
+csnow.load.spellknown = 2139
+alertAnims(csnow)
+adopt(gAlerts, csnow)
+
+-- TARGET IMMUNE. Everything a mage does is a spell, so casting into one of these burns the
+-- whole burst for zero: Ice Block (45438), Divine Shield (642/1020), Cloak of Shadows
+-- (31224, 90% spell resist), Spell Reflection (23920, your next spell comes back at you),
+-- Bestial Wrath (19574) and The Beast Within (34471), which make the target uncontrollable
+-- so Polymorph and Nova are wasted too. Stop, re-pool, swap, or wait it out.
+-- Trimmed from the shared list on purpose: Blessing of Protection (physical immunity only —
+-- Frostbolt lands through it) and Deterrence (dodge/parry, does nothing to spells) change
+-- no mage decision, and a prompt that fires when nothing is decidable is noise.
+local IMMUNE = { 45438, 642, 1020, 31224, 23920, 19574, 34471 }
+local immune = reg(F.icon("Mage - TARGET IMMUNE", CLASS, 44, 44, 0, 0, nil))
+immune.triggers = F.triggers({
+  F.auraTrigger("target", true, IMMUNE),   -- any caster: it is the target's state that matters
+  { type = "unit", event = "Unit Characteristics", unit = "target", use_unit = true,
+    use_hostility = true, hostility = "hostile" },
+})
+immune.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
+immune.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+immune.load = pvpLoad(false)
+alertAnims(immune)
+adopt(gAlerts, immune)
+
+-- TRINKET DOWN. The one question the medallion asks is "is my get-out-of-jail available",
+-- so this is visible ONLY while it is on cooldown — absence means ready, and the column
+-- stays empty in the normal case. Desaturated with the swipe running, i.e. it reads as
+-- unavailable at a glance. Exact item ids, never the equipment slot: the slot trigger tracks
+-- whatever sits in slot 13/14, so a PvE on-use trinket would report "medallion down" while
+-- it is actually ready, and that false negative is a death in this exact decision. The pack
+-- is class-gated to MAGE, so the class-specific Insignias reduce to two ids.
+local PVP_TRINKETS = {
+  37864,   -- Medallion of the Alliance (TBC honor, 2 min)
+  37865,   -- Medallion of the Horde     (TBC honor, 2 min)
+  18859,   -- Insignia of the Alliance (Mage, 5 min)
+  18850,   -- Insignia of the Horde    (Mage, 5 min)
+}
+local trinketTrigs = {}
+for i, id in ipairs(PVP_TRINKETS) do
+  trinketTrigs[i] = itemTrigger("Cooldown Progress (Item)", id,
+    { use_genericShowOn = true, genericShowOn = "showOnCooldown" })
+end
+local trink = reg(F.icon("Mage - Trinket DOWN", CLASS, 32, 32, 0, 0, nil))
+trink.triggers = F.triggers(trinketTrigs, { disjunctive = "any" })   -- whichever one you wear
+trink.cooldownTextDisabled = false   -- swipe numbers; no %p subtext (OmniCC would double it)
+trink.desaturate = true
+trink.load = pvpLoad(false)
+adopt(gPvP, trink)
+
+-- WILL OF THE FORSAKEN DOWN. On 2.4.3 WotF does NOT share a cooldown with the medallion
+-- (that arrived in 3.3), so an Undead mage genuinely carries two charges and whether the
+-- second is up changes whether the first gets spent. Gated on the ability, not the race.
+local wotf = reg(F.icon("Mage - Will of the Forsaken DOWN", CLASS, 32, 32, 0, 0, nil))
+wotf.triggers = F.triggers({ F.cdTrigger(7744, "Will of the Forsaken", "showOnCooldown") })
+wotf.cooldownTextDisabled = false
+wotf.desaturate = true
+wotf.load = pvpLoad(false)
+wotf.load.use_spellknown = true
+wotf.load.spellknown = 7744
+adopt(gPvP, wotf)
+
+-- ENEMY TRINKET. Their trinket down for two minutes is when the real Polymorph chain goes
+-- in; a one-shot "they trinketed!" flash without the countdown changes nothing. One clone
+-- per opponent (unit = "arena" => clones, hence the dynamic-group parent). This is an
+-- INFERENCE, not a read: no 2.5.x API exposes another player's cooldowns, so the timer
+-- starts when the trinket cast is SEEN. Arena-only — arena1..5 do not exist in a BG.
+local etrink = reg(F.icon("Mage - Enemy Trinket", CLASS, 32, 32, 0, 0, nil))
+etrink.triggers = F.triggers({
+  { type = "event", event = "Spell Cast Succeeded", unit = "arena", use_unit = true,
+    use_spellId = true, spellId = { "42292" },   -- "PvP Trinket", cast by both medallions
+    duration = "120" },                          -- REQUIRED on timed events; medallion CD
+})
+etrink.cooldownTextDisabled = false
+etrink.load = pvpLoad(true)
+adopt(gPvP, etrink)
+
+-- COUNTERSPELL LOCKOUT. The eight seconds bought by the interrupt, which is the go: burn
+-- Icy Veins / Water Elemental / Arcane Power now and do NOT spend Polymorph on a healer who
+-- cannot cast anyway. A lockout is not an aura, so the only way to see it is the combat log
+-- event plus a duration supplied here (Counterspell 8 s, verified). sourceUnit = player, so
+-- a partner's interrupt does not light my bar.
+local lockout = reg(F.aurabar("Mage - CS LOCKOUT", CLASS, 140, 12, 0, 0, nil,
+  { 0.4, 0.85, 1, 1 }))
+lockout.triggers = F.triggers({
+  F.clogTrigger("SPELL", "_INTERRUPT", "8", {
+    use_sourceUnit = true, sourceUnit = "player",
+    use_spellId = true, spellId = { "2139" },
+  }),
+})
+lockout.subRegions[2] = F.subtext("%p", 12, "INNER_RIGHT")
+lockout.subRegions[3] = F.subborder("bar")
+lockout.load = pvpLoad(false)
+lockout.load.use_spellknown = true
+lockout.load.spellknown = 2139
+adopt(gPvP, lockout)
+
+-- MY POLYMORPH, per opponent. Two decisions at once: do not touch that unit (any damage
+-- breaks it and the sheep regenerates ~6% HP/sec, so hitting it hands the healer free
+-- health), and the countdown is exactly the window the rest of the team has to work in.
+-- ownOnly, so another mage's sheep never shows here. All four ranks plus the Turtle and Pig
+-- variants. Glows in the last 3 s: re-poly now or the healer is free. Arena-only clones.
+local POLYMORPH = { 118, 12824, 12825, 12826, 28271, 28272 }
+local poly = reg(F.icon("Mage - Polymorph OUT", CLASS, 36, 36, 0, 0, nil))
+poly.triggers = F.triggers({
+  F.auraTrigger("arena", false, POLYMORPH,
+    { ownOnly = true, showClones = true, combinePerUnit = true, perUnitMode = "affected" }),
+})
+poly.subRegions[1] = F.subglow(false, { 0.85, 0.5, 1, 1 })
+poly.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
+poly.conditions = { F.condition(1, "expirationTime", "<=", "3", "sub.1.glow", true) }
+poly.load = pvpLoad(true)
+adopt(gPvP, poly)
 
 -- ===== icon polish everywhere ===============================================
 for _, aura in ipairs(order) do
