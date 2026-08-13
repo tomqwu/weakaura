@@ -1,6 +1,25 @@
--- generate.lua — "Paladin TBC - All Specs" (v5)
+-- generate.lua — "Paladin TBC - All Specs" (v6)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code).
+--
+-- v6 — two deferred questions came back from a source verifier, and both answers land
+-- on existing elements. NOT ONE W.uid() call was added, removed or reordered, so the
+-- re-import is still an Update and every dragged position survives:
+--   * CC ON ME now says WHICH break to use, in colour. The glow was already there and
+--     always red; nine conditions on `sub.1.glowColor` now recolour it by control type —
+--     red stun, purple fear, blue root, green confuse/poly, amber silence/lockout. Same
+--     five colours as the mage pack on purpose: a player who rolls two classes should
+--     learn one language, not two.
+--   * The Threat bar and the Threat Flash no longer load inside an ARENA. An arena has
+--     no threat table, so both were dead PvE furniture parked in the middle of the HUD
+--     exactly when screen space matters most. Everywhere else — open world, dungeon,
+--     raid, battleground — they behave exactly as in v5.
+--   Not built: a per-opponent enemy mana readout. It is now a proven WA primitive (the
+--   Power trigger accepts unit = "arena" on 2.5.x and clones per opponent), but a
+--   paladin has no mana drain, burn or punish — Judgement of Wisdom GIVES mana to the
+--   attacker. An opponent's mana bar would not change one paladin button press, which is
+--   the standard every element in this pack has to meet. It belongs in the packs that
+--   can act on it (warlock / priest / hunter / mage).
 --
 -- v5 — the PvP layer (arena + battleground). Ten new elements plus the dynamic group
 -- that holds them; every ELEMENT carries its own instance-type load gate (the group
@@ -125,6 +144,37 @@ local function inGroup(t)
   t.load.ingroup = { multi = { group = true, raid = true } }
   return t
 end
+-- v6 — "everywhere EXCEPT an arena", for PvE furniture that must not follow you in.
+-- There is no "not arena" key and no negation flag: the multiselect builder does honour
+-- `arg.inverse` (WeakAuras.lua:755-763), but the `size` load arg (Prototypes.lua:2035-2044)
+-- declares no `inverse`, no `test` and no `enableTest`, so multi mode is a plain OR over
+-- raw string equality and the complement has to be enumerated. This emits the load test
+--   (size==[[none]] or size==[[party]] or size==[[ten]] or size==[[twenty]]
+--    or size==[[twentyfive]] or size==[[fortyman]] or size==[[pvp]])
+-- `none` is the entry that had to be verified before this could ship, and it is why v5
+-- deliberately did NOT ship it. The worry was that WeakAuras only assigns `size` inside an
+-- instance, which would make this gate silently unload the bars in the open world — the
+-- one place a threat bar is least harmful and most often looked at. It does not:
+-- GetInstanceTypeAndSize (WeakAuras.lua:1598-1626) guards its in-instance branch with
+-- `if inInstance or instanceType ~= "none"` and then falls through to an explicit
+--   return "none", "none", nil, nil, 0
+-- so standing in Hellfire Peninsula `size` is the STRING "none", not nil, and ScanForLoads
+-- hands it to the load function unmodified. Listing `none` is what keeps these loading
+-- outside instances.
+-- Legal TBC keys are none/party/ten/twenty/twentyfive/fortyman/pvp/arena — Types.lua
+-- deletes ratedpvp/ratedarena/flexible/scenario for Classic flavours, and deletes `arena`
+-- only under IsClassicEra() — so listing all of them but `arena` IS "not arena". `twenty`
+-- is legal on TBC though no TBC difficulty index maps to it; listing it costs nothing.
+-- `pvp` is kept on purpose: Alterac Valley is full of elite NPCs with real threat tables,
+-- so a battleground is a place a threat bar still earns its space.
+local function noArena(t)
+  t.load.use_size = false   -- false = MULTI mode; only nil disables a multiselect gate
+  t.load.size = { multi = {
+    none = true, party = true, ten = true, twenty = true,
+    twentyfive = true, fortyman = true, pvp = true,
+  } }
+  return t
+end
 local function polish(icon)          -- crop + 1px outline on every icon
   icon.zoom = 0.3
   table.insert(icon.subRegions, F.subborder())
@@ -161,7 +211,8 @@ mp.conditions = {
 }
 adopt(gRes, mp)
 
--- 5) threat vs the current target (party/raid only). For prot, red = "I have aggro" = correct.
+-- 5) threat vs the current target (party/raid, and never in an arena). For prot, red =
+-- "I have aggro" = correct.
 local th = reg(F.aurabar("Paladin - Threat", CLASS, 172, 14, 0, -41, gRes.id, { 0.25, 0.80, 0.30, 1 }))
 th.triggers = F.triggers({ F.threatTrigger() })
 th.subRegions[2] = F.subtext("%threatpct%%", 12, "INNER_RIGHT", "threatpct")
@@ -171,6 +222,7 @@ th.conditions = {  -- severe last: a later match overwrites the same property
   F.condition(1, "aggro", "==", 1, "barColor", { 0.9, 0.12, 0.12, 1 }),
 }
 inGroup(th)
+noArena(th)   -- v6: an arena party is still a party, but has no threat table
 adopt(gRes, th)
 
 -- 6) >=80% threat flash over the bar — Ret only (a tank AT aggro must not be alarmed)
@@ -180,6 +232,7 @@ flash.blendMode = "ADD"
 flash.triggers = F.triggers({ F.threatTrigger(80) })
 flash.animation.main = F.animPreset("alphaPulse", "1")
 inGroup(flash)
+noArena(flash)   -- v6: a pulsing red alarm that can never fire is the worst kind of clutter
 gate(flash, GATE_RET)
 adopt(gRes, flash)
 
@@ -553,6 +606,50 @@ ccMe.triggers = F.triggers({ ccTrigger() })
 table.insert(ccMe.subRegions, F.subtext("%p", 14, "INNER_BOTTOM"))
 ccMe.load.use_combat = nil
 applyLoad(ccMe, pvpLoad())
+-- v6: colour IS the answer. Under a stun nobody reads text, and the icon of the effect
+-- alone does not say which button breaks it — a paladin's four answers are genuinely
+-- different spells. Red stun: only the trinket (you cannot bubble while stunned). Purple
+-- fear: trinket, then bubble. Blue root/snare: Blessing of Freedom, NOT the trinket —
+-- spending the medallion on a Frost Nova is how the next Hammer of Justice kills you.
+-- Green confuse/polymorph: ride it, any damage breaks it, so do nothing and let a partner
+-- clip it. Amber silence or school lockout: your Holy school is gone, nothing you press
+-- will land, so trinket EARLIER than the timer suggests. Same five colours as the mage
+-- pack (and every other pack in this repo) so one player learns one language.
+--
+-- `sub.1.glowColor` — verified in WA source, and all three preconditions hold here:
+--   1. INDEX. Conditions.lua builds the key positionally from ipairs(data.subRegions),
+--      so "sub.1" is correct only while the subglow is subRegions[1]. It is: alert()
+--      assigns subRegions[1] = F.subglow(...), polish() APPENDS the border and the %p
+--      subtext is table.insert-ed after that. Never insert a subregion ahead of index 1.
+--   2. useGlowColor MUST be true or the setter is a silent no-op: SetGlowColor only
+--      stores the value and re-runs SetVisible, which does `if self.useGlowColor then
+--      color = self.glowColor end` and otherwise hands nil to LibCustomGlow. F.subglow
+--      sets it true whenever a colour is passed, and RED is passed here.
+--   3. The glow must be on — SetGlowColor's restart is guarded by `if self.glow`. alert()
+--      passes glow = true, so it is lit the moment the aura shows.
+-- Value shape is an ARRAY of four numbers: the property type is "color", and WA emits
+-- {v[1], v[2], v[3], v[4]}, so an {r=,g=,b=,a=} hash would serialise to four nils.
+-- The comparison is against the RAW loss-of-control key ("STUN", not a localised label),
+-- and controlType is stored by the prototype (store = true) even without use_controlType,
+-- so the bare Crowd Controlled trigger above feeds these conditions unchanged.
+-- The five keys with no condition (NONE, CHARM, DISARM, PACIFY, POSSESS) fall back to the
+-- aura's own base glowColor — red — which reads as "trinket food", the right default.
+local CC_STUN    = { 1, 0.15, 0.15, 1 }   -- trinket, and only the trinket
+local CC_FEAR    = { 0.7, 0.3, 1, 1 }     -- trinket, then bubble
+local CC_ROOT    = { 0.3, 0.7, 1, 1 }     -- Blessing of Freedom — do NOT trinket
+local CC_CONFUSE = { 0.4, 0.95, 0.5, 1 }  -- ride it; any damage breaks it
+local CC_SILENCE = { 1, 0.85, 0.2, 1 }    -- school gone: trinket earlier than you think
+ccMe.conditions = {
+  F.condition(1, "controlType", "==", "STUN",             "sub.1.glowColor", CC_STUN),
+  F.condition(1, "controlType", "==", "STUN_MECHANIC",    "sub.1.glowColor", CC_STUN),
+  F.condition(1, "controlType", "==", "FEAR",             "sub.1.glowColor", CC_FEAR),
+  F.condition(1, "controlType", "==", "FEAR_MECHANIC",    "sub.1.glowColor", CC_FEAR),
+  F.condition(1, "controlType", "==", "CONFUSE",          "sub.1.glowColor", CC_CONFUSE),
+  F.condition(1, "controlType", "==", "ROOT",             "sub.1.glowColor", CC_ROOT),
+  F.condition(1, "controlType", "==", "SILENCE",          "sub.1.glowColor", CC_SILENCE),
+  F.condition(1, "controlType", "==", "PACIFYSILENCE",    "sub.1.glowColor", CC_SILENCE),
+  F.condition(1, "controlType", "==", "SCHOOL_INTERRUPT", "sub.1.glowColor", CC_SILENCE),
+}
 
 -- 36) Trinket DOWN — is my get-out-of-jail available. Shows ONLY while on cooldown,
 -- so absence means ready and the column stays empty in the normal case. One trigger

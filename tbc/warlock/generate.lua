@@ -47,10 +47,29 @@
 --     WeakAuras (no prototype, no library), and an 18 s "DR timer" models the
 --     reset window rather than the category state, so it is wrong the moment
 --     two spells share a category. Nothing here pretends otherwise.
+--
+-- v5 (three verified findings applied — see the notes at each site):
+--   * CC ON ME is now COLOUR-CODED by controlType. The glow colour is driven by
+--     nine conditions on the property "sub.1.glowColor", which is verified live:
+--     the subglow is subRegions[1], it is built with a colour (so useGlowColor
+--     is true — with it false the setter runs and nothing changes on screen),
+--     and glow is already true, which is what lets SetGlowColor restart it.
+--     Colours are byte-identical to the mage pack's so a player who rolls both
+--     learns one language: red stun, purple fear, blue root, green confuse,
+--     amber silence/lockout.
+--   * Threat bar and threat flash no longer load in an ARENA. There is no "not
+--     arena" load key, so the complement is enumerated on the `size` arg —
+--     including `none`, which is the literal string the client reports in the
+--     open world, so every PvE case is unchanged.
+--   * NEW per-opponent Enemy Mana row (arena only): the Power prototype's unit
+--     arg accepts "arena" on 2.5.x and clones one row per opponent. This is the
+--     Drain Mana / Curse of Tongues readout the v4 notes deferred as unverified.
+--
 -- UID ORDER IS SACRED: the two v2 auras are built at the BOTTOM of this file so
 -- every pre-v1 uid() call keeps its position in the seeded stream. v3 is a
 -- load-gate-only change: no aura added, removed, renamed or reordered. v4's
 -- nine auras are built after them, at the very bottom, for the same reason.
+-- v5's single new aura is built below all of those, at the very end.
 
 math.randomseed(20260813)  -- FIXED pack seed; append-only uid order across versions
 
@@ -149,6 +168,30 @@ mana.conditions = {
 }
 adopt(gRes, mana)
 
+-- v5: "everywhere except an arena", for the threat bar and its flash overlay.
+-- An arena has no threat table, so both are pure clutter there — but there is
+-- genuinely no "not arena" load key: the `size` load arg declares no `inverse`
+-- and no `test`, so multi mode is a plain OR over raw string equality and the
+-- complement has to be spelled out. The value that mattered is `none`: in the
+-- open world the client reports the literal STRING "none" (GetInstanceTypeAndSize
+-- returns early with "none" when you are not in an instance), not nil, so listing
+-- it keeps the bar loading in Hellfire exactly as before. use_size = false is
+-- MULTI mode, not "off" — only nil disables a multiselect load arg.
+-- `pvp` (battleground) is kept deliberately: Alterac Valley has real NPC bosses
+-- and a real threat table, so a BG threat bar is still PvE furniture that works.
+-- Fresh table per aura, so the two auras never share one by reference.
+local function notArenaSize()
+  return { multi = {
+    none = true,        -- open world / city / no instance
+    party = true,       -- 5-man normal or heroic
+    ten = true,         -- Karazhan, Zul'Aman
+    twenty = true,      -- legal key on TBC, unreachable; listing it is free
+    twentyfive = true,  -- SSC / TK / Hyjal / BT / Sunwell
+    fortyman = true,    -- vanilla 40s
+    pvp = true,         -- battleground (AV has NPC bosses); arena is the one omission
+  } }
+end
+
 -- threat vs target: green -> orange at 70% -> red on aggro (most severe last).
 -- Party/raid only, like its flash overlay: solo you are the tank on your own
 -- target, so the bar would otherwise sit permanently full and red.
@@ -159,6 +202,8 @@ threat.subRegions[2] = F.subtext("%threatpct%%", 12, "INNER_RIGHT", "threatpct")
 threat.subRegions[3] = F.subborder("bar")
 threat.load.use_ingroup = true
 threat.load.ingroup = { multi = { group = true, raid = true } }
+threat.load.use_size = false
+threat.load.size = notArenaSize()
 threat.conditions = {
   F.condition(1, "threatpct", ">=", "70", "barColor", { 1, 0.6, 0.1, 1 }),
   F.condition(1, "aggro", "==", 1, "barColor", { 0.9, 0.12, 0.12, 1 }),
@@ -174,6 +219,8 @@ flash.blendMode = "ADD"
 flash.triggers = F.triggers({ F.threatTrigger(80) })
 flash.load.use_ingroup = true
 flash.load.ingroup = { multi = { group = true, raid = true } }
+flash.load.use_size = false
+flash.load.size = notArenaSize()
 flash.animation.main = F.animPreset("alphaPulse", "1")
 adopt(gRes, flash)
 
@@ -470,6 +517,42 @@ end
 local ccme = alertIcon("Warlock - CC ON ME", RED, true)
 ccme.width, ccme.height = 44, 44
 ccme.triggers = F.triggers({ gTrig{ type = "unit", event = "Crowd Controlled" } })
+-- v5: the glow colour now CARRIES the category, because under a 3 s stun a
+-- player parses colour and never text. Property string is "sub.1.glowColor" —
+-- "sub." .. <1-based index into subRegions> .. "." .. <key from the subregion
+-- type's property table>. Three preconditions, all satisfied here:
+--   1. the subglow really is subRegions[1] (alertIcon writes it at [1], the
+--      %p subtext lands at [2] and the border at [3]) — the index is positional,
+--      so never INSERT a subregion ahead of it, only append;
+--   2. useGlowColor is true — F.subglow sets it whenever a colour is passed, and
+--      RED is passed below. With it false SetGlowColor stores the value and the
+--      glow silently keeps LibCustomGlow's default: a real no-op, not an error;
+--   3. glow is already true (the icon appearing at all is the signal), which is
+--      what lets SetGlowColor's `if self.glow` restart actually repaint it.
+-- The value must be a 4-element ARRAY, not {r=,g=,b=,a=} — a hash serialises to
+-- four nils. controlType is stored by the prototype even without use_controlType,
+-- so the bare Crowd Controlled trigger above feeds these comparisons, and the
+-- comparison is against the RAW key ("STUN"), never a localised label.
+-- Colours are byte-identical to the mage pack's, on purpose: one language.
+--   red    stun          -> the trinket is the only answer
+--   purple fear          -> trinket, Death Coil or Will of the Forsaken
+--   blue   root          -> a movement answer; do NOT burn the trinket on a root
+--   green  confuse/poly  -> ride it, any damage breaks it (yours or a partner's)
+--   amber  silence/lockout -> your Shadow school is gone, so Fear went with your
+--                             damage: trinket EARLIER than you otherwise would
+-- The five loss-of-control types with no condition (NONE, CHARM, DISARM, PACIFY,
+-- POSSESS) fall back to the base colour, which is the same red — "trinket food".
+ccme.conditions = {
+  F.condition(1, "controlType", "==", "STUN",             "sub.1.glowColor", { 1, 0.15, 0.15, 1 }),
+  F.condition(1, "controlType", "==", "STUN_MECHANIC",    "sub.1.glowColor", { 1, 0.15, 0.15, 1 }),
+  F.condition(1, "controlType", "==", "FEAR",             "sub.1.glowColor", { 0.7, 0.3, 1, 1 }),
+  F.condition(1, "controlType", "==", "FEAR_MECHANIC",    "sub.1.glowColor", { 0.7, 0.3, 1, 1 }),
+  F.condition(1, "controlType", "==", "CONFUSE",          "sub.1.glowColor", { 0.4, 0.95, 0.5, 1 }),
+  F.condition(1, "controlType", "==", "ROOT",             "sub.1.glowColor", { 0.3, 0.7, 1, 1 }),
+  F.condition(1, "controlType", "==", "SILENCE",          "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+  F.condition(1, "controlType", "==", "PACIFYSILENCE",    "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+  F.condition(1, "controlType", "==", "SCHOOL_INTERRUPT", "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+}
 ccme.load = F.load(CLASS, PVP)
 
 -- --- TARGET IMMUNE (prompt) -------------------------------------------
@@ -559,6 +642,56 @@ fward.load = F.load(CLASS, ARENA)
 local howl = addCD("Howl of Terror", HOWL, true)
 howl.load.use_size = false
 howl.load.size = { multi = { arena = true, pvp = true } }
+
+-- =====================================================================
+-- v5's one new aura. Built at the VERY BOTTOM, after every v1/v2/v4 uid()
+-- call, so all 35 existing uids keep their position in the seeded stream and
+-- a v4 import offers "Update" instead of a duplicate group. It is re-parented
+-- into the PvP column afterwards, which appends it to controlledChildren and
+-- therefore never reorders anything above it.
+-- =====================================================================
+
+-- --- Enemy Mana (clone row, arena only) --------------------------------
+-- The drain plan, made legible: one bar per mana-using opponent, with the name
+-- on the left and the percentage on the right. Drain Mana, Curse of Tongues and
+-- a felhunter parked on the healer are all investments that only pay off if you
+-- can SEE them paying off; without this you are draining on faith and switching
+-- targets on a guess. Gold under 30% is the go: that healer is one drain from
+-- being a damage-free body, so stop switching and finish the pressure.
+--
+-- Verified shape, and every field is load-bearing:
+--   unit = "arena" + use_unit -> one clone per opponent (the prototype's
+--     statesParameter is "unit" and arena is a multi-unit id, so WA expands it
+--     to arena1..arena5 and gives each its own cloneId). Needs the dynamic
+--     group it is parented into; clones in a static group stack on one spot.
+--   use_powertype = true AND powertype = 0 -> read MANA specifically. Omit
+--     EITHER and powerType is nil, and the trigger silently falls back to the
+--     opponent's PRIMARY bar — a rogue's energy in a bar labelled mana.
+--   use_requirePowerType = true -> the row only exists while mana is that
+--     opponent's primary bar, so warriors and rogues self-hide instead of
+--     parking an empty slot in the column. It is enabled by use_powertype.
+-- ARENA-gated, never PVP: arena1..arena5 do not exist in a battleground, so a
+-- BG-loaded row would be permanently blank.
+-- Honest caveat, and it is a client question the addon source cannot settle:
+-- whether 2.5.x pushes UNIT_POWER_FREQUENT for arena units continuously or only
+-- around ARENA_OPPONENT_UPDATE. WA re-evaluates the unit on that event either
+-- way, so the worst case is a coarser refresh, never a wrong number.
+local emana = reg(F.aurabar("Warlock - Enemy Mana", CLASS, 120, 12, 0, 0, gPvp.id,
+  { 0.25, 0.45, 0.95, 1 }))
+emana.triggers = F.triggers({ gTrig{
+  type = "unit", event = "Power",
+  unit = "arena", use_unit = true,
+  use_powertype = true, powertype = 0,   -- 0 = Mana
+  use_requirePowerType = true,
+} })
+emana.subRegions[2] = F.subtext("%name", 10, "INNER_LEFT")
+emana.subRegions[3] = F.subtext("%percentpower%%", 10, "INNER_RIGHT", "percentpower")
+emana.subRegions[4] = F.subborder("bar")
+emana.conditions = {
+  F.condition(1, "percentpower", "<", "30", "barColor", { 1, 0.85, 0.2, 1 }),
+}
+emana.load = F.load(CLASS, ARENA)
+adopt(gPvp, emana)
 
 -- ===== assemble (v2000 nested), encode, verify =====
 local transmit = F.assemble(top, byId)

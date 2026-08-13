@@ -1,4 +1,4 @@
--- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v4).
+-- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v5).
 -- Run: lua5.1 tbc/hunter/generate.lua   (toolkit libs must be fetched once:
 --      tools/tbc-weakaura-creator/scripts/setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game.
@@ -30,6 +30,22 @@
 -- load-gated to arena/battleground, so nothing about the PvE HUD changes. Elements
 -- that read arena1..arena5 are arena-ONLY (those unit ids do not exist in a BG).
 -- Zero custom code was added: every new composite is a plain AND or OR of triggers.
+--
+-- v5 (see README "v5 — the CC glow speaks, and the arena stops lying"): one new aura
+-- and two changed elements, all three from a source verification of things v4 deferred.
+--   * CC ON ME is now colour-coded by controlType: the glow says which BREAK works
+--     before you have read a single word. sub.1.glowColor is a real, settable
+--     condition property (Glow.lua properties table, Conditions.lua sub.N parser) —
+--     it is only a no-op when useGlowColor is false, and F.subglow sets that flag
+--     whenever a colour is passed, which this element does.
+--   * Threat bar and threat flash no longer load in an ARENA. The size load arg has
+--     no inverse, so the complement is enumerated; open world is the literal string
+--     "none" (GetInstanceTypeAndSize's explicit fallthrough return), so listing it
+--     is what keeps both elements loading while questing.
+--   * ENEMY MANA: one bar per opponent who actually runs on mana. The Power
+--     prototype is NOT pruned on TBC and its unit arg accepts "arena" (the deletion
+--     of arena units is gated on IsClassicEra, not IsTBC), so this is a plain
+--     multi-unit clone row with zero custom code.
 --
 -- Every spell id was verified on wowhead.com/tbc. Aura triggers carry EVERY
 -- rank as strings; cooldown triggers carry the numeric rank-1 id; spellknown
@@ -169,6 +185,21 @@ mana.conditions = {
 }
 adopt(gRes, mana)
 
+-- v5: "everywhere except an arena", spelled out. The `size` load arg declares no
+-- `inverse` and no `test`, so there is genuinely no "not arena" key — the complement has
+-- to be enumerated, and the emitted load test is a plain OR of string compares. `none` is
+-- the load-bearing entry: in the open world GetInstanceTypeAndSize returns the literal
+-- STRING "none" (its explicit fallthrough return, not nil), so leaving it out would delete
+-- the threat bar while questing. `pvp` (battleground) stays in: AV has NPCs and a real
+-- threat table. `arena` is the only key left out — an arena has no threat table at all, so
+-- there the bar is a dead green rectangle in the slot closest to the crosshair.
+local function noArenaSize()
+  return { multi = {
+    none = true, party = true, ten = true, twenty = true,
+    twentyfive = true, fortyman = true, pvp = true,
+  } }
+end
+
 -- 5. threat — escalating tiers, each one paired with the ability that answers it:
 --    orange at 70 (Misdirection prompt), red at 90 (Feign Death prompt), deep red
 --    on aggro. Most severe condition last. Group-gated: solo you ARE the threat
@@ -184,6 +215,8 @@ threat.conditions = {
 }
 threat.load.use_ingroup = true
 threat.load.ingroup = { multi = { group = true, raid = true } }
+threat.load.use_size = false   -- false = MULTI mode (nil would disable the gate)
+threat.load.size = noArenaSize()
 adopt(gRes, threat)
 
 -- 6. threat >= 80% in a party/raid: pulsing red overlay on the threat bar
@@ -193,6 +226,8 @@ flash.blendMode = "ADD"
 flash.triggers = F.triggers({ threatTrigger(80) })
 flash.load.use_ingroup = true
 flash.load.ingroup = { multi = { group = true, raid = true } }
+flash.load.use_size = false
+flash.load.size = noArenaSize()
 flash.animation.main = F.animPreset("alphaPulse", "1")
 adopt(gRes, flash)
 
@@ -577,8 +612,39 @@ adopt(top, gPvP)
 local ccMe = reg(F.icon("Hunter - CC ON ME", CLASS, 40, 40, 0, 0, nil))
 ccMe.triggers = F.triggers({ trig{ type = "unit", event = "Crowd Controlled" } })
 ccMe.cooldown = false
-ccMe.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
+ccMe.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })   -- red default = "trinket food"
 ccMe.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+-- v5: the glow COLOUR carries the category, because under a stun a player parses colour and
+-- never text. sub.1.glowColor is the real property name: "sub." .. <1-based subRegions index>
+-- .. "." .. <key from the subregion's properties table>, and the subglow above is index 1.
+-- Two preconditions, both satisfied here: useGlowColor must be true (otherwise SetGlowColor
+-- stores the value and LibCustomGlow keeps using its own default — a silent no-op), which
+-- F.subglow sets whenever a colour is passed; and the glow must be on, which it is. Values
+-- are 4-element ARRAYS — an {r=,g=,b=,a=} hash would serialise to four nils.
+-- Same five colours as the mage pack on purpose: one language across two characters.
+-- Anything not listed (CHARM, DISARM, PACIFY, POSSESS) keeps the red base = "spend the break".
+ccMe.conditions = {
+  -- RED — stun. Nothing a hunter owns breaks a stun: it is the medallion or nothing,
+  -- and the Trinket DOWN readout in the PvP stack is the other half of that sentence.
+  F.condition(1, "controlType", "==", "STUN", "sub.1.glowColor", { 1, 0.15, 0.15, 1 }),
+  F.condition(1, "controlType", "==", "STUN_MECHANIC", "sub.1.glowColor", { 1, 0.15, 0.15, 1 }),
+  -- PURPLE — fear. Trinket, or Will of the Forsaken if you are Undead (the pack tracks
+  -- that racial's cooldown separately, which is exactly the "which break do I spend" call).
+  F.condition(1, "controlType", "==", "FEAR", "sub.1.glowColor", { 0.7, 0.3, 1, 1 }),
+  F.condition(1, "controlType", "==", "FEAR_MECHANIC", "sub.1.glowColor", { 0.7, 0.3, 1, 1 }),
+  -- GREEN — confuse / polymorph. Ride it: any damage breaks it, and your pet is already
+  -- hitting something. Trinketing here throws the break away for an effect about to end.
+  F.condition(1, "controlType", "==", "CONFUSE", "sub.1.glowColor", { 0.4, 0.95, 0.5, 1 }),
+  -- BLUE — root. NOT a trinket: a hunter shoots at full effect while rooted, so keep firing
+  -- and save the break for the stun that follows. A root only kills you if a melee is
+  -- closing, and that case already has its own prompt (DEADZONE -> Scatter / trap / Wing Clip).
+  F.condition(1, "controlType", "==", "ROOT", "sub.1.glowColor", { 0.3, 0.7, 1, 1 }),
+  -- AMBER — silence or school lockout. Your shots and your traps are gone for the duration,
+  -- so there is no "play through it" line: trinket EARLIER than you otherwise would.
+  F.condition(1, "controlType", "==", "SILENCE", "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+  F.condition(1, "controlType", "==", "PACIFYSILENCE", "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+  F.condition(1, "controlType", "==", "SCHOOL_INTERRUPT", "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+}
 ccMe.zoom = 0.3
 table.insert(ccMe.subRegions, F.subborder())
 ccMe.load = pvpLoad(PVP_SIZE)
@@ -723,6 +789,40 @@ local cdTrap = addCD("Freezing Trap", FRZTRAP[1], nil)
 cdTrap.load = pvpLoad(PVP_SIZE, { use_spellknown = true, spellknown = FRZTRAP[1] })
 local cdScatter = addCD("Scatter Shot", SCATTER, nil)
 cdScatter.load = pvpLoad(PVP_SIZE, { use_spellknown = true, spellknown = SCATTER })
+
+-- ===== v5 addition: the one new aura, constructed last =====
+-- Same append-only rule as v2 and v4: one new W.uid() call, at the very END of the file.
+
+-- 45. ENEMY MANA — one bar per opponent who actually runs on mana, so the row IS the
+--     healer list. Mana denial is the hunter's win condition in a long game, and Viper
+--     Sting is a choice of target, not a rotation slot: this says which arena unit is worth
+--     the sting and when the drain has done its job. Below 20% a healer cannot chain-heal
+--     through a swap, so the bar goes amber — this pack's "press now" colour, the same one
+--     SILENCE NOW and Kill Command wear.
+--
+--     The Power prototype is not pruned on TBC and its unit arg accepts "arena" (WA deletes
+--     arena units only under IsClassicEra, not IsTBC), and statesParameter = "unit" makes it
+--     clone one state per arena1..arena5 — hence the dynamicgroup parent. Both flags matter:
+--     use_powertype = true AND powertype = 0 pin it to MANA, because without them the
+--     trigger silently reads whatever bar that opponent primarily uses (a rogue's energy).
+--     use_requirePowerType then hides every opponent whose PRIMARY bar is not mana, so the
+--     rogue and warrior rows never appear and the row that remains is the one you care about.
+--     Arena-gated only: arena1..arena5 do not exist in a battleground, so a BG-loaded copy
+--     would be permanently blank rows.
+local enemyMana = reg(F.aurabar("Hunter - Enemy Mana", CLASS, 120, 12, 0, 0, nil,
+  { 0.25, 0.55, 0.95, 1 }))
+local emPower = F.powerTrigger(0)          -- 0 = Mana, and use_powertype is already true
+emPower.unit = "arena"                     -- multi-unit: one clone per opponent
+emPower.use_requirePowerType = true        -- mana must be their PRIMARY bar
+enemyMana.triggers = F.triggers({ emPower })
+enemyMana.subRegions[2] = F.subtext("%name%", 10, "INNER_LEFT")
+enemyMana.subRegions[3] = F.subtext("%percentpower%%", 10, "INNER_RIGHT", "percentpower")
+enemyMana.subRegions[4] = F.subborder("bar")
+enemyMana.conditions = {
+  F.condition(1, "percentpower", "<", "20", "barColor", { 1, 0.85, 0.2, 1 }),
+}
+enemyMana.load = pvpLoad(ARENA_SIZE, { use_spellknown = true, spellknown = VIPERST[1] })
+adopt(gPvP, enemyMana)
 
 -- ===== layout order (no uid cost: controlledChildren order is pure layout) =====
 local function placeFirst(group, id)
