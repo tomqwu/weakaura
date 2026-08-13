@@ -19,6 +19,12 @@
 -- Pure gating: no element added, removed or reordered, so every uid is unchanged. Barkskin,
 -- Innervate and the Innervate prompt now carry an INVERSE gate (not_spellknown = Mangle (Bear))
 -- and no longer load for a feral druid, who cannot cast either spell without dropping form.
+--
+-- v4 (PvP layer) — see README "## v4 — PvP layer". Six new elements plus one new dynamic
+-- group, EVERY one of them gated on the instance type (`load.size` multiselect: arena+bg, or
+-- arena alone for anything that reads arena1..arena5). Nothing existing changed, so a PvE
+-- druid sees a byte-for-byte identical HUD. Built in the v4 block at the BOTTOM of this file
+-- so the seeded uid stream stays append-only.
 
 math.randomseed(20260812)  -- FIXED pack seed; append-only uid order across versions
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -403,6 +409,168 @@ tolMissing.displayIcon = "Interface\\Icons\\ability_druid_treeoflife"
 tolMissing.cooldown = false
 tolMissing.subRegions[1] = F.subglow(true, { 0.35, 0.95, 0.45, 1 })
 tolMissing.subRegions[2] = F.subborder()
+
+-- ================= v4 additions — the PvP layer =================
+-- APPEND-ONLY again: every constructor below draws a uid AFTER all v1-v3 ones.
+--
+-- HARD RULE: every element here is gated on the instance type, so a druid who never queues
+-- for arena or a battleground sees exactly the v3 HUD. The load arg is `size` (UI label
+-- "Instance Size Type"), a multiselect over WA's instance_types; on TBC the only PvP keys
+-- that can ever match are `arena` and `pvp` (Types.lua deletes ratedarena/ratedpvp for
+-- Classic flavours, and WeakAuras.InstanceType() can never return them). `use_size = false`
+-- is NOT "off": multiselect load args are live for both true and false and only inert at nil
+-- — false selects MULTI mode, which ORs the listed keys. Group-level load is not a child
+-- gate in WA, so the gate goes on every child individually, which is also what lets the
+-- dynamic groups collapse their gaps in PvE.
+local function pvpGate(extra)     -- arena OR battleground
+  local g = { use_size = false, size = { multi = { arena = true, pvp = true } } }
+  for k, v in pairs(extra or {}) do g[k] = v end
+  return g
+end
+local function arenaGate(extra)   -- arena ONLY — arena1..arena5 do not exist in a BG, so a
+  local g = { use_size = false, size = { multi = { arena = true } } }  -- BG-loaded arena
+  for k, v in pairs(extra or {}) do g[k] = v end                       -- element is a
+  return g                                                             -- permanently blank slot
+end
+
+-- Raw (non-factory) triggers still need the fields WA's own editor always writes.
+local function rawTrigger(t)
+  t.names = {}; t.spellIds = {}
+  t.subeventPrefix = "SPELL"; t.subeventSuffix = "_CAST_START"
+  t.debuffType = t.debuffType or "HELPFUL"
+  return t
+end
+
+-- ===== verified PvP ids (wowhead.com/tbc, 2.4.3 data) =====
+-- Damage-pointless CC: Cyclone makes the target immune to ALL damage and healing for its
+-- whole duration, and Entangling Roots breaks the moment it takes damage. Both mean "stop
+-- hitting that unit". Deliberately NOT in this list: Bash and Maim — stuns are exactly when
+-- you SHOULD be pouring damage in, so mixing them into the same row would invert the message.
+local IDS_CYCLONE = { 33786 }                                   -- single TBC rank
+local IDS_ROOTS   = { 339, 1062, 5195, 5196, 9852, 9853, 26989, -- Entangling Roots r1-r7
+                      19970, 19971, 19972, 19973, 19974, 19975, 27010 }  -- Nature's Grasp roots
+local IDS_CC_HOLD = {}
+for _, id in ipairs(IDS_CYCLONE) do IDS_CC_HOLD[#IDS_CC_HOLD + 1] = id end
+for _, id in ipairs(IDS_ROOTS)   do IDS_CC_HOLD[#IDS_CC_HOLD + 1] = id end
+
+-- Hard stops only: buffs that make the press you were about to make land for nothing.
+-- Mitigation cooldowns (Barkskin, Shield Wall, Pain Suppression) are NOT here — they change
+-- how much damage lands, not whether pressing the button is worth a GCD.
+-- Deterrence is not here either: on 2.4.3 it is +25% parry / +25% dodge, not an immunity.
+local IDS_IMMUNE = { 642, 1020,            -- Divine Shield r1-r2 (immune to everything)
+                     1022, 5599, 10278,    -- Blessing of Protection r1-r3 (physical immunity)
+                     45438,                -- Ice Block
+                     31224,                -- Cloak of Shadows (90% spell miss + strips DoTs)
+                     19574, 34471 }        -- Bestial Wrath / The Beast Within (CC immunity)
+
+-- Every TBC PvP trinket a DRUID can equip. All six cast spell 42292 ("PvP Trinket") since
+-- 2.1.2, which is what makes the enemy-side countdown below possible.
+local PVP_TRINKETS = { 28235,   -- Medallion of the Alliance (Druid),  2 min
+                       28241,   -- Medallion of the Horde (Druid),     2 min
+                       37864,   -- Medallion of the Alliance (all classes, 2.4), 2 min
+                       37865,   -- Medallion of the Horde (all classes, 2.4),    2 min
+                       18863,   -- Insignia of the Alliance (Druid),   5 min
+                       18853 }  -- Insignia of the Horde (Druid),      5 min
+
+-- P0 the PvP column — mirrors the Alerts flow on the other side of the character so the PvE
+-- layout is untouched. MUST be a dynamicgroup: two of its children are clone sources.
+local gPvP = reg(F.dynGroup("Druid - PvP", 150, 96, nil, "DOWN", "TOP", 6))
+adopt(top, gPvP)
+
+local function pvpIcon(id, size, gate)
+  local ic = reg(F.icon(id, CLASS, size, size, 0, 0, nil))
+  ic.zoom = 0.3
+  ic.load = F.load(CLASS, gate)
+  ic.cooldownTextDisabled = false   -- WA prints the countdown on the swipe; no %p (OmniCC)
+  ic.subRegions[2] = F.subborder()
+  adopt(gPvP, ic)
+  return ic
+end
+
+-- P1 CC on me — the single prompt that answers "ride it or spend the trinket". The icon comes
+-- from the trigger, so the effect identifies itself (sap / poly / fear / stun / kick lockout),
+-- and %p is the countdown you decide against. No controlType filter: this catches every
+-- loss-of-control effect including school lockouts, which are not auras and which aura2 can
+-- therefore never see. No combat gate either — the opener Sap lands out of combat.
+local ccOnMe = alertIcon("Druid - CC on Me", pvpGate())
+ccOnMe.triggers = F.triggers({ rawTrigger{ type = "unit", event = "Crowd Controlled" } })
+ccOnMe.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
+ccOnMe.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+ccOnMe.subRegions[3] = F.subborder()
+
+-- P2 Barkskin while stunned — the druid-only press nothing else in the game can prompt.
+-- 22812's 2.4.3 tooltip reads "Can be used while stunned"/"Usable while feared", so a stunned
+-- druid still has exactly one button, and this is it. Trigger 1 is the Barkskin readiness
+-- check on purpose: activeTriggerMode = -10 means the FIRST active trigger supplies the icon,
+-- so the prompt wears Barkskin's own icon rather than the stun's. Inverse-gated like every
+-- other Barkskin element in this pack (v3): the spell carries "Cannot be used while
+-- shapeshifted" on 2.4.3 and you cannot shift out while stunned, so for a feral it would be a
+-- prompt for a button that does not exist.
+local barkStun = alertIcon("Druid - Barkskin (Stunned)", pvpGate({
+  use_spellknown = true, spellknown = CD_BARKSKIN,
+  use_not_spellknown = true, not_spellknown = 33878,
+}))
+barkStun.triggers = F.triggers({
+  F.cdTrigger(CD_BARKSKIN, "Barkskin", "showOnReady"),
+  rawTrigger{ type = "unit", event = "Crowd Controlled", use_controlType = true, controlType = "STUN" },
+})
+barkStun.cooldown = false
+barkStun.subRegions[1] = F.subglow(true, { 0.5, 0.9, 0.4, 1 })
+barkStun.subRegions[2] = F.subborder()
+
+-- P3 target immune — stop the burst. Continuing into a bubble, an Ice Block or a Blessing of
+-- Protection spends the whole cooldown set for zero, and Bestial Wrath means the Cyclone you
+-- were about to cast fails outright. The matched buff supplies the icon, so which immunity it
+-- is (and therefore whether to swap, re-pool or answer it) is readable without text.
+local targetImmune = alertIcon("Druid - Target Immune", pvpGate())
+targetImmune.triggers = F.triggers({ F.auraTrigger("target", true, IDS_IMMUNE) })
+targetImmune.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
+targetImmune.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+targetImmune.subRegions[3] = F.subborder()
+
+-- P4 my trinket down — visible ONLY while on cooldown, so an empty slot means "ready" and the
+-- column stays quiet in the normal case. One trigger per item id OR'd together: the
+-- equipment-slot trigger would report whatever sits in slot 13/14, so a PvE on-use trinket
+-- would claim your medallion is down when it is ready — a false negative that gets you killed
+-- in the one decision this element exists for.
+local function trinketCD(itemId)
+  return rawTrigger{ type = "item", event = "Cooldown Progress (Item)",
+                     use_itemName = true, itemName = itemId,
+                     use_genericShowOn = true, genericShowOn = "showOnCooldown" }
+end
+local myTrinket = pvpIcon("Druid - PvP Trinket Down", 32, pvpGate())
+local trinketTriggers = {}
+for i, itemId in ipairs(PVP_TRINKETS) do trinketTriggers[i] = trinketCD(itemId) end
+myTrinket.triggers = F.triggers(trinketTriggers, { disjunctive = "any" })
+myTrinket.desaturate = true   -- reads as "unavailable" without needing the number
+
+-- P5 enemy trinket — one clone per opponent who has used theirs, counting down 120s. The flash
+-- is worthless; the countdown is the whole value, because it is the window in which a real CC
+-- chain sticks. This is an INFERENCE, not a read: no 2.5.x API exposes another player's
+-- cooldowns, so the timer starts when the cast is seen. 120s is the Medallion cooldown every
+-- level-70 arena player carries; a low-level BG opponent on a 5-minute Insignia would show
+-- "ready" early. Arena-gated because unit = "arena" makes no sense in a battleground.
+local enemyTrinket = pvpIcon("Druid - Enemy Trinket", 36, arenaGate())
+enemyTrinket.triggers = F.triggers({
+  rawTrigger{ type = "event", event = "Spell Cast Succeeded",
+              unit = "arena", use_unit = true,
+              use_spellId = true, spellId = { "42292" },
+              duration = "120" },
+})
+
+-- P6 my CC out — one clone per opponent carrying my Cyclone or my roots, with the remaining
+-- time. Both effects mean the same thing: every point of damage sent at that unit is wasted
+-- (Cyclone absorbs it all) or actively harmful (damage breaks roots), and the timer is the
+-- window you bought on the OTHER target. Own-only, because someone else's roots are not your
+-- clock. The matched aura supplies the icon, so cyclone and roots are never confused.
+local ccOut = pvpIcon("Druid - CC Out", 36, arenaGate())
+ccOut.triggers = F.triggers({
+  F.auraTrigger("arena", false, IDS_CC_HOLD,
+    { ownOnly = true, showClones = true, combinePerUnit = true, perUnitMode = "affected" }),
+})
+ccOut.cooldownTextDisabled = true
+ccOut.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
+ccOut.subRegions[3] = F.subborder()
 
 -- ================= assemble (v2000 nested), encode, verify, write =================
 local transmit = F.assemble(top, byId)

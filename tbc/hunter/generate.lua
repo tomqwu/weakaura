@@ -1,4 +1,4 @@
--- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v3).
+-- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v4).
 -- Run: lua5.1 tbc/hunter/generate.lua   (toolkit libs must be fetched once:
 --      tools/tbc-weakaura-creator/scripts/setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game.
@@ -25,6 +25,11 @@
 -- The single leak was Expose Weakness: a Survival-talent debuff sitting in the
 -- ungated set, i.e. loading for Beast Mastery, which cannot apply it. It is now
 -- inverse-gated off Bestial Wrath.
+--
+-- v4 PvP layer (see README "v4 — PvP layer"): twelve new auras, every one of them
+-- load-gated to arena/battleground, so nothing about the PvE HUD changes. Elements
+-- that read arena1..arena5 are arena-ONLY (those unit ids do not exist in a BG).
+-- Zero custom code was added: every new composite is a plain AND or OR of triggers.
 --
 -- Every spell id was verified on wowhead.com/tbc. Aura triggers carry EVERY
 -- rank as strings; cooldown triggers carry the numeric rank-1 id; spellknown
@@ -80,6 +85,35 @@ local MISDIR  = 34477            -- Misdirection (lvl 70)
 local ARCANE  = 3044             -- Arcane Shot r1 (6s cd; Multi-Shot's OR-partner)
 local MENDPET = 136              -- Mend Pet r1 (no cooldown, 15s channel)
 local REVIVE  = 982              -- Revive Pet r1 (the dead-pet answer)
+
+-- ===== v4: verified PvP spell / item ids (wowhead.com/tbc) =====
+local SILENCE  = 34490                              -- Silencing Shot (MM 41-pt, 20s cd, 3s silence)
+local SCATTER  = 19503                              -- Scatter Shot (SV 20-pt, 30s cd, 4s disorient)
+local FRZTRAP  = { 1499, 14310, 14311 }             -- Freezing Trap r1-r3; the TRAP lasts 1 min
+local VIPERST  = { 3034, 14279, 14280, 27018 }      -- Viper Sting r1-r4 (8s mana drain)
+local WOTF     = 7744                               -- Will of the Forsaken (Undead racial, 2 min)
+local PVPTRINK = 42292                              -- "PvP Trinket" — the spell EVERY medallion
+                                                    -- and insignia casts (verified on item 37864)
+-- The four trinkets a hunter can actually be wearing. Item ids, never names, and never
+-- the equipment-slot trigger: that one tracks whatever sits in slot 13/14, so a PvE
+-- on-use trinket would report "medallion down" while the medallion is ready — a false
+-- negative in the one decision this element exists for.
+local TRINKETS = {
+  30346,  -- Medallion of the Horde    (lvl 70, 2 min)
+  37864,  -- Medallion of the Alliance (lvl 70, 2 min)
+  18846,  -- Insignia of the Horde    (Hunter, lvl 60, 5 min)
+  18856,  -- Insignia of the Alliance (Hunter, lvl 60, 5 min)
+}
+-- Hard stops only: while one of these is up, shots and traps do nothing. Mitigation
+-- cooldowns are deliberately absent, and so is Deterrence — on 2.4.3 it is +25% parry
+-- and dodge, not an immunity, so it does not change which button you press.
+local IMMUNE = {
+  642, 1020,          -- Divine Shield r1-r2
+  1022, 5599, 10278,  -- Blessing of Protection r1-r3 (physical immunity = every shot)
+  45438,              -- Ice Block
+  31224,              -- Cloak of Shadows
+  34471,              -- The Beast Within (their trap/scatter immunity window)
+}
 
 -- icons that live in the alert flow all get the same entrance/exit motion
 local function alertAnim(a)
@@ -479,6 +513,216 @@ revivePet.load.use_spellknown = true
 revivePet.load.spellknown = REVIVE
 alertAnim(revivePet)
 adopt(gAlerts, revivePet)
+
+-- ===== v4 additions: the PvP layer =====
+-- Same rule as the v2 block: everything new is constructed at the BOTTOM of the file
+-- so no W.uid() call is inserted before an existing one, then re-parented into place
+-- (re-parenting and renaming are free; uid CALL ORDER is what must never move).
+--
+-- Every element below carries its own arena/battleground load gate. A group's load is
+-- not a child gate, so the gate is repeated per aura — which is also what makes the
+-- dynamic groups collapse cleanly in PvE, where none of this loads at all.
+
+-- use_size = false is NOT "off": multiselect load args are active for both true and
+-- false and only inert at nil. false selects MULTI mode, which ORs the entries.
+local PVP_SIZE   = { arena = true, pvp = true }   -- arena OR battleground
+local ARENA_SIZE = { arena = true }               -- anything reading arena1..arena5:
+                                                  -- those units do not exist in a BG
+local function pvpLoad(sizes, extra)
+  local l = F.load(CLASS)
+  l.use_size = false
+  local m = {}
+  for k, v in pairs(sizes) do m[k] = v end        -- fresh table per aura
+  l.size = { multi = m }
+  for k, v in pairs(extra or {}) do l[k] = v end
+  return l
+end
+
+-- The factory's private trigger stub, replicated for the prototypes it does not wrap.
+local function trig(t)
+  t.names = {}; t.spellIds = {}
+  t.subeventPrefix = "SPELL"; t.subeventSuffix = "_CAST_START"
+  t.debuffType = t.debuffType or "HELPFUL"
+  return t
+end
+
+-- Item cooldown by NUMERIC item id. genericShowOn is mandatory — nil means the aura
+-- never shows, the same trap as the spell version.
+local function itemCD(itemId, showOn)
+  return trig{ type = "item", event = "Cooldown Progress (Item)",
+               use_itemName = true, itemName = itemId,
+               use_genericShowOn = true, genericShowOn = showOn }
+end
+
+-- Spell Cast Succeeded: the only sanctioned enemy-cooldown *inference* on 2.5.x, and
+-- the only way to know a trap is on the ground. duration is REQUIRED (string seconds);
+-- without it the state lasts 1 second and nobody sees it.
+local function castSucceeded(unit, ids, duration)
+  local s = {}
+  for i, id in ipairs(ids) do s[i] = tostring(id) end
+  return { type = "event", event = "Spell Cast Succeeded",
+           unit = unit, use_unit = true,
+           use_spellId = true, spellId = s, duration = duration }
+end
+
+local gPvP = reg(F.dynGroup("Hunter - PvP", 150, 96, nil, "DOWN", "TOP", 6))
+adopt(top, gPvP)
+
+-- 34. CC ON ME — which break works, and whether to spend it now. No controlType filter,
+--     so it matches ANY loss-of-control effect, including a Kick/Counterspell school
+--     lockout, which is not an aura and which no aura trigger can ever see. The icon
+--     comes from the trigger (iconSource -1) because the icon IS the identity of the
+--     effect, and %p is the answer to "ride it or trinket it". No combat gate: the
+--     opener lands before you are in combat.
+local ccMe = reg(F.icon("Hunter - CC ON ME", CLASS, 40, 40, 0, 0, nil))
+ccMe.triggers = F.triggers({ trig{ type = "unit", event = "Crowd Controlled" } })
+ccMe.cooldown = false
+ccMe.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
+ccMe.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+ccMe.zoom = 0.3
+table.insert(ccMe.subRegions, F.subborder())
+ccMe.load = pvpLoad(PVP_SIZE)
+alertAnim(ccMe)
+adopt(gAlerts, ccMe)
+
+-- 35. DEADZONE — a hostile target inside ~8 yards means Auto Shot, Steady Shot and
+--     every other shot are dead, so the next press is Wing Clip / Scatter / trap /
+--     melee, not a shot. "<=" tests max <= 8, i.e. "definitely inside the deadzone".
+--     Trigger 2 keeps it off friendly targets. This is the pack's ONLY Range Check —
+--     it polls on FRAME_UPDATE, which is exactly why it sits behind a PvP gate and a
+--     combat gate. LibRangeCheck is an estimate, so nothing hard depends on it.
+local deadzone = reg(F.icon("Hunter - DEADZONE", CLASS, 40, 40, 0, 0, nil))
+deadzone.triggers = F.triggers({
+  trig{ type = "unit", event = "Range Check", unit = "target",
+        use_range = true, range = "8", range_operator = "<=" },
+  trig{ type = "unit", event = "Unit Characteristics", unit = "target", use_unit = true,
+        use_hostility = true, hostility = "hostile" },
+})
+deadzone.iconSource = 0
+deadzone.displayIcon = "Interface\\Icons\\Ability_Hunter_SteadyShot"
+deadzone.cooldown = false
+deadzone.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
+deadzone.zoom = 0.3
+table.insert(deadzone.subRegions, F.subborder())
+deadzone.load = pvpLoad(PVP_SIZE, { use_combat = true })
+alertAnim(deadzone)
+adopt(gAlerts, deadzone)
+
+-- 36. SILENCE NOW — target is casting AND Silencing Shot is genuinely castable.
+--     "Action Usable" folds cooldown + mana + range into one boolean, so the prompt
+--     never appears for a button that would fail. No spell whitelist: TBC has no
+--     interruptibility flag at all (WA disables the arg for IsTBC), so filtering by
+--     id would only shrink coverage while pretending to add precision. Trigger 1 is
+--     first, so %p counts down the cast; the icon comes from trigger 2 = the button.
+local silence = reg(F.icon("Hunter - SILENCE NOW", CLASS, 40, 40, 0, 0, nil))
+silence.triggers = F.triggers({
+  trig{ type = "unit", event = "Cast", unit = "target", use_unit = true },
+  trig{ type = "spell", event = "Action Usable",
+        use_spellName = true, spellName = SILENCE, realSpellName = "Silencing Shot",
+        use_exact_spellName = true, use_ignoreoverride = true },
+})
+silence.iconSource = 2
+silence.cooldown = false
+silence.subRegions[1] = F.subglow(true, { 1, 0.85, 0.2, 1 })
+silence.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
+silence.zoom = 0.3
+table.insert(silence.subRegions, F.subborder())
+silence.load = pvpLoad(PVP_SIZE, { use_spellknown = true, spellknown = SILENCE })
+alertAnim(silence)
+adopt(gAlerts, silence)
+
+-- 37. TARGET IMMUNE — stop. Shooting into Divine Shield / Blessing of Protection /
+--     Ice Block / Cloak of Shadows burns the whole burst for zero damage, and The
+--     Beast Within means the trap and Scatter will not land either. iconSource -1
+--     shows WHICH immunity, which is what decides swap vs wait-out.
+local immune = reg(F.icon("Hunter - TARGET IMMUNE", CLASS, 40, 40, 0, 0, nil))
+immune.triggers = F.triggers({ F.auraTrigger("target", true, IMMUNE) })
+immune.cooldown = false
+immune.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
+immune.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
+immune.zoom = 0.3
+table.insert(immune.subRegions, F.subborder())
+immune.load = pvpLoad(PVP_SIZE)
+alertAnim(immune)
+adopt(gAlerts, immune)
+
+-- 38. Trinket DOWN — "is my get-out-of-jail available". showOnCooldown only, so the
+--     column is EMPTY in the normal case and absence means ready. Four triggers ORed
+--     because itemName has no multiEntry; only one of them can ever be equipped, and
+--     iconSource -1 means the icon is the trinket you actually own.
+local trinket = reg(F.icon("Hunter - Trinket DOWN", CLASS, 32, 32, 0, 0, nil))
+local trinketTrigs = {}
+for i, id in ipairs(TRINKETS) do trinketTrigs[i] = itemCD(id, "showOnCooldown") end
+trinket.triggers = F.triggers(trinketTrigs, { disjunctive = "any" })
+trinket.cooldownTextDisabled = false
+trinket.desaturate = true
+trinket.zoom = 0.3
+table.insert(trinket.subRegions, F.subborder())
+trinket.load = pvpLoad(PVP_SIZE)
+adopt(gPvP, trinket)
+
+-- 39. Will of the Forsaken DOWN — Undead carry a second, independent 2-minute break,
+--     and whether it is up is what decides if the medallion can be spent early.
+--     Gated on the ability, not the race: no racial, no icon, no gap.
+local wotf = reg(F.icon("Hunter - Will of the Forsaken DOWN", CLASS, 32, 32, 0, 0, nil))
+wotf.triggers = F.triggers({ F.cdTrigger(WOTF, "Will of the Forsaken", "showOnCooldown") })
+wotf.cooldownTextDisabled = false
+wotf.desaturate = true
+wotf.zoom = 0.3
+table.insert(wotf.subRegions, F.subborder())
+wotf.load = pvpLoad(PVP_SIZE, { use_spellknown = true, spellknown = WOTF })
+adopt(gPvP, wotf)
+
+-- 40. Enemy trinket — one clone per opponent, counting down 120s from the cast we
+--     SAW. This is an inference, not a read: no API on 2.5.x exposes another player's
+--     cooldowns. The countdown is the whole value — "they trinketed" as a one-shot
+--     flash changes nothing, "their break is gone for 90 more seconds" is the go.
+--     Arena-only, because unit = "arena" is meaningless in a battleground.
+local enemyTrinket = reg(F.icon("Hunter - Enemy Trinket", CLASS, 32, 32, 0, 0, nil))
+enemyTrinket.triggers = F.triggers({
+  castSucceeded("arena", { PVPTRINK }, "120"),
+})
+enemyTrinket.cooldownTextDisabled = false
+enemyTrinket.zoom = 0.3
+table.insert(enemyTrinket.subRegions, F.subborder())
+enemyTrinket.load = pvpLoad(ARENA_SIZE)
+adopt(gPvP, enemyTrinket)
+
+-- 41. Trap Armed — a trap is on the ground: pull the target across it, recall the pet
+--     (your own pet is the most common trap-breaker) and do not waste the second one.
+--     Inference again, with the trap's own 1-minute lifetime supplied: it cannot see
+--     the trap being sprung or broken, so it is a maximum, not a fact.
+local trapArmed = reg(F.icon("Hunter - Trap Armed", CLASS, 36, 36, 0, 0, nil))
+trapArmed.triggers = F.triggers({ castSucceeded("player", FRZTRAP, "60") })
+trapArmed.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
+trapArmed.zoom = 0.3
+table.insert(trapArmed.subRegions, F.subborder())
+trapArmed.load = pvpLoad(PVP_SIZE, { use_spellknown = true, spellknown = FRZTRAP[1] })
+adopt(gPvP, trapArmed)
+
+-- 42. Viper Sting out — one clone per opponent carrying YOUR Viper Sting. Mana denial
+--     is the hunter's win condition in a long game and the sting gets dispelled, so
+--     the row emptying is the re-apply prompt. Tracked on the opponents rather than on
+--     the kill target, because the drain belongs on whoever heals.
+local viperOut = reg(F.icon("Hunter - Viper Sting Out", CLASS, 36, 36, 0, 0, nil))
+viperOut.triggers = F.triggers({
+  F.auraTrigger("arena", false, VIPERST, {
+    ownOnly = true, showClones = true, combinePerUnit = true, perUnitMode = "affected",
+  }),
+})
+viperOut.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
+viperOut.zoom = 0.3
+table.insert(viperOut.subRegions, F.subborder())
+viperOut.load = pvpLoad(ARENA_SIZE, { use_spellknown = true, spellknown = VIPERST[1] })
+adopt(gPvP, viperOut)
+
+-- 43-44. Scatter -> Trap is the hunter's entire opening game plan, and neither button
+--        is in the PvE cooldown row. Both join it under the PvP gate, so the row is
+--        byte-for-byte the same row in a raid and grows two icons in arena.
+local cdTrap = addCD("Freezing Trap", FRZTRAP[1], nil)
+cdTrap.load = pvpLoad(PVP_SIZE, { use_spellknown = true, spellknown = FRZTRAP[1] })
+local cdScatter = addCD("Scatter Shot", SCATTER, nil)
+cdScatter.load = pvpLoad(PVP_SIZE, { use_spellknown = true, spellknown = SCATTER })
 
 -- ===== layout order (no uid cost: controlledChildren order is pure layout) =====
 local function placeFirst(group, id)

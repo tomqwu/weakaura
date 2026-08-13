@@ -1,4 +1,4 @@
-# Hunter TBC — Beast Mastery & Survival (v3)
+# Hunter TBC — Beast Mastery & Survival (v4)
 
 A single WeakAuras pack for TBC Anniversary (2.4.3) hunters that covers both raid specs:
 Beast Mastery (41/20/0) and Survival (0/20/41). It is built from the rotation, not from a
@@ -6,9 +6,93 @@ list of trackers — every element maps to one line of the priority list, and an
 does not change which button you press next was left out. Everything matches by **spell ID**
 (never by name), so it works identically on a zhCN or any other localized client.
 
-33 auras: one draggable top-level group `Hunter TBC - BM & Survival` anchored at screen
-centre `(0, -140)`, holding five sub-groups you can drag independently. Built for WeakAuras
+45 auras: one draggable top-level group `Hunter TBC - BM & Survival` anchored at screen
+centre `(0, -140)`, holding six sub-groups you can drag independently. Built for WeakAuras
 `internalVersion 45` / `tocversion 20501`; modern WA migrates it forward on import.
+
+## v4 — PvP layer
+
+v4 adds twelve auras that load **only inside an arena or a battleground**. Everything else
+is untouched: same uids, same triggers, same load rules, same positions
+(`stable=32 changed=0` against v3).
+
+**Nothing changes in PvE.** Every new aura carries its own instance-type load gate
+(`use_size = false, size = { multi = { arena = true, pvp = true } }`), not just the group it
+sits in — a group's load is not a child gate. In a raid, a dungeon, or out in the world the
+new group is empty, the cooldown row is the same nine icons it was in v3, and the alert flow
+holds the same nine prompts. Four of the new elements read `arena1..arena5` and are therefore
+**arena-only**, because those unit ids do not exist in a battleground and a BG-loaded arena
+element is a permanently blank slot.
+
+### New group: `Hunter - PvP` `(150, 96)`
+
+A downward dynamic stack on the opposite side of your character from `Alerts`, holding the
+state readouts. It is empty when nothing needs saying:
+
+| Element | What it shows | What you do differently |
+|---|---|---|
+| **Trinket DOWN** | your medallion/insignia **while it is on cooldown**, desaturated, with the swipe | Absence means ready. While the icon is up your only break is Bestial Wrath / The Beast Within, so you eat the next CC instead of pre-trinketing, and you stop pushing into a setup you cannot escape. Four item ids are watched (Medallion of the Horde/Alliance, hunter Insignia of the Horde/Alliance) — never the equipment slot, which would report "trinket down" for a PvE on-use trinket in the other slot. |
+| **Will of the Forsaken DOWN** | Undead only: the racial while it is on its own 2-minute cooldown | A second, independent break. Knowing it is up is what lets you spend the medallion on the first stun instead of saving it for the fear. Gated on `spellknown 7744`, so nobody else ever sees it. |
+| **Enemy Trinket** | one clone per opponent, counting 120s down from the moment you *saw* them use it | Their break is gone: this is the window where a Scatter → Freezing Trap or a Wyvern Sting actually sticks, so the whole team's CC chain goes in now instead of being wasted. |
+| **Trap Armed** | a Freezing Trap you just dropped, counting down its 1-minute lifetime | Pull the target across it, and recall your pet first — your own pet is the most common trap-breaker. It also stops you burning the second trap while the first is still live. |
+| **Viper Sting Out** | one clone per opponent carrying **your** Viper Sting, with the remaining 8s | Mana denial is how a hunter wins a long game, and the sting is dispellable. The row emptying *is* the re-apply prompt; tracked on the opponents, not on the kill target, because the drain belongs on whoever heals. Arena-only. |
+
+### New prompts in `Alerts`
+
+Same language as the rest of the flow — they slide in from below, glow, and fly up on exit:
+
+- **CC ON ME** — any loss-of-control effect on you, with its own icon and a countdown.
+  It answers "ride it or spend the break": a stun means trinket, a root does not, and a
+  school lockout means the spell you were about to use is gone for the duration. This is
+  also the only element in the pack that can see a Kick/Counterspell **school lockout**,
+  because a lockout is not an aura and no aura trigger can ever find it. No combat gate —
+  the opening Sap or trap lands before you are in combat.
+- **DEADZONE** — a hostile target inside roughly 8 yards, in combat. Your shots do not work
+  right now, so the next press is Wing Clip, Scatter Shot, a trap or melee, never a shot.
+  The deadzone kills more hunters than any cooldown mistake and is one of the very few
+  positioning facts a HUD can express. It is a range *estimate* (WeakAuras' range check is
+  approximate), so treat it as a warning, not a measurement — and it is the pack's only
+  frame-update trigger, which is exactly why it is behind the PvP and combat gates.
+- **SILENCE NOW** — your target is casting **and** Silencing Shot is genuinely castable
+  (off cooldown, in range, mana available). The prompt uses "Action Usable", so it never
+  glows for a button that would fail; the countdown under it is the remaining cast time.
+  Marksmanship only, via `spellknown 34490`.
+- **TARGET IMMUNE** — the target gained a hard stop: Divine Shield, Blessing of Protection
+  (physical immunity, i.e. every shot you own), Ice Block, Cloak of Shadows, or The Beast
+  Within. Stop the burst — swap, pool, or wait it out. The icon shows *which* immunity,
+  because that decides swap versus wait.
+
+### Two icons join the cooldown row (arena/BG only)
+
+**Freezing Trap** and **Scatter Shot**, both gated on their own spell id *and* the PvP gate.
+Scatter → Trap is the hunter's entire opening game plan and neither button has any place in
+a raid row, which is why they were not there before and why the row is byte-for-byte
+unchanged in PvE.
+
+### What this layer is **not**
+
+- **It is not diminishing-returns tracking.** TBC DR (Freezing Trap shares the Incapacitate
+  category with Polymorph, Sap, Gouge, Wyvern Sting and Repentance) cannot be expressed in
+  WeakAuras without a custom trigger maintaining its own category table — there is no DR
+  concept anywhere in the addon. Nothing here approximates it: `Trap Armed` is the trap's
+  own lifetime and `Viper Sting Out` is a debuff timer. Neither says anything about whether
+  your next trap will land at full duration. An incomplete DR tracker is worse than none,
+  because it gets trusted.
+- **It does not read enemy cooldowns.** No API on 2.5.x can. `Enemy Trinket` is an
+  *inference* started by seeing the cast: if an opponent trinkets out of your view, nothing
+  starts, and the 120s assumes the level-70 medallion (the old level-60 insignias are 5
+  minutes).
+- **It cannot see a trap being sprung.** `Trap Armed` runs the trap's maximum lifetime; if
+  the trap is broken by your pet or a stray tick, the icon keeps counting.
+- **It cannot tell which opponent is the healer,** and no element pretends to. Enemy *class*
+  is readable on TBC, enemy *spec* is not.
+- **It cannot filter casts by interruptibility.** WeakAuras disables that argument entirely
+  on TBC clients, so `SILENCE NOW` fires on any cast your target starts. Fake-casting stays
+  a player skill, not a HUD feature.
+- **`CC ON ME` depends on the client's loss-of-control API.** WeakAuras registers the
+  trigger for TBC and calls `C_LossOfControl`; that the 2.5.x client populates it is the one
+  thing here that source cannot prove. Get sapped and kicked in a duel once and confirm the
+  icon appears. Everything else in the layer is built on primitives this repo already ships.
 
 ## v3 — spec-selective loading
 
@@ -98,8 +182,9 @@ complements on Bestial Wrath, so a Beast Mastery hunter never loads the Survival
 
 **Alerts** `(-150, 96)` — a dynamic stack of glowing 40x40 prompts growing upward beside your
 character; each one slides in from below and flies up while fading out when it stops applying,
-so the appearance itself is the signal. Nine prompts, with *Kill Command* anchored at the
-bottom of the flow so the one reflex prompt never moves:
+so the appearance itself is the signal. Nine prompts in PvE (four more in arena/battleground,
+see *v4 — PvP layer*), with *Kill Command* anchored at the bottom of the flow so the one
+reflex prompt never moves:
 
 - *Kill Command* — you landed a ranged, spell **or** melee crit **and** Kill Command is off
   cooldown, i.e. the exact 5-second window in which the button works.
@@ -116,11 +201,17 @@ bottom of the flow so the one reflex prompt never moves:
 text, tooltips on hover and desaturation while the ability is down: Bestial Wrath,
 Intimidation, Readiness, Wyvern Sting, Rapid Fire, Multi-Shot, Arcane Shot, Misdirection,
 Feign Death. Talent and late-trained abilities load-gate on their own spell, so the row shows
-exactly the buttons your current build owns and the gaps close by themselves. Two of them do
+exactly the buttons your current build owns and the gaps close by themselves. In an arena or
+a battleground it grows two more: **Freezing Trap** and **Scatter Shot** (v4). Two of them do
 double duty: **Rapid Fire** and **Bestial Wrath** show their *active* window first (15s of
 +40% ranged haste; 18s of +50% pet damage) — full colour plus a glow while it runs, the
 cooldown swipe afterwards. Kill Command deliberately has no icon here — a 5-second cooldown
 says nothing useful; its reactive alert owns it.
+
+**PvP** `(150, 96)` — a downward dynamic stack of state readouts that exists only in an arena
+or a battleground: trinket down, Will of the Forsaken down (Undead), enemy trinket countdowns,
+trap armed, Viper Sting out. Empty in PvE, and empty in PvP whenever nothing needs saying.
+Full description in *v4 — PvP layer* above.
 
 **Procs** `(110, 24)` — a cloned 32x32 icon right of the bars for **Quick Shots**, the 12s
 +15% ranged-haste proc from Improved Aspect of the Hawk. It pops in with a scale-and-pulse
@@ -150,6 +241,14 @@ actually there:
 | Mend Pet prompt | `spellknown 136` | any hunter with a pet |
 | Revive Pet prompt | `spellknown 982` | any hunter with a pet |
 | Threat bar / threat flash | party/raid only | grouped play |
+| CC ON ME / Trinket DOWN / TARGET IMMUNE | arena + battleground | everyone, PvP only |
+| DEADZONE prompt | arena + battleground + in combat | everyone, PvP only |
+| SILENCE NOW prompt | `spellknown 34490` + arena/BG | Marksmanship (Silencing Shot) |
+| Will of the Forsaken DOWN | `spellknown 7744` + arena/BG | Undead |
+| Trap Armed / Freezing Trap CD | `spellknown 1499` + arena/BG | level 20+, PvP only |
+| Scatter Shot CD | `spellknown 19503` + arena/BG | Survival 20-pointer, PvP only |
+| Enemy Trinket | **arena only** (reads `arena1..arena5`) | arena |
+| Viper Sting Out | `spellknown 3034` + **arena only** | level 36+, arena |
 
 Beast Mastery and Survival never both light up at `x=44`. Since v3 that is enforced by the
 load rules themselves and not by talent arithmetic: The Beast Within needs `spellknown 19574`,
@@ -173,15 +272,26 @@ the v2 situation, where the tracked debuff itself is what a BM hunter can never 
   melee, so these need a target-count scenario gate and a group of their own.
 - **A pet health bar / pet unit frame.** The pet decisions the *rotation* needs are covered by
   the two prompts above; a second set of unit frames is not this pack's job.
-- Master Tactician (a passive crit proc you cannot react to) and Deterrence (PvP defensive).
+- Master Tactician (a passive crit proc you cannot react to).
+- **Deterrence**, deliberately, even in the PvP layer: on 2.4.3 it is +25% parry and dodge,
+  not an immunity, so it is not a hard stop on the target-immunity alert and it is not a
+  button whose readiness changes your next press the way the trinket's does.
+- **A per-opponent range column, enemy health frames, an enemy-cooldown wall, or "the enemy
+  healer's mana".** The first is impossible (WeakAuras' range check has no arena unit and
+  every extra unit costs its own frame-update trigger), the middle two are Gladius' job and
+  fail the "changes my next press" bar, and enemy power on arena units is not a verified
+  primitive in this client.
 
 ## Importing
 
 Copy the whole string from the fenced block at the bottom (GitHub's copy button on that block
 grabs it exactly) or from `all-specs.txt`, then in game: `/wa` → **Import** → paste.
 
-Three things to expect, all normal:
+Four things to expect, all normal:
 
+- The twelve v4 **PvP auras show as greyed-out / not loaded** in the `/wa` list whenever you
+  are not in an arena or a battleground. That is the load gate working, not a fault — step
+  into a BG and they light up.
 - The import dialog shows a **code-review panel**. This pack contains exactly two lines of
   custom code — one on the Kill Command alert and one on Mongoose Bite, both the same
   sanctioned "either of these events fired, and the ability is ready" one-liner.
@@ -210,7 +320,11 @@ instead of creating a duplicate group. When adding auras in a future version, ap
 elements at the end of the build order — never reorder or delete existing ones. v2's five new
 auras are built at the bottom of the script and re-parented into their groups afterwards,
 which is why every v1 aura kept its UID (`stable=27 changed=0`). v3 adds no constructors at
-all — it only sets two load fields — so it reports `stable=32 changed=0` against v2.
+all — it only sets two load fields — so it reports `stable=32 changed=0` against v2. v4's
+twelve PvP auras follow the same rule — constructed in a block at the very bottom, then
+re-parented into `Alerts`, the cooldown row and the new `Hunter - PvP` group — so it reports
+`stable=32 changed=0` against v3, with every pre-existing aura's load table, triggers and
+parent unchanged as well.
 
 ## Verified spell IDs
 
@@ -239,9 +353,29 @@ All checked on wowhead.com/tbc. Aura triggers carry every rank; cooldown trigger
 | Misdirection | CD icon + threat prompt + gate | 34477 |
 | Mend Pet | pet prompt + gate (r1) | 136 |
 | Revive Pet | dead-pet prompt + gate (r1) | 982 |
+| Silencing Shot | v4 interrupt prompt + gate (MM) | 34490 |
+| Scatter Shot | v4 CD icon + gate | 19503 |
+| Freezing Trap | v4 CD icon, trap-armed inference + gate (r1-r3) | 1499, 14310, 14311 |
+| Viper Sting | v4 arena clone row (r1-r4) | 3034, 14279, 14280, 27018 |
+| Will of the Forsaken | v4 second-break readout + gate | 7744 |
+| PvP Trinket | v4 enemy-trinket inference (the spell every medallion casts) | 42292 |
+| Divine Shield | v4 target-immunity alert (r1-r2) | 642, 1020 |
+| Blessing of Protection | v4 target-immunity alert (r1-r3) | 1022, 5599, 10278 |
+| Ice Block / Cloak of Shadows | v4 target-immunity alert | 45438, 31224 |
+| The Beast Within | v4 target-immunity alert (their trap immunity) | 34471 |
 
-## Import string (v3)
+PvP trinket **item** ids watched by *Trinket DOWN* (all four verified on wowhead.com/tbc;
+only one can ever be equipped, so they are ORed into one element):
+
+| Item | Id | Cooldown |
+|---|---|---|
+| Medallion of the Horde | 30346 | 2 min |
+| Medallion of the Alliance | 37864 | 2 min |
+| Insignia of the Horde (Hunter) | 18846 | 5 min |
+| Insignia of the Alliance (Hunter) | 18856 | 5 min |
+
+## Import string (v4)
 
 ```
-!WA:2!DV1A0TXX15SgwXsWooIWsYrs2XW0wkKk2YaGe8HJLDbabfjfbj1cqrQxMyb2HyxXf7UA3f8vIBtyCCzFLMY260MM0eZ04Eo90K0YZPP9KtpPnmX50ZPPn3YF0Z(JM2g12020hNg1)L(NENzw8IeeKwpsm9p4WDND2zNzUFF37DU3bcxiq(pxWLFSnYjLFgzldZegAgwd5ZNVX8f60rndK3q3XYqtJiNqrvt2IOp0nhOKUdXk4thCaIKMJYgvUpLKUu1NMrXIi5yE4nvrW(1KSvUrodlzIvCVpR5bJRPU4IswYbZyyO5OAAn)OtpTnXriNPe(vDmpMx)KjEcSVINk4jdMUK1SQZkPLJ3zkwlWFNRVQfPGQHEMfmjIfSmkzUkVfPvxKSV1u1N2WQOKd2c)RXFaFAlii4BdPsokgwJAsFST)C4cW0Qf8BjLNvrxI2oswo(ZnTQUQTI)44)C8VKJLAHcel7roPL3LVACh6xxQKLuK1PL2Mennvz7Jfiu8s4lLZutAbI1sS6hu22)nSlLJmlovtxA6PvNFTPselDMPsNjMyMkpAmlc(iX0JLC4HVzjBsY5XXvAEpKvuxQiX2)QYKCypqN8wdKC4X6F8Hxbx64dl)RjRAFTs64SzwsejnnZwKyxNH)8ugYKF)3H3Yvs5ceZwsF9sOeiy)L00coHIQdzD(t5R1hyfjDv(IzxWr6FDIKnjTdkXk4OCFWXJRBOt2qgN)0wmfDnXYMGlQY2lrBkDucrIxusvVFim(cqeOdOtik()hEZ1SInrB6Xmu1DYLi5izsk2QQSzGk4lrITrjR8e7BQsRrxs7c4hd)SxETPTWLgCyj5i57Ms65rjC)0QOF(CPtiMm5iR6yKFwE73)yhosjv510MV7HfV(fU08XMr0oVKgX3QOGqKHTSldDguhxf8TkDkPYXmX1mKK9Vg)ZWgUqplhAvBeipZeQYokhEvvS5Pzd2h5DahqaEx)DVdOFONnyTr0WHTAjy2sD3tLnXJnEMrJtFDf4OV4jHJ9Q4c07fECOvrgajhNtIv9yqq)lHqKPOGTSWtapjCs)W7dAdA3FTVhKY8qJJnjycfjkkNyPA7OM32RlGr307cNcE)WtHye6GyQ8L1x4dE2ldDd9Suojp20y3BOthokTS7EOLrI6dHM2souWarzD2CJdIUOae)zpcC81OefSdMc)B5JygWHmVZu2ksYgZnPN6Gvy1rlmp4jqWuECsRWMZN4eMhSMxOkL(g8AlJDGZz(qSAqMUbf5MNjuIhdV9MShGumImRYpYgCP4f9(6RZE(1kHRqtVa0ZQwurdjdwz8rgDKKWXTqacTnRYAy1vh(WEAuBQ5b73sDXGNVKKmfogmtgZqvMttX1mnvDtSPKj5rkM2uMw4f2mKrTlnLhCBWQBoevoHLK5st4DXgv(0mvcJoEMHhCKKERv1asxBWrgjP4uIdE2bYy2(omKqLQ6Ym6S40Aggw8fMzXrxons2QFsQg3J6TiwweAEIDOZ5vMBKsfZrSMfo(k4IkNSTb)FEd7iimPCngEciVBZxv67vt5XMhTDkcQCdoD57SXXPVCke1ckopkK8cRqzo5rlv2zZ5GmFDNJiwSeAyYViR2tMZwvVGgj3aJtvebF4JaF0SXrD55pc8H9hN2D0lUbdKhhFFzk7nsS(6Z8GyxhtMIHiYe5usZRa(HE5QhsuLo9q(3Clvro)dA5rrGd5Vwg0KcRW4J2QYerMiecr1hVzDQDTZAzHdJVOF4H9dVh)RX(edWwwoJfvIvYIiMqJiPlkPzQi5JpiYWFIzBds18oTuEYvsiHKe9cXLSUY4d(0vV7PtZ0PXEnf45rDTOwCWx8fnmkkaFaFIZrjEFt)WZbNbEH1076SKjhz4bVM5CwQ6uf0efVrLQSmrxCKKxiP4AgwQOmIPMC1bgvCWln6izInm03XoPyEfs(z6ho2(wAwjlvjedSKQEcJI5KCerNhkreA1WS1ZCgR8ks6fi2h7KWRX8(zjt0ZeILZcWkql(Vj1fPcmCFfvl0M19YHGZEyyapf5)Pcuf5WGcWqW5GH90s)vQQTvCmJ5iwuTRRysVIYHeQtr7guSxLNLTH6SHX2j9ZW5RvTmioexhmTmkRS3O(G0kqgpDVW4lFe4ccWe3SSAv2q4eNaUiJhbxcNpxgUcC1pc8IcWuyFMfKW3lhKN)LKbcuqWSTTJDZ6VA0CagGcOcxdMb0GIGzwZNS5VkVoWbU(rblbZNP5TERAnrvjqjywyoyEbyb(SAXSWheon8H8bVeL3d)0zHFgkZf(iNewc(OCIn8YSQ(ySYxb(zHLzCw4NRmvf(5rQj8lGKs4xua(LGp(De2h8lFg4ta)kWk(GFv4xd(1RsxUx4vPCf4twHN0t(WlAv8sdj3E3WVPc8PGFl4tdFgOVtDs43gb)(Gp761U6aVwRrcH4(aphSkfWZqh9eLcOJWk8bFEqK)U7d(SWNdEnpAcV9mcc2ekZa(D2gUWN(E2mxyKArXR6W2qa15duhRvbIdIIVbf8x9bzPq8uMh0BVdPvDkXi5mm)UdWJJREOfD0y4(6NG)1mZ7ubRB(uBbAvPrnax1yQH5J3KoPcuEl8NA5enWsz1UOoIeJrGuODgIplcXxJUiJQJPBnYdVB5DlE9jH3D24wsQYzFRnjyFBHe0(5szwk2iJFUqJvhj4zRqcwPY6hYa6MYaA959G0dX2ZBx0IW1G(Xxc(QyJ7T(gZ1GwfITPxruQaUCcVMVAjndrByVm)IJWlzV0MOqbPRQ30Zwl1boQNdMhkXWXsng67)WXsCo0nIbZm4fsYjuFRYeQnQYDWjyw4lbFzQDH)GSWxT1EcHmj0TXkWhQPnjhdl6ukf8h2icvlOZoChsyZqEbtpbkTZvu1YYWsHrZFqueDi)RKRSJoi6Op)BJ4FA445qUd60c7E8XFJvz(smwjnBYsL3RyGWSxzlydZwWDWM3I4qMYQ8gLQdV8jmF2QEHetwEuD7RmbrAMy0nHFLuezvPR45VI9v4BUDk2(ApTtbjg4IQcbXvOwekm7Ds1LTcv5Xsv)GVWAKOXe7V3WJ7CXjzOpQMUx6e547iqHZZGVszRj)XE8k4pPjKQp59E)l)yGqLWVa3ZqMhPY2BttSmr13bttDKQMWQWVWoyk0NiZJwt0wibJJBX2j4eQokQ6MVNkpk58Mg2KG0ffDITnCFW(PZr)W9dpakpFabuE(UHdUpkWmaxhcYUrADTlZv0L)iWJESaHk7oc17eku6ezBGljpnQg6zoWTUAbUe5gvMiXlHo)6jTOYaMW7fwtvl)STNAH2gy(HGy(G4(He(O4XK(PsPLFcMbkCg9Uy(QTrEddnCBu6PNtfD3A9Y3sJ(HYwNYVoFk)7fpCVD3Jy4oI2zV0YOHyLHzLryLDWk7Kvgvms0i9ILDhkCxwyVpQU2czXfTVCdw0SgiMyQ(hF4Ax6E2lFZzieZy0Ty4isrHkmZCOjT4p7F7gf0mMRFlY1lr0ZVaxRuCADkRJ6eoRM32HvwHwxAEOmOxomlonhEn61L3gjRnv3ic7zL36gFdU0AyFXmkQ5zqiFlXUfTfTrUsoog6JIEQRjTaRVgwfBslSVxCEG6w(HyMEB9eMVjDUSQXX157wn(OzYmAk46pk3830mZFn00353DE39GWWir47ah4BFpuK0iDmOrQcYMA9a)58bYRY8LyPYOKSvmh9xAEOYvsvV0NQnDVgOruu3XN88WWzPmi0Qeh9tH0hNR(Zd9VPAE4TudfHJBOPSjMBqM3uLRRmJArc8Ab6GAS558m2Kf(80OvD6WNMUWtPYFaFBg6d)nzHnu2wA9qXdhUdex3zhr6Gv2jRm62aBH)(6bSW)qTqu4FKdlHVNcCdf4FYh8pFy4Fra((8L1)veBb)BW)Up4ha)hW)zlW)1Dcuc8FF3aAqv)F(oIps6z6oz3YNVEKb8)ufs8THF4DyXV)Bjb5Xe7OZo7o8Ush9El5g1klBldSWOpJoJrYLJV8wKMRwTr7F4z3Su9IOuTTfhB4loQYmAxFYTxQ(x9tAP6RxvQgnuy47M9THesQG1mavYQB4SvP7nQVwQ4CN5TujS8fLglQC0PLgQNTxc)xFxtchkoUTG5AD8XG75tvJpCNtvtlycJIfL0LnF4kvhl9yjtKjyQbtNEWroBn(cMYqVGb1hU4OFRMhVs99tulOhSp0fFLGJzzu00XSLkp8SgbVa6HJvnFxA(3c6yeCaP5MX8rQ29Q2YQ42BP2w2A)KcDYp4yehZhQMuVmR6SeALmNjPi4VodbZDFKgTV8K31TR)JRH7gPur900oJVp)CC7)IsA48g6XY2rIMflbQpFO3EvDL2INLkswMxUX8HUYpNx)GU8s9l9bxxEbDPIQ5zBdg9(nUTHLdezLcwQ8KbC)lrVK6KtRI9jQPwu15(Pzyzy6vk3iVHo(51D6xkpUTQCIX6BWXtNZsswTK9l)aOFVRizLN7WfIo9GAvtxAmnILJ9QtxstlHQvEnCO65v7FHa1)1dODB44mcH5qWxyT4AJMQGYGZm5zhA5NegqO5QB(AOq6v4kyzPRIhtMJVsEw8t1mkSA16rb4JBnvFXsf7SjxNf)Clvhv0zZSWBeikKAvEqxdoSrb4jefJnYztYJR5R4k8yyN6ke0v4XP9IRqRUcpH3R5k8KmeXUTPIPNajl8MVClIowigponxpMTqhufi6el18PvmMBu9SBu3TRzZ(NirsEbweAzAygrQiz)V8paoUi7wVKMD0eEo7rjifW9sAhSnwMyBNR2cbKgwed0pye0qYUbUVBT0L7U1RLWVrf7x0hXI4ff3ZJQllreS5qwZhIEnHMY3ABoLFKlFjBhKMgG)FVK5Il0Q5n7AAw6En0BZP9G4(MlzPhSnNlh(QbnSc6C5iE)VJR2EqCWGx15vdIm8MBZGAA4gzHFG4yQZt0QA5GfEGiEbebnH89YsnSGgr(jIbe4hT9oda)FuzAnwiCfEeAYXPPLFqKlBEQQrrGEV9vILtvt1zHP4u2POIqpji3LqRUMP0LmlnV2edUTMwCfUNTX2cD28nGOw0SIpAjhwCrwZwdXo5mWDuveEJi0UIYOBGvNLp4kSmuZ2cMnIxOzSHTrpkzjAo2dxGoAqfcUcphVI55v8gbcdRiWqASQZgyb5deyEHvyHLH2LlvUlPF4nWR1T1Oj(eFKzlLFwMYvJJQn8GT8kYY6BwVLTE7H7SgOAC45tHBLoCxrPBcjCpSYEzBiHVfLWSYiSnA3fDJ2D2j6GuOU7CduXFEfInNJVbNJJM4OzW7wWL4tTvwGRqp1tb459oC0gWbAoQ9v8qTC8kd7Uktvkt1z2nJG7O4MqWUc9AEYndCzQDMAeAM3jtjknlrVFdRICqBScZMhVTplRRVzqRsvqRVMdArafdV6kCg4nCfE(ThL6k8cUc)ummPRqSQ4rxH41IfDfsuge6k0NRqsAx5k0VRWzXoZvyGSUcd(Mgk9L4ECGgpOgQOEvLSVAmC4kCYLKj2oCBzmlyfrucfKNLDx5hMDPY1l23O9v2kw5E2vyY6mC5kCr4XCfUeoKVm(3vCfUAzJtUcVpxH2CfAhR)uUcVFkA0v4PCUkTREAUHgxHt7k8mydcTrDE95keztMkCf6aBwNClcSf4Ump9oP8VSs)oEtO0Vw4otQ5Jx(wDf(466wzl7KA(0ZPoTtAhl1ziCgtO5hR7OHYeBE1Z2e1837BlymVyTPxa(A1NsHEPPua(Z2AceAg2E)hE)neCVwnBDzhG23YAL7m625ysZrwVEDHVVw8fpe)1HY(r4aDCQUzCIUv0wBBhAt0OqjYuSfb2AahRLrBC9f16)8jMy4MG123BBWAF)YynZdxxU8lNSQaph8fBnsieV9fO4j2jKPUS(NfE96pmfWVBnhGIYboXvq0viTRqM78M)zshwI88DNW4pdlTjJ(FSJ1aG1ZSdQX4joWyAhfcliaC8vQPxmCSjYP5ezWMy9)D(2p8LRaHQ36lsZlQhyYvy6MJEE1QON7o4MT3o6DeCtJCw0v4cCKqU2knCIRvSTCfk0eKW9Thaj8eWa772WQw33sw1ELVydTQTETrs7ULzTTF)23nmRHZ06rrC8tHqtEDYfZDHUgF8MGF2)Ed8Z91C8JEDh6I6o7QT2jvFYiW7nIj74mrL3uz9Oz5rFQUgN18i1FWxRXmxfm33QQklTaEDURqX66BxbD8pJap)UaQ(Yn2)RLkhv37cO0BhDB7Sx9V8(BiGmrQXpFIlm2KJjortaKh4TFk02zCcnhX7mqr(mneOSA1y9F3sH2TC0t2zWcoPAeyP3RRxOpn1ZzzUqtal(3dawc5kiaFgA2LkFuGs0hnrpeBhvjTGtG6xuQCuGypcDCuTOQm7Geuj1qSNqJdo9SByx)lmXcZsS09ohshPUxqYuvoy)ObV6Rpf9KZ)0PvmCQKClw9XSYlPtcYEqDFIAnBw)RuZ2eRKQPN6ERjxtUc3)bUDt0KRWdu(CK6k8G0I39wtPKRWblNnjxHwQMhjxHaWb3NRWdbrCfo097kC4wfrH3rWREyCRTVhxHJ6kCmwgHCfoE1ubvZVKPYPwW2v4r3CAGeUJKfOENm(KjJCTuZfzsQRZ7uwNFXAplbH7nA3DYvUSnRJBvTYQ0OUgtBoPfSl7Y0WZ24OCvhuDhuXersFH7ebdqzxQJj2UkVc1F2cCfEjAiC9(DnMLRWzAIM1qHZukwPfBYg7DGFOctHtS7u5H(uvos3RAOxgMTPJPAw4ZdPRCmJItLC10It51I)x8)k0wwDdy7MZUWwm38HRGhwOXUqxR(PBtlo76t6WTpeyHnbbCf(OEI(qxl050AVZCdg(snr0x6oUOV6jhZv4J1ir(Dkb5v)JAOGCLkMt2ZifXzY2jfBlLDOl0PwQZFDXMifNDVRu8CF1gthR16)Egbjoz2obzKbmenhQWq92v6MiiN7TYcYATohVJqDgTz(40mHEMV224YFf)62XSoT0TAqmI69Zo6nP54D9b3SoH(K935KZh1PygRMPdE(7IMF3gHEnGIx5hdgD78l0ybEvh2FRbf)wtk3(0d2H11gCGqli3eP8c7z1r3xJPRRvZ2Q2ll(Y02aDiPhwQ9zJ2eX3I7DnXUnbn2v4A7zmSU5ObxJ4tMyNsl8qfgy2ML7Yp4ExX32KjBxHC7LzDXk0BPyZKtSxPjBIy7d9tmXglaxFC4EoM5HQeVKZxsn)mm9D2vcku47wXek(Wj7pZp(clu1FTBJzzKVrre67EhjIqNTZ8Jf)C9fAKb6Cx)7qGfvNeAg4M6Yw2)ZUchn0T3p0KDNpI3noNrhDhpNrV5Ov)gCkvufY4IZC9CtCELMqPE1YrxEtuQVfloX8WltLB04c3h8n5XqMf(4WuuxCV)NilvitpSOrzrhUbeWA7rAd7b7Zaliey(F4UnmZbkgqoG8YV36(XQEjOx47WsR8lrN6E)QsP)Is)27)T2)Isr26w(rKE(lDPlMmH58lA3rd(rKgWwSJth90Hcm79(s))
+!WA:2!DZ3EWTX159MvWkwc(rKOLKTL8dyAlfshBzaqc(qXoo4fjbjbj0cqrkzjtSa7HaR4IDxU7cqcMM0eghx1020uMe7M3X0jUD60KClN00oEsD7LjontRtYx50jZoDUPTHT3CttFmnQ)1n9F65XcGfKGGusu2IAgYf7E2ZE2Z589771577SCNPLSFPh7sp4QzeYoTOUQwyvzv9bD5YvcxEpzaTwYQQyQRklJedNxswuhPm4LhOOIjs3ZJ7zaKGSz(vREDCbfHA3nvEDKGP2HxxbE6twWi)Azu1fr6HSFTAhiKS08ZlOl6jLQQSPKM(CJo1ugitUmAc43QP2rTBNuHcJBRqX9CcpjlQxsQKGCgwJLxVm7zMzjDuojvLuL1q850vlQTeRgjLMhT3LLuMsvVGGjUgUxMDd2WMJJZ1QcfnZRQpQg52gUZGNaMskNBDHS0c6I3Wuq30DMPKuKmY7oe(ht3lyQlLlhs3yKtOBF6leYK82fkQl4FfYrdnKSSKOXrBXBOI4hkJMSqzK(c0YJjA4EnJIzqLWd1KfNAkP5wEYWbtMAYKPcYNQ6TsOJW3IpzIOdp8LlAGIohUFLK1cP5vekGmCVKikdUfidE9bIoCI(gB4fXtDSUL7LfLmUyrf8OPeYVGSS2bfONNID)4QIO)W3M90vuXCiTdMCMIykGN(kkl7z88sMOvy3LnxV)ffuKytMDbhPVvqcgOKMykwoZ83kCSqkQkOvfXJFsnMKmNOBGWtQIglqQkPxc(dvqqsPpWh(ba)qhqNqa8V396lzrdK8ujuLumZeo6iPIY3QKOwlvXx8id1I6zrgxwIuIIG8zWVm8R9zwEkD8udUBjyk46YckzXu4(ifrE9zsgMpA0rwYunBjw93xId7VOK4YYZ19W8ZCMZnxWP5nYkiJCTeMqWtXwgvGoXuWZcUwImKKyyMqYQcIUxM9AODxONl5DjdmqE6XLenZF4LKWvpjTZEFVny)CWD8)5Tb9b9SkTo8QM0zloTdw31eAtOGJLA0qKhppCVp7jGJ(c4jOhaEiOvEkajdJNex0dcECVagImjbSLgEy4rGt4gENqBq7UD(CqCTdngUkEcNxGGYr6sgMsznSBcy019SWJcVl4XWyesNyYSvKx4co1ZaDd9SqgbBUPe3I3t6la5y39qo6pGlm00qWKagq5xHo2yGOZYbHo1rGJTmHrb3atI))shrRft0CMtAKxquD2jSfhSiTmYbTdCCmyklEqNNoMp(X1oGJhOgl9ASsRGDGH0UlAjyoDvcYnlLOeki(YltVbMfdjsl8dTkJkEw73(k07FXI4zOPkd9SKoH0GsHlm0iJosu4y6yacPolrRyTzhw3EkS0uTd0NU08EoDrbrcC0tQuAERoMMKjzAY6gytkIYIzXKNuthFIbfz4CQPsNBvAzZIrLJRlOTW42NSA1xnvKWOJLA4yJe1EUYbiD5yJmsu(j5J1)aP0AFl6syHQkIu2z(PKvv1ztmLW9UmYO01ELejU3R9KyfsO2X3IgNvyMrkwidsVeCSfXtQmMTvz)y3T9JHjvkr1MazFz2AuF7sQ03SzBNeHfUbNSYvg4(PRm5rs5YBE)q0ZSiHZjlwtLr6mMyoFfZJWxOiwXKBEAPNiJHKsozuMbgJiic(Ghb(WPdHLLN9iWh0DisZroznkipe(5fjCV(dgjI2bWnDqrcgcjIeJlmxEWn0lt8q4ASt3L71xtjmp)DQBZIahYTtoOj4wKYpAijI4PKqWlrE86LP21wlLfom(bDd3TB4ECVm9vmaDA5P0juSI6i(WYibfEbzT8cUyDIuS7O1wmIK3PeYIoFybmtIsUqc6NFSypETRE8KuzA0hlp8EWYAXsXbxHMxvTah8UDXplHX774gEs4PGNEzLU6hnXidh7IAZQlPqeqJYB3RKefrk8Je9mr5xwvxctJOIjxAGr5JDUrhjvWHHih9e8zZJYoDFWr37cLe0LeWyGfKucRwiJGjp24HIiUwv1A9PEk9S5fuYHmo6jGxIA9ZcAyltq6MLHfHd6(YetKYrX9vfTqQw3xYl0)HHbSfK)T4icYHyCWGWqWW2sP)M1K2YNqDwKor66IAKZi8qC1jODvc2R69s3qz2qITs(mCANILb(bzYGjhdqp2BaxqY8qkBzVWyx6iWz4GXVCfXQ0UWXpoCwkFeCo845zGZdx4dbplhmjUntdc4NldKL9MebeKJtRTnJ7M2EoKCaQqEqcUimnidfaT0ApsZFuwzGjmZ9c6CAprZR9gLAIfLafHsWSWCCqz2OA(0W7doj8R4cE)e(E4dKg(vjCUWh6eWcWhMXydphTOpc94Zd)AWLO8SWVEfwv4JIznHFdmtj8BYb)wWhBhH7d(TFk4Jd)oWIUGpb8jHpvn2LBbEbcVc8Iv5t6jRV51lCUbfBVB4tNh(mWNf(CWNhI8ONa(cyWVl4lUIZzh4LA1VxmUVLNewIa4POJEcqa0(PhCbVmWZE29cFr4lbVKnBcR(ugeCviCgWxEt4f(C7z98cJ4efVKj1HaIXhyzS65qMyu8AeWFTBKMaXJRDaBFhskzwKYKtX8BpapUF1d5qhngUVYXzVnTSMvX6Ap2gGwvRudWvnM1q7HAsJufkVb(hN8enqtzTMOogjkhbMfARH4LWq8LjtYyXXexJSX762xIp)eW7iDiDbjX03yZeS3nWe0(qX1kgCKXgYBI6ycovvMGfRo)H5a6MWb067Xgspi1N3Uih85a9JFi4vXvU36RmtcAni26EeEHC4Pt4LC5KPzqsf7LAxSF2r6dTowipKz1lBRRLyahXYbTdfE4GXtGT9F4GHhcBgrSuXotugd13Tcd1Q14DWdW0Wxd(6e9c)VsdVAR94fZjHnBSk8HOAtWuvNmKId)rnIH6GyJDygKqhHSdu5eyQDMcs66Q65PS53jMeDi3lMPIHoy0re3Bc5Fk4yzW8oyJwOxJV93EjQTejkkBGwOIVIT4J(iBaBODqShSz1rMOj1R4OuD4LpU2PQzfsqrXrvmo)4iHPdsCc)8XrIscN32EfJZZCUDsQFTN0mNafCreHGXvyPiey2BNilBrIWJfQ9cF6LrbcY3xV(gZ8StqrFejDV)JNH5rqEgFg8nROn5pXMVc(tBct1lEl32LEqGR6YVa7zqTJu192KiDnS4Bpjjgs5yzvyNy4jo2MiT71XQTG8ec7ITPNXLmZlPODpvVv050unqEitkkidd4wH9rgJUHBdUDm9825W0Z3bCG9saMTWKHG5UXS1oNMRkl)(G7)OT4TI5ieRtiqPJNUbMK84yXqpX(V6flWOiRvDGeQi24xBQfHgqjEp9YsYzl1E8YTnWCdcbDbHCdHDrWJrDtOsx6HPkOWJO7GAR2QzvvLXUrPKCwjS5wRu5sYQFKFJd5xHnK)dc5R3U7H3xhb6SxYXaEPh9rp6NESd6XoPhdW7pG)EXh72RVU0XT(OkYLtJN0(6nystFGG8X7BSHDo1DQN5YtJqAbjUyyYtqH5PQ5WQ0cDQF0Q5KvNTpD0mfrkzlZKkfIuw(vWYe6x22D48lskljBPmiNomDDAo8YKZR4gjTo1CeHEVkUUXCWLuc9nMkVuwkeY1c0lX6IwntrttvLrXwQlluM2wdlHRYbPVVqSfQ7s3fv1BRhx7k04YAkhxH5TAOrtLA04Wm3pt93uu1Fnu13P3Ew3DNWWygHFiS)3ypeK0iDetnEorn5EG)cwh5fO2sSqfus6QQJ(R1ouLcjIxIizq81aRefl74fpnmCAchewRed9tG0hJj(Zg9VUsU7nucbHJDOPIkM1qZPjXKvMsQacEPw6GOS5jTv2KgEzYQvDsFNKmXtyLF3Uwp0h(BsdRMFtzRhmKpFDGX1D2H)oOh7KEmWMaBH)(6bSW)Gtik8pYGLWpjpSwE4FYf8pFy4)lh8tztR))Wyl4Nb)lUGFo8Vc)Bhe(33jqjW)X1dObr8)P7i0ijNU7ODlE66rgW)zniXBa)IDyYV7Rkc5r57OZo7232sg9Ul6grll1Lb6YOpTcLJKrhFUnqnxQwL23WLwpv9SyQABZNy4ZoA(PLNzInNQ(9FRMQ(k1OQb86d(XPVjKHKqy1AHqzvun3i1DT6lLqo3A(wcfw8ScjcigykHb7zZPW)GRBuyVHWUfmBRJLa2ZFNdB4gssw2ty1cfeue1U7QfhmzIOHt5jESKjJns)oSfmUQsovInCHW2TQDSQL3hskNINiyt8Z7jHUAbntTdw9M9R65mylC0D8EjXFZJPQNbeMDAT7RwZlzikHDVLOBzJTtCSr(EsGm1UlhHEPKujeTWA1lCypJoIN4rDuuKObJCUrhjQ2HQzwBSHJos4OEgz0XDmatfKV)OP8elE8Xgjk1avcxX)BkxbZKuYkiMfDhxR2KUm2dNIfussAm2AhKHztbVGmEUe6r3WuGezmoIDKyliRzEUolYxO0ulNd6c7EWS2Td2mAITU35kILvekiLL6An2I6qgQ6MG)fZPlXcWWTTa5uIHtTYhHxwQGK5TrIAZWKZYVwwvf8RxXSpHSyx1YWhmsSXsMrxquQOXZD7yBPxuqplZiomI3g(wleSbLr6Mglnvrz5Ws6zLXDvBlL)ECeBI3V81GX4y2cgS(PxoK8OXZLp20t0)Gx6rGb4AUiSxdtKEEMqBAiWyRZZXwmlDnzLvZTuTYXeWhsFYibJhS)ORqxtEDjtjSbSPHxVLaq8LylKRNHvZbpmpFWr6pkBTsFElUhg3OwCpIf3XjTIf3jS4EN2pMfxBueX2TQ8jhhZaYQ(LoiVPoMVjej(rAhK0PYHuq6sztMxD2rvsVADxUSb9hEKGyz6Q(sLAnIqb0(EUFoCmE6L2bI7EdBBajHPlh2)udpTrJUB7mrHyaPQosfBBng0GsVk2xE5KvAUvCkez1Q6ej3IUkAeCpBLIPb3GogsRDxKZrKWi7S6e(JmzlAyIz9BH9RDaIXt0sz16AkAiKvvAZSDpyFXlQR4PnZNX3f8OQ7X8z8B)BhxODp4od(SoVGhSuJMRhIOUzT0WpNpH0Ci5AAJOl5GF7fzbRw6NKMOScRy6TeLsWVCZnWa(Vj0uhADS48qc4oju)XW8YApATvMGCTX5dMrswYS8Kmw2jjKqBkiZmt9UMU450koN84X2u1vwC7zt0xrgnFBiGojs7Jw0KUwllBiJXozuXEPvaED)KMIWr3anzx6alsJ6n1TodmEHefiQZJeMLEZqVzzsVblqWI79YkyowbVEl(Gf5OinAXPBPS4(BzoUfPl1dPjxOstsEXRIpxXqMemv8T0oyL7LQsX4E1Q2WwwbPPTnT1sxVo2TwcKdJO(my3Z91vaIJn(6HESxQtom3E8rp6N68ExeN37StSrxE7UZvXc(ZMhzW4XxLXJJvBsIk4vHz2p6g5cS4EY6zbyXs3xGgWd0Cu7ZBJAz4vk2DjQOuQOZ0Rhb3rH1HGT4EkTtSEGlvSZKJqIMpAsEHsiL(u1lWaTbZvkl(Yi66ZSEqB(AGwxnh0Ibuu8Qfxq41T4cT5OulUWwCrOyslUO1WJwC95elAX1FfqOf3awCXinLf3GwCdHBmlUHtBXf)kgk91ywCGvEquurSulAehkoS4E0fergMmDzunyfWOecipn9Qk3m9cvkNpYOrQOfRslBXD(6uCzXDb4bT4EwCxEs8)4)eQOCYI7DzX9ywCpoUWtAX9ee0OfNxZlqAkFmfnwC(T46axHoxToljT46ADQkS46gxTEyAeOtWNs7KBLW)kc974kqOVt4oLQ5ID8gDb(451nYTSvI5toR0uMjn1LMgX4y8oxIUd4nvW5K6VjI5VLBk4yEwNHSaET6dtrVKWua)5BmOendBVVdVVgcUx2H7qBb0(QwQCNb2mdtAoY6vQlKaoXxSWguhk7xI7ONLiBgpq3iARTndTXRMRiAs6KaDoGH1sjpMY8Y9D6WJpCtWA79MgS2pTcwt7W1LFavcawlpj8vB1VxmE7RqWt0SUPUmjin8k1NGgWVNJKYOYIXyXDglUXT4MyNx9pL6qdoORDcL)uS06u6)roAdawpXwigJfmc1PmZJOlSadFfFQ59fC8mYM(J1eT)V9B(WxwCse5wFvsSwTbtwCxS5ONxOg656dUzZ1JUJGBAKXIwCNJHeY0wXHdFXcTLjxUMGeU1DbiHhggyVxdA16(QsR2Z)vBOwTvCU6CxVuRT5(BF9qTgEKwpkIHFY5DIzqNnZz6ASXAc(zF7oWp3AZXpk1Lih1LpST2jrEYiWd4xJMIue6nHwpAA2QpvxLtRDK6tMwhQ5QI5(U1ezP1IDJBXntDTTfNo(FJwEpBdO6Z1y7VwOYkfFDaLETiBBRTQ)52xdbKHJp2PdFMetKGF8Mai3)nFc02ACcjUZBnqr8PAiqzPAXp46LaTR6vpzRbl4bvJal9oJsUiYsdPRvUjGf37oalBNWswIIwSTGPc9lU2bcRRoRONWv3jze4Z2jUKxn0Y3mxCGPWid6oSHKT)5BE2dCcEYUytiTFTsAPxhqjrhgL7hLPG32J0eGYTDtJbZosg(L5jPCVNWKu0NeeBEDY1T0dgfrxEx6LvmCEn6v1sCrNsCOTjDbIZRAys9sjTJmL)RxNf4lwTo6SZqVfU6Se5lwCLZVz2y7adzXnpUQVV015Kw7B1AnzsI8uY8QMm0w2CDPOfTVODeRTMG2U9BA0H5ytteISlu2aAOoZIQQCA1GSOFpgnlUi6FW6PwljgROKvsjNhYeAJ0vr0NHnD)vV2KWzNj(x)eWDVBhbCpFfOzZd5fEW2y4jdWvSC)dCXXdn7ii1Ma4UJBE0dA7t)h1FxD6pKpV(9so4puGa92lp(SU7HVZaD2rp8D4ZV)oH))BwY702nnkjRjEB7lAJHD6kYzARVUpxFL9fVjyN7Cxa2XRfhh85H98Qvtr7WrijGdcR)rq2Z4yvA5RMI20BHLRlvqsKMGNvtzh6Di5sajNAnQ)bgVCjKUID(HFK6Eabnjrp9jPJQV84KD04JteLvnPJOLhupRGcIkJR(xHZLEO(hXXsTx)iSpDeAEIeZu6cA13AjZkysUGQCQso(8y3IJK8XI7DS)R1m8XI7av2uqwCTqoCxBmxES4ouL04XI7W1sGhlUJahyVwC3nG9v5EUnlU7Tv(iwChfF2XYBXDFwC3Vf3dqtfhlUhSwo44yBPxjNomS4EO1N)nC7iPFtVteAIO(Vy8z9pbXeSTsg1Z6mXq91BGU7K5v3MmpUr)5wIeU7GYZku2OYAvnCPghEX6W3BHVD(fukVtefM8BtJVcUTsOJ6tuulUppj252FKksZKsnfswFqFPkgS48njIklc)I8uPub3PsQWhT6(ZBjvLkWS1TNJsdVmKSAoJhIq5CuJh1Ug)x4FZtQznd53oA62GF(FPQ4HYnETlDku7A0v)TDARETdbkVoiGf3lBt69ErVdj3ENzI57CnH0)j2Xj912gawCFLgrY3PiKx4pUHeYfRQdAxdveps2mQyBXn8EMoLJF6z4Bcv8tU7Lko0R2y2rNMmSRHqo0RUPes)dOYRnyUb7TRKnHq(PUrMq6u7COo82zGMzJtZi6PETnzTwRAm4wMUplD1g9iNUVEfOoEBVlCQJOprFDoXCbmlKsVzYGFHRJQF3eIUdqXR8MGs3o)knMGxZk)BmyXV6OYTpvSo0VySb8wwSju5xCxRm6inMDDzh(ITBM8LQTb6qqXNq7Lc0eY3V7UxvSBs06T429yN76ddVdYNiYiUSVbZnqPML0yF6DVKVnjfcT4MA3mxxWC9wm40z47vyIMq2(m7AjBFJnjRMRBrNUXGaU9wm9VXfA86H60CNzvuhQhJCJP0SvB4ZU7LvC4NOXoR4C5c3nrtjdOTIOkgzUWzmmNp1eZ1eI6N7TmIkD5R)yWEoQJDU5PlkLDAk1WO6Q36761I3gA4O9L6nV1VT23yKe6QzB0s3(J3rw62(7mBIqdfX7id052E3Ftx(1WYQkiJ0vCuSlFb8ETT9(VrowKxz6)(wmwQa5rJXp9mzg)05Bcl1Rwj2rRJLIgl4EzbpIq3ir9za47WIqen4q(iOU(S)T)0eImz70fGg7NgWa6SfjvShCB2szUwM7xCffePqrgD8rG9CoNFyL1LuMgz6HChTwRw84K9dQ6uEmZJ80NQUHW0ifwDQTpRJQGkuUsd4ydDt0B6jOEbKOJVBq0K8MTyrEiBNWgTTSXm93XogtV)uJM4npE(vQXZxkrd44f3z2S0I9fX)afgFMUu8VDy5)aKSBzbjtub6EgU0hLLpEpEAiU290G9lCmCnBNLHEy1QRX2zIvdoaEkNUTZQ0EybiKn(vbhzsJf3BSVpXpR2BXI77xT5S4(bSTF2pKUHPH19yX(cxDp2V)v0J1WvMk91d97xLbV(VIjaYu0)zJvkbQyBrAIaOVZoUo9RW0vydgI9dQyi2d8EBOHyAhQrswUITil9BHwKHhznJY5TV4d1vVfAxoxZOCV(B1uoscxgx3(di)r570V)E9dJY(6oAxAASQgFKn3K2HO7yxpKuGYtYIzZIiFtHjb(D(3mTyE7XrDecDzD0KUMQxFDgrDm0aNTj0KV7ne0elU)2tfYxN9s3k5(OBLCF(O5k9pctqATlVKQyrvfEJ4hONT2GSyxR(ZwHOAwuR35hQ7okhSje1)Yk2Of7TiI6pYI71sx5BIwhE7G8DqZF3eQR)E8s)M(1ZYytJi7JBYx)YfeMAkuwtm7f5tZeEOVgzR2lPGsWQt6DpFRM2bHcF5)SnL3osVLcEXsXN5C9xQjWGV31lyqlfArSfXl9a19P38IqVWpKMJTy30)wKUQ9NjtYNiZ3yF3y)jYeBu8g(QyE6ZDUZgnS2CZB0rd(Qy2IbFhNmWj92sPB59))a
 ```

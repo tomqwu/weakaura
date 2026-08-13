@@ -24,16 +24,24 @@ use GitHub's copy button on the block to grab the whole string in one click.
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
 | Rogue — All Specs | Combat · Assassination · Subtlety | v43 | 46 | [string](tbc/rogue/README.md#import-string-v43) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v4 | 32 | [string](tbc/paladin/README.md#import-string-v4) · [raw](tbc/paladin/all-specs.txt) |
-| Druid — All Specs | Feral tank · Restoration · Balance | v2 | 39 | [string](tbc/druid/README.md#import-string-v2) · [raw](tbc/druid/all-specs.txt) |
-| Warlock — All Specs | Affliction · Demonology · Destruction | v2 | 27 | [string](tbc/warlock/README.md#import-string-v2) · [raw](tbc/warlock/all-specs.txt) |
-| Hunter — BM & Survival | Beast Mastery · Survival | v2 | 33 | [string](tbc/hunter/README.md#import-string-v2) · [raw](tbc/hunter/all-specs.txt) |
-| Priest — All Specs | Shadow · Holy · Discipline | v2 | 29 | [string](tbc/priest/README.md#import-string-v2) · [raw](tbc/priest/all-specs.txt) |
-| Mage — Arcane & Frost | Arcane · Frost | v2 | 32 | [string](tbc/mage/README.md#import-string-v2) · [raw](tbc/mage/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v5 | 43 | [string](tbc/paladin/README.md#import-string-v5) · [raw](tbc/paladin/all-specs.txt) |
+| Druid — All Specs | Feral tank · Restoration · Balance | v4 | 46 | [string](tbc/druid/README.md#import-string-v4) · [raw](tbc/druid/all-specs.txt) |
+| Warlock — All Specs | Affliction · Demonology · Destruction | v4 | 37 | [string](tbc/warlock/README.md#import-string-v4) · [raw](tbc/warlock/all-specs.txt) |
+| Hunter — BM & Survival | Beast Mastery · Survival | v4 | 45 | [string](tbc/hunter/README.md#import-string-v4) · [raw](tbc/hunter/all-specs.txt) |
+| Priest — All Specs | Shadow · Holy · Discipline | v4 | 39 | [string](tbc/priest/README.md#import-string-v4) · [raw](tbc/priest/all-specs.txt) |
+| Mage — Arcane & Frost | Arcane · Frost | v4 | 41 | [string](tbc/mage/README.md#import-string-v4) · [raw](tbc/mage/all-specs.txt) |
 
 Every pack is class-gated and auto-adapts to your spec through `spellknown` talent gates —
 import the one pack for your class and it shows the right elements after a respec, with no
 further action.
+
+Every pack except the rogue also carries a **PvP layer**: elements that exist only inside an
+arena or battleground (CC-on-you with the break decision, trinket availability, enemy trinket
+countdowns, interrupt and immunity prompts, your own CC timers on each opponent). They are
+load-gated per aura, so a PvE player sees no change at all. What is *not* built — and why —
+is in `tools/tbc-weakaura-creator/references/pvp.md`; most importantly there is **no
+diminishing-returns tracking**, because TBC WeakAuras cannot express it without custom code
+and a partial DR tracker is worse than none.
 
 ## Packs
 
