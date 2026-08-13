@@ -23,19 +23,19 @@ use GitHub's copy button on the block to grab the whole string in one click.
 
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
-| Rogue — All Specs | Combat · Assassination · Subtlety | v43 | 46 | [string](tbc/rogue/README.md#import-string-v43) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v5 | 43 | [string](tbc/paladin/README.md#import-string-v5) · [raw](tbc/paladin/all-specs.txt) |
-| Druid — All Specs | Feral tank · Restoration · Balance | v4 | 46 | [string](tbc/druid/README.md#import-string-v4) · [raw](tbc/druid/all-specs.txt) |
+| Rogue — All Specs | Combat · Assassination · Subtlety | v45 | 56 | [string](tbc/rogue/README.md#import-string-v45) · [raw](tbc/rogue/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v6 | 43 | [string](tbc/paladin/README.md#import-string-v6) · [raw](tbc/paladin/all-specs.txt) |
+| Druid — All Specs | Feral tank · Restoration · Balance | v5 | 46 | [string](tbc/druid/README.md#import-string-v5) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v4 | 37 | [string](tbc/warlock/README.md#import-string-v4) · [raw](tbc/warlock/all-specs.txt) |
 | Hunter — BM & Survival | Beast Mastery · Survival | v4 | 45 | [string](tbc/hunter/README.md#import-string-v4) · [raw](tbc/hunter/all-specs.txt) |
-| Priest — All Specs | Shadow · Holy · Discipline | v4 | 39 | [string](tbc/priest/README.md#import-string-v4) · [raw](tbc/priest/all-specs.txt) |
+| Priest — All Specs | Shadow · Holy · Discipline | v5 | 40 | [string](tbc/priest/README.md#import-string-v5) · [raw](tbc/priest/all-specs.txt) |
 | Mage — Arcane & Frost | Arcane · Frost | v4 | 41 | [string](tbc/mage/README.md#import-string-v4) · [raw](tbc/mage/all-specs.txt) |
 
 Every pack is class-gated and auto-adapts to your spec through `spellknown` talent gates —
 import the one pack for your class and it shows the right elements after a respec, with no
 further action.
 
-Every pack except the rogue also carries a **PvP layer**: elements that exist only inside an
+Every pack also carries a **PvP layer**: elements that exist only inside an
 arena or battleground (CC-on-you with the break decision, trinket availability, enemy trinket
 countdowns, interrupt and immunity prompts, your own CC timers on each opponent). They are
 load-gated per aura, so a PvE player sees no change at all. What is *not* built — and why —
@@ -45,12 +45,15 @@ and a partial DR tracker is worse than none.
 
 ## Packs
 
-- **tbc/rogue/all-specs.txt** — full HUD, v43 of a 43-iteration build: health/energy/threat
+- **tbc/rogue/all-specs.txt** — full HUD, v44 of a 44-iteration build: health/energy/threat
   bars with 35/40 energy threshold lines, combo pips (always-visible sockets, green→orange gradient),
   spec-adaptive cooldown row
   (15 spells, talent-gated, tooltips + keybind labels), animated alert flow (SnD missing,
   Riposte window, Feint-at-70%-threat, Evasion-below-50%-HP), weapon enchant proc tracker
-  with clones, out-of-combat fade. Locale-independent (pure spell-ID matching, built on a
+  with clones, out-of-combat fade, plus the arena/BG-only PvP layer (CC-on-me with the
+  break decision, Kick prompt and lockout bar, target immunity, trinket availability,
+  enemy trinket countdowns, own Blind/Sap/Gouge per opponent, Wound Poison uptime).
+  Locale-independent (pure spell-ID matching, built on a
   zhCN client). Combat / Mutilate / Subtlety auto-adapt via spell-known gates.
 - **tbc/paladin/all-specs.txt** — seal uptime + missing alarm, own Judgement debuff, Holy
   Shield uptime, mana/health/threat bars, and a talent-gated cooldown row; Holy / Protection /
@@ -64,7 +67,10 @@ and a partial DR tracker is worse than none.
 - **tbc/hunter/all-specs.txt** — Serpent Sting and Hunter's Mark timers, Bestial Wrath window,
   aspect-missing alarm, Kill Command reactive prompt, proc tracker; BM and Survival only.
 - **tbc/priest/all-specs.txt** — Shadow Word: Pain and Vampiric Touch timers, Vampiric Embrace
-  and Inner Fire uptime, Shadowform-missing alarm, shield and Fade prompts, mana/health bars.
+  and Inner Fire uptime, Shadowform-missing alarm, shield and Fade prompts, mana/health bars,
+  plus the arena/BG-only PvP layer (CC-on-me colour-coded by CC category, Fear Ward and Mass
+  Dispel prompts, trinket clocks, UA-on-ally warning, and a per-opponent enemy mana bar for
+  the Mana Burn decision). The threat bar and Fade prompt do not load in an arena.
 - **tbc/mage/all-specs.txt** — Arcane Blast stacks (the Arcane rotation driver), Ice Barrier
   uptime and missing alarm, Clearcasting proc, Evocation and Ice Block prompts, mana bar;
   Arcane and Frost only.

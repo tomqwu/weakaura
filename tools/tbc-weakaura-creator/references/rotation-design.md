@@ -53,6 +53,71 @@ Every pack must pass all four, judged in combat, never from the /wa preview:
    should be nearly still. Constant motion trains the player to ignore it, which costs the
    alert that actually mattered.
 
+## The alert flow is where "press this now" lives
+
+The alert column (a `grow="UP"` dynamic group beside the character) is the pack's primary
+surface for telling the player what to press. It is worth understanding why it does not
+compete with the "cut anything that doesn't change the next press" rule:
+
+**A cooldown-row icon and an alert answer different questions.** The row icon answers *does
+this ability exist, and is it up* — a passive readout the player consults. The alert answers
+*press this now* — it interrupts the player. Desaturating an icon when it comes off cooldown
+says the button is available; it never says the moment has arrived.
+
+**Alerts are conditional, so they cost nothing while silent.** Nothing is drawn until the
+condition fires, and the dynamic group closes the gap afterwards. So the budget for alerts is
+not screen space — it is the quality of each condition. Adding a tenth alert whose condition
+is right costs the player nothing; adding one whose condition is loose costs them every alert,
+because a column that cries wolf gets ignored wholesale.
+
+Rules for what earns an alert:
+
+- **Ability-ready AND the state that makes pressing it correct.** Never ability-ready alone —
+  that is the cooldown row's job, and an alert built that way sits lit for most of the fight.
+  The canonical shapes are *reactive* (a proc or event window fired, and the answer is off
+  cooldown) and *conditional* (a danger or opportunity threshold crossed, and the answer is
+  off cooldown).
+- **If it would be lit most of the fight, the condition is wrong.** A paladin's Judgement
+  cooldown is 10s against a 20s debuff, so "Judgement is ready" is true almost always; the
+  real cue is the debuff expiring. Fix the condition or leave the ability in the row.
+- **Prefer promoting an existing decision over adding a new icon.** The high-value abilities
+  usually already sit in the cooldown row as passive icons. Giving one an alert at its true
+  moment is nearly always worth more than adding another passive icon.
+- **Emergencies always earn one.** Survival cooldowns paired with the health threshold that
+  calls for them, and CC-breaks paired with being CC'd, are the highest-value alerts in the
+  pack — they fire rarely and matter enormously each time.
+
+A useful smell test: compare the pack's alert count with its passive cooldown-icon count. A
+pack with many passive icons and few alerts is making the player scan a row to discover
+moments the HUD could have announced.
+
+## Show what the player CANNOT press
+
+The default cooldown row is inverted: it shows every ability all the time and dims the ones
+on cooldown, so the row is at its busiest when the player has the fewest options. The player
+already knows their own spellbook — what they cannot know is what is unavailable and for how
+long.
+
+So for **situational and utility cooldowns**, use `genericShowOn = "showOnCooldown"`: the icon
+exists only while the cooldown runs, carrying its countdown, and disappears when the ability
+is back. Inside a dynamic group the gap closes, so **absence is the readout** — an empty row
+means everything is available. A row of two icons means exactly two things are down, and both
+are counting back.
+
+The exception is **press-on-cooldown rotational buttons** (a paladin's Judgement and Crusader
+Strike, a bear's Mangle, a shadow priest's Mind Blast). Those must stay `showAlways`, because
+their whole point is the ready-glow that fires the instant they come up — an icon that is
+hidden while ready cannot announce itself. Hiding them would trade a "press this now" signal
+for a "you cannot press this" one, which is the wrong direction for the button you press most.
+
+The split, then:
+
+| Ability kind | Display | Why |
+|---|---|---|
+| Press-on-cooldown rotational | `showAlways` + ready glow | the glow IS the instruction |
+| Situational / utility / long CD | `showOnCooldown` + countdown | absence = available; presence = when it returns |
+| Emergency answer (defensive, CC break) | alert flow, paired with its trigger state | it must interrupt, not be looked up |
+
 ## Rotation rule → element mapping
 
 | Rotation rule | Element |

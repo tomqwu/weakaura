@@ -36,6 +36,23 @@
 -- No custom code: every composite is a multi-trigger AND, an OR (disjunctive "any"), or a
 -- condition. What is NOT in it — diminishing returns, enemy cooldown reads, enemy spec,
 -- "only interruptible casts" — is listed with its reason at the top of the v4 section.
+--
+-- v5 (source verification closed two v4 unknowns; ONE new aura, no existing aura's uid moved):
+--   * the threat bar and the threat flash now carry the inverse instance-size gate, so they
+--     no longer load in arena, where there is no threat table at all. v4 left them alone
+--     because the open-world value of `size` was unconfirmed; it is the literal string
+--     "none" (WeakAuras.lua GetInstanceTypeAndSize ends `return "none", "none", nil, nil, 0`
+--     for the not-in-an-instance case), so enumerating the complement is safe outdoors.
+--   * NEW: "Mage - Enemy Mana", one bar per mana-using arena opponent. The Power prototype's
+--     unit arg accepts `arena` on TBC (the deletion of arena from actual_unit_types_cast is
+--     inside `if WeakAuras.IsClassicEra()`, not TBC), registers UNIT_POWER_FREQUENT per
+--     arena1..5, and clones on statesParameter = "unit".
+--   * CC ON ME's nine `sub.1.glowColor` conditions were re-verified against the shipped
+--     string and the WA source and are LIVE — no change. The trap they avoid: SetGlowColor
+--     only stores the colour, and SetVisible forwards it to LibCustomGlow only when
+--     useGlowColor is true, so a subglow built WITHOUT a colour makes every glowColor
+--     condition a silent no-op. F.subglow(on, color) sets useGlowColor whenever a colour is
+--     passed, and this aura's subglow is subRegions[1], which is what "sub.1" resolves to.
 
 math.randomseed(20260816)  -- FIXED pack seed; uid() call order is append-only forever
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -62,6 +79,22 @@ end
 
 -- shared bits ---------------------------------------------------------------
 local IN_GROUP = { multi = { group = true, raid = true } }  -- party or raid only
+
+-- v5: "everywhere except arena", for PvE furniture that would be pure clutter in an arena.
+-- There is no "not arena" key: the `size` load arg (Prototypes.lua) declares no `test` and no
+-- `inverse`, and multiselect mode is a plain OR over raw string equality, so the exclusion has
+-- to be spelled out as every OTHER legal instance_types value. On TBC the full key set is
+-- none / party / ten / twenty / twentyfive / fortyman / pvp / arena (Types.lua deletes
+-- ratedpvp, ratedarena, flexible and scenario for Classic-family clients, and deletes `arena`
+-- only for Classic Era). `twenty` is legal but no TBC difficultyIndex maps to it; listing it is
+-- free. `none` is the load-bearing entry: GetInstanceTypeAndSize returns the literal strings
+-- "none", "none" from its final line when you are not in an instance, so the open world MATCHES
+-- and the bars keep loading while questing — the doubt that kept this gate out of v4.
+-- `pvp` stays listed on purpose: Alterac Valley has real NPCs with a real threat table.
+local NOT_ARENA = { multi = {
+  none = true, party = true, ten = true, twenty = true,
+  twentyfive = true, fortyman = true, pvp = true,
+} }
 
 local ICE_BARRIER = { 11426, 13031, 13032, 13033, 27134, 33405 }  -- ranks 1-6
 
@@ -154,6 +187,12 @@ threat.conditions = {
 -- always the aggro target, so ungated the bar sat pinned red for every quest mob.
 threat.load.use_ingroup = true
 threat.load.ingroup = IN_GROUP
+-- v5: and NOT in arena. An arena team has no threat table, so the bar sat there reading a
+-- meaningless number in exactly the place a player has least attention to spare. `ingroup`
+-- could not express this on its own — an arena team IS a party. Everywhere else is unchanged,
+-- open world included (see NOT_ARENA): this is the only PvE element v5 touches, twice.
+threat.load.use_size = false   -- false selects MULTI mode; only nil disables the gate
+threat.load.size = NOT_ARENA
 adopt(gRes, threat)
 
 -- 80%+ threat: pulsing red overlay on the threat bar, party/raid only.
@@ -165,6 +204,8 @@ flash.triggers = F.triggers({ F.threatTrigger(80) })
 flash.animation.main = F.animPreset("alphaPulse", "1")  -- duration required or it is invisible
 flash.load.use_ingroup = true
 flash.load.ingroup = IN_GROUP
+flash.load.use_size = false   -- v5: follows its bar out of the arena
+flash.load.size = NOT_ARENA
 adopt(gRes, flash)
 
 -- ===== Buffs: static timer row (mutually-exclusive specs share the slot) ====
@@ -471,12 +512,11 @@ adopt(gAlerts, shatter)
 --     nothing; the prompt is built from "target is casting" AND "Counterspell is usable".
 --   * enemy cooldown reads and enemy spec detection. No 2.5.x API exposes either. The enemy
 --     trinket row is an inference started by SEEING the cast, not a read.
---   * hiding the threat bar/flash inside arena. The only spelling is the inverse size gate
---     (every non-PvP instance type listed), and WeakAuras only assigns `size` at all inside
---     `if inInstance or instanceType ~= "none"` — in the open world the value is not proven
---     to be "none", so that gate can silently unload the bars everywhere outside instances.
---     A PvE regression is a worse trade than two dead bars in arena; left alone until the
---     open-world value is confirmed in game.
+--   * hiding the threat bar/flash inside arena — DONE IN v5, see NOT_ARENA. v4 left it out
+--     because WeakAuras only assigns `size = Type` inside `if inInstance or instanceType ~=
+--     "none"`, so the open-world value was unproven and the gate risked unloading the bars
+--     everywhere outdoors. It does not: that block is a guard, and the function's final line
+--     returns the literal "none" for the not-in-an-instance case, which the gate lists.
 local function pvpLoad(arenaOnly)
   local l = F.load(CLASS, { use_size = false })
   l.size = arenaOnly and { multi = { arena = true } }
@@ -499,6 +539,23 @@ adopt(top, gPvP)
 -- a Counterspell/Kick school lockout at all (a lockout is not an aura, so no aura trigger can
 -- ever find it). Colour carries the category and %p the countdown — under a stun a player
 -- parses colour, never text. No combat gate: the opener Sap lands out of combat.
+--
+-- v5 re-verified the colour-coding below against the WeakAuras source rather than by
+-- inspection, because three separate things have to hold for it to be anything but a no-op:
+--   1. "sub.1" is POSITIONAL — Conditions.lua builds the key from ipairs(data.subRegions), so
+--      it resolves to the subglow only while the subglow is subRegions[1]. Never insert a
+--      subregion ahead of it; append, exactly as wa_factory.lua already warns.
+--   2. useGlowColor must be true. SetGlowColor only stores the value; SetVisible passes it to
+--      LibCustomGlow behind `if self.useGlowColor then color = self.glowColor end`, so with it
+--      false the setter runs and the screen never changes. F.subglow sets it whenever a colour
+--      is passed — which is why the base colour below is given explicitly, not left to default.
+--   3. the glow must be on (SetGlowColor's restart is guarded by `if self.glow`), which the
+--      `true` below does unconditionally.
+-- The value shape matters too: property type "color" is emitted as {v[1],v[2],v[3],v[4]} and
+-- expanded to four positional args, so these MUST be 4-element arrays — an {r=,g=,b=,a=} hash
+-- would serialise to four nils. controlType carries store = true in the prototype, so it is a
+-- state variable even without use_controlType, and the comparison is against the raw API key
+-- ("STUN"), never a localised label.
 local ccme = reg(F.icon("Mage - CC ON ME", CLASS, 44, 44, 0, 0, nil))
 ccme.triggers = F.triggers({ { type = "unit", event = "Crowd Controlled" } })
 ccme.cooldown = false
@@ -656,6 +713,45 @@ poly.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
 poly.conditions = { F.condition(1, "expirationTime", "<=", "3", "sub.1.glow", true) }
 poly.load = pvpLoad(true)
 adopt(gPvP, poly)
+
+-- ===== v5 additions: enemy mana =============================================
+-- ONE new aura, appended after the whole v4 uid stream: the 41 existing auras keep their uid,
+-- so a re-import still offers "Update". The two other v5 changes are load gates on the threat
+-- bar and threat flash (see NOT_ARENA), which move no uid.
+
+-- ENEMY MANA, one bar per opponent. A mage does not drain mana, but the mage plays the mana
+-- clock harder than anyone: Counterspell exists to keep a healer from spending it, Polymorph
+-- exists to stop them drinking it back, and the whole decision "keep applying pressure vs.
+-- commit the burst now" is a read on how much the enemy healer has left. A single number the
+-- team can call out is worth more than another cooldown icon.
+--   * unit = "arena" clones — one row per opponent — hence the dynamic-group parent.
+--   * use_powertype + powertype = 0 are BOTH required to read MANA specifically. Drop either
+--     and powerType is nil, the trigger falls back to UnitPowerType(unit), and the row happily
+--     reports a rogue's energy as if it were mana.
+--   * use_requirePowerType hides every opponent whose PRIMARY bar is not mana, so warriors and
+--     rogues (who have no mana pool at all on TBC, i.e. a 0/0 bar that reads as "empty = go")
+--     never take a row. The honest cost: a druid in bear or cat form drops off the list until
+--     they shift back, because their primary bar is rage/energy while shifted.
+--   * arena-only, never arena+pvp: arena1..arena5 do not exist in a battleground, where this
+--     would be permanently blank rows.
+local emanaTrig = F.powerTrigger(0)
+emanaTrig.unit = "arena"
+emanaTrig.use_requirePowerType = true
+local emana = reg(F.aurabar("Mage - Enemy Mana", CLASS, 140, 12, 0, 0, nil,
+  { 0.25, 0.50, 0.95, 1 }))
+emana.triggers = F.triggers({ emanaTrig })
+emana.subRegions[2] = F.subtext("%name", 10, "INNER_LEFT")
+emana.subRegions[3] = F.subtext("%percentpower%%", 12, "INNER_RIGHT", "percentpower")
+emana.subRegions[4] = F.subborder("bar")
+-- Two tiers, same escalation idiom as the health bar: amber = they are running low, so deny
+-- the drink and keep them casting; green = they are out, which is the kill window. Severe
+-- tier last, because a later matching condition overwrites the same property.
+emana.conditions = {
+  F.condition(1, "percentpower", "<=", "30", "barColor", { 1, 0.85, 0.2, 1 }),
+  F.condition(1, "percentpower", "<=", "10", "barColor", { 0.35, 0.95, 0.55, 1 }),
+}
+emana.load = pvpLoad(true)
+adopt(gPvP, emana)
 
 -- ===== icon polish everywhere ===============================================
 for _, aura in ipairs(order) do

@@ -53,6 +53,25 @@
 --     filter (WA disables the arg on TBC), enemy mana (the Power prototype's arena
 --     unit support is unverified), and the inverse "hide the threat bar in arena"
 --     gate (its open-world behaviour is unproven and it would change a PvE aura).
+--
+-- v5 (three v4 deferrals resolved against the WeakAuras source; one new aura):
+--   * CC ON ME is now colour-coded by controlType, because "which break works" is
+--     the decision, not "am I controlled". Same colour language as the mage pack:
+--     red stun, purple fear, blue root, green confuse/poly, amber silence/lockout.
+--     Verified: subglow is subRegions[1], glow = true and useGlowColor = true, so
+--     "sub.1.glowColor" really repaints the glow (with useGlowColor = false the
+--     setter runs and nothing changes on screen — the trap this was deferred on).
+--     Values are 4-element ARRAYS; a {r=,g=,b=} hash serialises to four nils.
+--   * The threat bar and the Fade prompt no longer load in an ARENA. Arena has no
+--     threat table, so both were pure clutter there. The open-world worry that
+--     blocked this in v4 is settled: GetInstanceTypeAndSize returns the literal
+--     string "none" outdoors (WeakAuras.lua:1626 explicit fallthrough), so listing
+--     `none` in the multi table keeps them loaded everywhere in PvE.
+--   * NEW Priest - Enemy Mana: one bar per arena opponent whose PRIMARY resource
+--     is mana, class-coloured, red under 20%. The Mana Burn scoreboard. The Power
+--     prototype is present on TBC, its unit arg accepts "arena" (only ClassicEra
+--     deletes that value), arena1..5 are registered, and statesParameter = "unit"
+--     clones one row per opponent — hence the dynamicgroup parent.
 
 math.randomseed(20260815)  -- FIXED pack seed; the uid() call order below is append-only forever
 
@@ -98,6 +117,28 @@ end
 -- so a "none" threat trigger never activates. Threat stays target-relative.
 local function threatTrigger(_unit, minPct)
   return F.threatTrigger(minPct)
+end
+
+-- v5: keep a PvE element out of the arena, where its mechanic does not exist.
+-- There is no "not arena" key — the `size` load arg is a plain multiselect with no
+-- `inverse` and no `test`, so the exclusion is spelled out as every OTHER legal
+-- instance type. `use_size = false` is MULTI mode (only nil disables the gate).
+-- `none` is the value this was deferred on and it is now proven: GetInstanceTypeAndSize
+-- guards the "assign size = Type" block with `if inInstance or instanceType ~= "none"`
+-- and then falls through to `return "none", "none", nil, nil, 0`, so the open world
+-- reports the literal string "none" and the element stays loaded out there.
+-- `pvp` (battleground) is kept on purpose: BGs have NPCs and a real threat table.
+local function hideInArena(a)
+  a.load.use_size = false
+  a.load.size = { multi = {
+    none = true,        -- open world / city / no instance
+    party = true,       -- 5-man normal or heroic
+    ten = true,         -- Karazhan, ZA
+    twenty = true,      -- legal key, unreachable on TBC; free to list
+    twentyfive = true,  -- SSC / TK / Hyjal / BT / Sunwell
+    fortyman = true,    -- the vanilla raids
+    pvp = true,         -- battleground
+  } }
 end
 
 -- Always-on elements breathe with the fight: append an always-active Unit
@@ -154,6 +195,7 @@ threat.conditions = {
   F.condition(1, "threatpct", ">=", "70", "barColor", { 1, 0.6, 0.1, 1 }),
   F.condition(1, "aggro", "==", 1, "barColor", { 0.9, 0.12, 0.12, 1 }),
 }
+hideInArena(threat)  -- v5: no threat table exists in an arena; everywhere else unchanged
 adopt(gRes, threat)
 
 -- =====================================================================
@@ -283,6 +325,10 @@ fade.subRegions[1] = F.subglow(true, { 1, 0.45, 0.1, 1 })
 fade.load.use_combat = true
 fade.load.use_spellknown = true
 fade.load.spellknown = 586
+-- v5: same arena exclusion as the bar that drives it. Trigger 1 is the threat
+-- trigger, so this prompt was already unreachable in an arena — the gate makes it
+-- unreachable at LOAD time, which is one fewer aura evaluating every frame there.
+hideInArena(fade)
 alertAnimations(fade)
 adopt(gAlerts, fade)
 
@@ -466,6 +512,24 @@ adopt(top, gPvP)
 -- effect — stun, poly, fear or a locked school — and %p is the countdown that
 -- answers "ride it or spend the trinket". NOT combat-gated: the opening Sap
 -- and the pre-gate fear land before you are in combat.
+--
+-- v5 — the glow is colour-coded by controlType, because under CC a player parses
+-- COLOUR, never text, and the category is the whole decision:
+--   red    stun          the trinket is the only answer
+--   purple fear          trinket, or Fear Ward the next one before it lands
+--   blue   root          NOT the trinket — a priest has no root break, so this is
+--                        "reposition, LoS, and keep casting; you are not helpless"
+--   green  confuse/poly  ride it, and hold your DoT/damage: any tick breaks it
+--   amber  silence/lockout  your school is gone (every priest defensive is Holy or
+--                        Shadow), so trinket EARLIER than you otherwise would
+-- Same five colours as the mage pack, on purpose: one language across two classes.
+--
+-- Mechanically this needs three things and has all three: the subglow really is
+-- subRegions[1] (so "sub.1.glowColor" resolves), it was built with a colour so
+-- useGlowColor = true (with it false the setter is a silent no-op), and glow = true
+-- so SetGlowColor's restart guard passes. Values must be 4-element ARRAYS.
+-- The five loss-of-control types with no condition (NONE, CHARM, DISARM, PACIFY,
+-- POSSESS) fall back to the base colour below, i.e. red "trinket food" — correct.
 local ccOnMe = reg(F.icon("Priest - CC ON ME", CLASS, 44, 44, 0, 0, nil))
 ccOnMe.triggers = F.triggers({
   gTrigger{ type = "unit", event = "Crowd Controlled" },
@@ -473,6 +537,17 @@ ccOnMe.triggers = F.triggers({
 ccOnMe.cooldown = false
 ccOnMe.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
 ccOnMe.subRegions[2] = F.subtext("%p", 16, "INNER_BOTTOM")
+ccOnMe.conditions = {
+  F.condition(1, "controlType", "==", "STUN",             "sub.1.glowColor", { 1, 0.15, 0.15, 1 }),
+  F.condition(1, "controlType", "==", "STUN_MECHANIC",    "sub.1.glowColor", { 1, 0.15, 0.15, 1 }),
+  F.condition(1, "controlType", "==", "FEAR",             "sub.1.glowColor", { 0.7, 0.3, 1, 1 }),
+  F.condition(1, "controlType", "==", "FEAR_MECHANIC",    "sub.1.glowColor", { 0.7, 0.3, 1, 1 }),
+  F.condition(1, "controlType", "==", "CONFUSE",          "sub.1.glowColor", { 0.4, 0.95, 0.5, 1 }),
+  F.condition(1, "controlType", "==", "ROOT",             "sub.1.glowColor", { 0.3, 0.7, 1, 1 }),
+  F.condition(1, "controlType", "==", "SILENCE",          "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+  F.condition(1, "controlType", "==", "PACIFYSILENCE",    "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+  F.condition(1, "controlType", "==", "SCHOOL_INTERRUPT", "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+}
 ccOnMe.load = pvpLoad(false)
 alertAnimations(ccOnMe)
 adopt(gAlerts, ccOnMe)
@@ -627,6 +702,56 @@ myCC.cooldown = false
 myCC.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
 myCC.load = pvpLoad(true)
 adopt(gPvP, myCC)
+
+-- =====================================================================
+-- v5 addition — the Mana Burn scoreboard. Created after every earlier
+-- W.uid() call, so all 39 v4 uids keep their positions in the seeded stream.
+-- =====================================================================
+
+-- ---- state: enemy mana, one bar per opponent (arena) --------------------
+-- Mana Burn is the priest's second win condition and it is the only one you
+-- cannot see: burning 700-750 mana a cast into a 9k healer is a decision you
+-- have to be able to score. This is that scoreboard.
+--
+-- unit = "arena" makes the Power prototype clone one state per opponent
+-- (statesParameter = "unit"), hence the dynamicgroup parent — the same
+-- mechanism the enemy trinket clock and the CC rows already use.
+--
+-- Both use_powertype AND powertype = 0 are required: without the flag the
+-- trigger silently reads whatever bar the opponent primarily uses, so a rogue
+-- row would show ENERGY as if it were mana. use_requirePowerType then hides
+-- every opponent whose primary resource is not mana, so rogues and warriors
+-- never take up a row and the column is exactly the people worth burning.
+--
+-- Colour is identity: standard class colours, which every player already reads
+-- without thinking (warrior red and rogue yellow can never appear — those two
+-- are filtered out by requirePowerType, which is also why red is free to mean
+-- something else here). Under 20% the bar goes red: that is roughly two heals
+-- left, the point where mana, not damage, is the fastest way to win.
+--
+-- Arena-only, never battleground: arena1..arena5 do not exist in a BG, so a
+-- BG-loaded copy would be permanently blank rows.
+local emana = reg(F.aurabar("Priest - Enemy Mana", CLASS, 120, 14, 0, 0, nil,
+  { 0.25, 0.5, 0.92, 1 }))
+local emanaTrigger = F.powerTrigger(0)   -- 0 = Mana, with use_powertype set
+emanaTrigger.unit = "arena"              -- clones: arena1..arena5
+emanaTrigger.use_requirePowerType = true -- mana must be their PRIMARY bar
+emana.triggers = F.triggers({ emanaTrigger })
+emana.subRegions[2] = F.subtext("%percentpower%%", 12, "INNER_RIGHT", "percentpower")
+emana.subRegions[3] = F.subborder("bar")
+emana.conditions = {
+  F.condition(1, "class", "==", "DRUID",   "barColor", { 1, 0.49, 0.04, 1 }),
+  F.condition(1, "class", "==", "HUNTER",  "barColor", { 0.67, 0.83, 0.45, 1 }),
+  F.condition(1, "class", "==", "MAGE",    "barColor", { 0.41, 0.8, 0.94, 1 }),
+  F.condition(1, "class", "==", "PALADIN", "barColor", { 0.96, 0.55, 0.73, 1 }),
+  F.condition(1, "class", "==", "PRIEST",  "barColor", { 1, 1, 1, 1 }),
+  F.condition(1, "class", "==", "SHAMAN",  "barColor", { 0, 0.44, 0.87, 1 }),
+  F.condition(1, "class", "==", "WARLOCK", "barColor", { 0.58, 0.51, 0.79, 1 }),
+  -- last, so it wins over the class colour: nearly dry, go now
+  F.condition(1, "percentpower", "<", "20", "barColor", { 0.9, 0.12, 0.12, 1 }),
+}
+emana.load = pvpLoad(true)
+adopt(gPvP, emana)
 
 -- ===== icon polish: crop + 1px outline on every icon =====
 for _, icon in ipairs(icons) do

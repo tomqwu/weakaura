@@ -25,6 +25,17 @@
 -- arena alone for anything that reads arena1..arena5). Nothing existing changed, so a PvE
 -- druid sees a byte-for-byte identical HUD. Built in the v4 block at the BOTTOM of this file
 -- so the seeded uid stream stays append-only.
+--
+-- v5 (source-verified PvP fixes) — see README "## v5 — the CC prompt answers itself". Two
+-- changes, NO new auras, so every uid is byte-identical to v4 and the import dialog still
+-- offers Update:
+--   * CC on Me now colour-codes the glow by loss-of-control category, so the colour names the
+--     answer (red = trinket, purple = trinket, blue = shift out, green = ride it, amber = your
+--     school is locked out) before the icon is read. Nine `sub.1.glowColor` conditions.
+--   * the two threat bars carry an inverse instance-size gate and no longer load in an arena,
+--     where there is no threat table for them to read. v4 declined to ship this because the
+--     open-world value of `size` was unverified; it is the literal string "none", so the
+--     complement enumeration is safe. See notInArena() below.
 
 math.randomseed(20260812)  -- FIXED pack seed; append-only uid order across versions
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -146,15 +157,43 @@ manaB.subRegions[2] = F.subtext("%percentpower%%", 12, "INNER_RIGHT", "percentpo
 manaB.subRegions[3] = F.subborder("bar")
 manaB.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
 
+-- ===== v5 inverse size gate: "load everywhere EXCEPT an arena" =====
+-- An arena has no threat table, so both threat bars sit pinned and meaningless in there —
+-- pure clutter in the one place screen space is scarcest. WA's `size` load arg (Prototypes.lua
+-- "Instance Size Type") declares no `inverse` and no `test`, so there is genuinely no "not
+-- arena" key: multi mode ORs raw string equality over the listed keys, and the only spelling
+-- of "not arena" is to enumerate the complement.
+-- The value that made v4 refuse to ship this is `none`. GetInstanceTypeAndSize's
+-- `if inInstance or instanceType ~= "none"` block is a GUARD, not the whole function — under
+-- it sits an explicit `return "none", "none", nil, nil, 0`, so in the open world `size` is the
+-- literal string "none" (never nil), ScanForLoads passes it through unmodified, and listing
+-- `none` keeps the bars loaded while questing. That was the whole PvE risk, and it is gone.
+-- TBC's full instance_types set is none/party/ten/twenty/twentyfive/fortyman/pvp/arena
+-- (Types.lua deletes flexible, scenario, ratedpvp and ratedarena for Classic flavours, and
+-- deletes `arena` only for Classic Era), so listing seven keys omits exactly one: arena.
+-- `pvp` stays listed on purpose — a battleground has NPCs and a threat table, and the bars are
+-- as useful there as they are outdoors. `twenty` is a legal key that no TBC difficulty index
+-- maps to; listing it is free.
+local PVE_NOT_ARENA = { "none", "party", "ten", "twenty", "twentyfive", "fortyman", "pvp" }
+local function notInArena(gate)
+  local g = {}
+  for k, v in pairs(gate or {}) do g[k] = v end
+  local multi = {}                                     -- fresh table per call: two loads must
+  for _, key in ipairs(PVE_NOT_ARENA) do multi[key] = true end  -- never share one subtable
+  g.use_size = false                                   -- false = MULTI mode (nil = gate off)
+  g.size = { multi = multi }
+  return g
+end
+
 -- R5 Threat (Bear) — tank-inverted semantics: green while tanking, RED when aggro is lost
-local threatF = resBar("Druid - Threat (Bear)", -41, { 0.25, 0.8, 0.3, 1 }, GATE_F)
+local threatF = resBar("Druid - Threat (Bear)", -41, { 0.25, 0.8, 0.3, 1 }, notInArena(GATE_F))
 threatF.triggers = F.triggers({ F.threatTrigger() })
 threatF.subRegions[2] = F.subtext("%threatpct%%", 12, "INNER_RIGHT", "threatpct")
 threatF.subRegions[3] = F.subborder("bar")
 threatF.conditions = { F.condition(1, "aggro", "==", 0, "barColor", { 0.9, 0.12, 0.12, 1 }) }
 
 -- R6 Threat (Caster) — orange at 70%, red on aggro (severe condition last)
-local threatB = resBar("Druid - Threat (Caster)", -41, { 0.25, 0.8, 0.3, 1 }, GATE_B)
+local threatB = resBar("Druid - Threat (Caster)", -41, { 0.25, 0.8, 0.3, 1 }, notInArena(GATE_B))
 threatB.triggers = F.triggers({ F.threatTrigger() })
 threatB.subRegions[2] = F.subtext("%threatpct%%", 12, "INNER_RIGHT", "threatpct")
 threatB.subRegions[3] = F.subborder("bar")
@@ -489,14 +528,52 @@ end
 
 -- P1 CC on me — the single prompt that answers "ride it or spend the trinket". The icon comes
 -- from the trigger, so the effect identifies itself (sap / poly / fear / stun / kick lockout),
--- and %p is the countdown you decide against. No controlType filter: this catches every
--- loss-of-control effect including school lockouts, which are not auras and which aura2 can
--- therefore never see. No combat gate either — the opener Sap lands out of combat.
+-- and %p is the countdown you decide against. Still NO controlType filter on the trigger: it
+-- catches every loss-of-control effect including school lockouts, which are not auras and
+-- which aura2 can therefore never see. No combat gate either — the opener Sap lands out of
+-- combat.
+--
+-- v5: the category now drives the GLOW COLOUR, because under a stun a player parses colour and
+-- never text, and "am I CC'd" was never the decision — WHICH break works is:
+--   red    STUN / STUN_MECHANIC   the trinket is the only answer a druid has
+--   purple FEAR / FEAR_MECHANIC   likewise the trinket: 2.4.3 gives a druid no fear break
+--   blue   ROOT                   a MOVEMENT answer, NOT the trinket — shift form (any shift
+--                                 clears roots and snares), Travel/Cat out, or Nature's Grasp
+--   green  CONFUSE                polymorph/disorient: ride it, any damage breaks it, and
+--                                 trinketing here throws the cooldown away for nothing
+--   amber  SILENCE / PACIFYSILENCE / SCHOOL_INTERRUPT
+--                                 your school is gone (a Nature lockout takes Cyclone, roots,
+--                                 Healing Touch and Innervate at once) — trinket EARLIER than
+--                                 you otherwise would, because waiting costs the whole kit
+-- Deliberately identical to the mage pack's five colours: a player who rolls two of these
+-- classes learns one language, not two.
+--
+-- Mechanics this depends on, all source-verified: the condition property is
+-- "sub.1.glowColor", where 1 is the 1-based index into subRegions (Conditions.lua builds
+-- `"sub." .. index .. "." .. key` from ipairs(data.subRegions)), so the subglow MUST stay at
+-- index 1 — inserting a subregion ahead of it silently repoints all nine conditions. The value
+-- must be a 4-element ARRAY, not {r=,g=,b=,a=}, or it serialises to four nils. And the glow
+-- must be BOTH visible and colour-enabled: SetGlowColor only stores the value, while SetVisible
+-- does `if self.useGlowColor then color = self.glowColor end` and otherwise hands LibCustomGlow
+-- nil — so with useGlowColor false every one of these conditions would be a silent no-op.
+-- F.subglow(true, colour) sets glow = true AND useGlowColor = true, which is exactly what the
+-- call below does.
 local ccOnMe = alertIcon("Druid - CC on Me", pvpGate())
 ccOnMe.triggers = F.triggers({ rawTrigger{ type = "unit", event = "Crowd Controlled" } })
-ccOnMe.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
-ccOnMe.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")
-ccOnMe.subRegions[3] = F.subborder()
+ccOnMe.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })  -- red base = "trinket food":
+ccOnMe.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")    -- the fallback the five
+ccOnMe.subRegions[3] = F.subborder()                          -- uncovered locTypes restore
+ccOnMe.conditions = {
+  F.condition(1, "controlType", "==", "STUN",             "sub.1.glowColor", { 1, 0.15, 0.15, 1 }),
+  F.condition(1, "controlType", "==", "STUN_MECHANIC",    "sub.1.glowColor", { 1, 0.15, 0.15, 1 }),
+  F.condition(1, "controlType", "==", "FEAR",             "sub.1.glowColor", { 0.7, 0.3, 1, 1 }),
+  F.condition(1, "controlType", "==", "FEAR_MECHANIC",    "sub.1.glowColor", { 0.7, 0.3, 1, 1 }),
+  F.condition(1, "controlType", "==", "CONFUSE",          "sub.1.glowColor", { 0.4, 0.95, 0.5, 1 }),
+  F.condition(1, "controlType", "==", "ROOT",             "sub.1.glowColor", { 0.3, 0.7, 1, 1 }),
+  F.condition(1, "controlType", "==", "SILENCE",          "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+  F.condition(1, "controlType", "==", "PACIFYSILENCE",    "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+  F.condition(1, "controlType", "==", "SCHOOL_INTERRUPT", "sub.1.glowColor", { 1, 0.85, 0.2, 1 }),
+}
 
 -- P2 Barkskin while stunned — the druid-only press nothing else in the game can prompt.
 -- 22812's 2.4.3 tooltip reads "Can be used while stunned"/"Usable while feared", so a stunned
