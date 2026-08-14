@@ -1,4 +1,4 @@
--- generate.lua — Priest TBC All-Specs HUD (v4).
+-- generate.lua — Priest TBC All-Specs HUD (v6).
 -- Run: lua5.1 tbc/priest/generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import -> paste).
 --
@@ -72,6 +72,32 @@
 --     prototype is present on TBC, its unit arg accepts "arena" (only ClassicEra
 --     deletes that value), arena1..5 are registered, and statesParameter = "unit"
 --     clones one row per opponent — hence the dynamicgroup parent.
+--
+-- v6 (the cooldown row now shows what you CANNOT press; no new auras, no new uids):
+--   * Six of the nine cooldown icons become genericShowOn = "showOnCooldown" —
+--     Shadowfiend, Inner Focus, Power Infusion, Pain Suppression, Lightwell and Fear
+--     Ward. Each is situational: a mana cooldown, a burst window, an emergency, a
+--     pre-placed well, a pre-fear ward. The icon now exists only while its cooldown
+--     runs, carrying the swipe and the countdown, and vanishes when the ability is
+--     back. The row is a dynamic group, so the gap closes: ABSENCE IS THE READOUT.
+--     Their onCooldown == 1 -> desaturate condition goes with the change — under
+--     showOnCooldown every visible icon is on cooldown by definition, so desaturating
+--     them all would grey the whole row and make the icons harder to tell apart.
+--   * The three press-on-cooldown rotational buttons stay showAlways WITH a ready
+--     glow, because a hidden icon cannot announce the moment it comes up: Mind Blast
+--     and Shadow Word: Death (violet, the two presses that cancel a Mind Flay), and
+--     NEW — Prayer of Mending, which gains the gold Holy glow it never had. PoM is a
+--     10s-cooldown cast-on-cooldown staple of the Holy/Disc loop, the most mana-
+--     efficient heal in the game, kept rolling on the tank; hiding the healer's most
+--     frequent scheduled press would have been exactly the wrong direction.
+--     Those three keep their desaturate-while-down condition — they are on screen in
+--     both states, so it is still what separates "up" from "down".
+--   * Every ready glow is now switched OFF out of combat (inCombat == 0 ->
+--     sub.1.glow = false, appended last so it wins). Out of combat every cooldown is
+--     up, so the glow was permanent decoration on an idle HUD — and after this pass
+--     the out-of-combat row contains nothing BUT those three icons.
+--   * No aura added, removed or reordered: only triggers and conditions changed, so
+--     all 39 uids are untouched and this imports as an Update.
 
 math.randomseed(20260815)  -- FIXED pack seed; the uid() call order below is append-only forever
 
@@ -350,25 +376,48 @@ alertAnimations(dprayer)
 adopt(gAlerts, dprayer)
 
 -- =====================================================================
--- Cooldowns (0,-66): horizontal row, swipe numbers on, desaturate while down
+-- Cooldowns (0,-66): horizontal row. Since v6 the row is INVERTED — it shows
+-- what you cannot press. Situational cooldowns appear only while they are
+-- down; the three press-on-cooldown rotational buttons stay on screen and
+-- glow the instant they are up.
 -- =====================================================================
 local gCDs = reg(F.dynGroup("Priest - Cooldowns", 0, -66, nil, "HORIZONTAL", "CENTER", 4))
 gCDs.animate = false
 adopt(top, gCDs)
 
--- opts.readyGlow = colour  -> "press this NOW": violet pixel glow the moment it is up
+-- The classification lives in one flag: an icon with a readyGlow is a press-on-cooldown
+-- rotational button, everything else is situational.
+--
+-- opts.readyGlow = colour  -> ROTATIONAL. genericShowOn = "showAlways", so it is on
+--                             screen in both states: desaturated while down, and lit by
+--                             a pixel glow the moment it is up. The glow IS the
+--                             instruction, and a hidden icon could never fire one.
+--                             Suppressed out of combat, where everything is always up.
 -- opts.healthGuard = N     -> that glow is switched back off below N% health
 -- opts.notGate = spellId   -> also require that spell to be UNknown (spec exclusion)
+-- (no readyGlow)           -> SITUATIONAL. genericShowOn = "showOnCooldown": the icon
+--                             exists only while the cooldown runs, carrying the swipe
+--                             and its countdown, and disappears when the ability is
+--                             back. The row is a dynamic group, so the gap closes —
+--                             absence is the readout. No desaturate condition either:
+--                             every visible icon is on cooldown by definition, so
+--                             greying them all would only make them harder to tell apart.
 local function addCD(id, name, spellId, gate, opts)
   opts = opts or {}
+  local rotational = opts.readyGlow ~= nil
   local icon = reg(F.icon("Priest CD - " .. id, CLASS, 32, 32, 0, 0, nil))
-  local trigs = { F.cdTrigger(spellId, name, "showAlways") }
+  local trigs = { F.cdTrigger(spellId, name, rotational and "showAlways" or "showOnCooldown") }
   if opts.healthGuard then trigs[#trigs + 1] = F.healthTrigger(nil) end
   icon.triggers = F.triggers(trigs)
   icon.cooldownTextDisabled = false  -- swipe numbers on; no %p subtext (OmniCC double-number trap)
   icon.useTooltip = true
-  icon.conditions = { F.condition(1, "onCooldown", "==", 1, "desaturate", true) }
-  if opts.readyGlow then
+  icon.conditions = {}
+  if rotational then
+    -- desaturate still carries information here: this icon is visible in BOTH states
+    icon.conditions[1] = F.condition(1, "onCooldown", "==", 1, "desaturate", true)
+    -- the factory's icon prototype already puts a (disabled) subglow at subRegions[1],
+    -- so this REPLACES index 1 rather than inserting — every "sub.1.glow" reference in
+    -- this pack keeps pointing at a subglow, and the subborder stays at index 2
     icon.subRegions[1] = F.subglow(false, opts.readyGlow)
     icon.conditions[#icon.conditions + 1] =
       F.condition(1, "onCooldown", "==", 0, "sub.1.glow", true)
@@ -388,22 +437,40 @@ local function addCD(id, name, spellId, gate, opts)
     icon.load.not_spellknown = opts.notGate
   end
   fadeOutOfCombat(icon)
+  if rotational then
+    -- v6: out of combat every cooldown is up, so the ready-glow would sit lit forever on
+    -- an idle HUD. Appended AFTER the fade condition (and so after the glow-on rule) —
+    -- later match wins — and it reads the Unit Characteristics trigger fadeOutOfCombat
+    -- just added, which is now the last trigger.
+    icon.conditions[#icon.conditions + 1] =
+      F.condition(#icon.triggers, "inCombat", "==", 0, "sub.1.glow", false)
+  end
   adopt(gCDs, icon)
   return icon
 end
 
 local SHADOW_READY = { 0.55, 0.35, 1, 1 }  -- same violet as the Shadowfiend prompt
+local HOLY_READY   = { 1, 0.85, 0.2, 1 }   -- same gold as the Holy proc row
 
+-- ROTATIONAL (showAlways + ready glow) --------------------------------------------
 -- Mind Blast (8s, 5.5s with 5/5 Improved) and SW:Death (12s) are the two presses the
 -- Shadow rotation cancels a Mind Flay channel for, so both glow the instant they are up.
 addCD("Mind Blast",        "Mind Blast",          8092, 15473, { readyGlow = SHADOW_READY })
 addCD("Shadow Word Death", "Shadow Word: Death", 32379, 15473, { readyGlow = SHADOW_READY, healthGuard = 50 })
+-- SITUATIONAL (showOnCooldown) ----------------------------------------------------
+-- Shadowfiend is a mana cooldown fired at a mana window, and the Alerts column already
+-- owns that moment (mana < 50% AND the fiend ready), so the row icon only has to answer
+-- "when is it back".
 addCD("Shadowfiend",       "Shadowfiend",        34433, 34433)  -- all specs, 5 min
-addCD("Prayer of Mending", "Prayer of Mending",  33076, 33076, { notGate = 15473 })  -- Holy/Disc staple, 10s CD
-addCD("Inner Focus",       "Inner Focus",        14751, 14751)  -- Disc tier-2 talent, taken by Holy too
-addCD("Power Infusion",    "Power Infusion",     10060, 10060)  -- Disc 31-pt talent, 3 min
-addCD("Pain Suppression",  "Pain Suppression",   33206, 33206)  -- Disc 41-pt signature, 2 min
-addCD("Lightwell",         "Lightwell",            724,   724)  -- Holy 40-pt optional talent
+-- ROTATIONAL: the healer's most frequent scheduled press. 10s cooldown, cast on cooldown
+-- on the tank — the cheapest heal per point of healing a TBC priest owns — so it takes the
+-- gold Holy glow rather than being hidden while it is available.
+addCD("Prayer of Mending", "Prayer of Mending",  33076, 33076, { notGate = 15473, readyGlow = HOLY_READY })  -- Holy/Disc staple, 10s CD
+-- SITUATIONAL, continued ----------------------------------------------------------
+addCD("Inner Focus",       "Inner Focus",        14751, 14751)  -- Disc tier-2 talent, 3 min; paired with a specific big cast
+addCD("Power Infusion",    "Power Infusion",     10060, 10060)  -- Disc 31-pt talent, 3 min; a burn-phase window
+addCD("Pain Suppression",  "Pain Suppression",   33206, 33206)  -- Disc 41-pt signature, 2 min; an emergency
+addCD("Lightwell",         "Lightwell",            724,   724)  -- Holy 40-pt optional talent; placed before a damage phase
 addCD("Fear Ward",         "Fear Ward",           6346,  6346)  -- baseline for every priest since 2.3.0 (lvl 20, 3 min CD)
 
 -- =====================================================================

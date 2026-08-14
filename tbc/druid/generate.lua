@@ -36,6 +36,16 @@
 --     where there is no threat table for them to read. v4 declined to ship this because the
 --     open-world value of `size` was unverified; it is the literal string "none", so the
 --     complement enumeration is safe. See notInArena() below.
+--
+-- v6 (the cooldown row shows what you CANNOT press) — see README "## v6 — the cooldown row
+-- shows what you cannot press". NO new auras, NO removed auras, NO reordering, so every uid is
+-- byte-identical to v5 and the import dialog still offers Update. Seven of the eight cooldown
+-- icons are situational (Enrage, Frenzied Regen, Swiftmend, Nature's Swiftness, Force of
+-- Nature, Barkskin, Innervate) and become genericShowOn = "showOnCooldown" with their
+-- now-meaningless desaturate condition dropped; absence in the dynamic group is the readout.
+-- Mangle (Bear) is the one press-on-cooldown rotational button in the row, so it keeps
+-- showAlways + desaturate + its ready-glow, and gains a Unit Characteristics trigger purely so
+-- that glow can be silenced out of combat. See the classification table above addCD().
 
 math.randomseed(20260812)  -- FIXED pack seed; append-only uid order across versions
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -352,22 +362,63 @@ innervatePrompt.cooldown = false
 innervatePrompt.subRegions[1] = F.subglow(true, { 0.4, 0.7, 1, 1 })
 innervatePrompt.subRegions[2] = F.subborder()
 
--- ================= Cooldowns (0,-66): 32x32 row, desaturate while down =================
-local function addCD(label, realName, spellId, gate)
+-- ================= Cooldowns (0,-66): 32x32 row, shows what you CANNOT press ============
+-- v6 splits this row in two (see README "## v6 — the cooldown row shows what you cannot press"):
+--
+--   * SITUATIONAL cooldowns (`rotational` false) are genericShowOn = "showOnCooldown". The
+--     icon exists only while its cooldown runs, carrying the swipe and the countdown, and
+--     disappears the instant the ability is back. The row is a dynamic group, so the gap
+--     closes and ABSENCE IS THE READOUT: an empty row means everything is up. Their
+--     desaturate-while-down condition goes with the change — under showOnCooldown every
+--     visible icon is on cooldown by definition, so desaturating them all would grey the whole
+--     row and make the icons harder to tell apart.
+--   * PRESS-ON-COOLDOWN ROTATIONAL buttons (`rotational` true) stay showAlways and keep both
+--     the desaturate readout and a ready-glow. A hidden icon cannot announce the moment it
+--     comes up, and hiding the button you press most often is exactly the wrong direction.
+local function addCD(label, realName, spellId, gate, rotational)
   local ic = reg(F.icon("Druid CD - " .. label, CLASS, 32, 32, 0, 0, nil))
   ic.zoom = 0.3
-  ic.triggers = F.triggers({ F.cdTrigger(spellId, realName, "showAlways") })
+  if rotational then
+    -- trigger 2 is the always-active Unit Characteristics state feeder: with disjunctive
+    -- "all" it never gates visibility (and activeTriggerMode -10 keeps trigger 1 driving the
+    -- icon and swipe), it exists only so the ready-glow can be silenced out of combat.
+    ic.triggers = F.triggers({ F.cdTrigger(spellId, realName, "showAlways"), F.unitCharTrigger() })
+    ic.conditions = { F.condition(1, "onCooldown", "==", 1, "desaturate", true) }
+  else
+    ic.triggers = F.triggers({ F.cdTrigger(spellId, realName, "showOnCooldown") })
+    ic.conditions = {}
+  end
   ic.cooldownTextDisabled = false   -- WA prints the CD number; no %p subtext (OmniCC)
   ic.useTooltip = true
-  ic.conditions = { F.condition(1, "onCooldown", "==", 1, "desaturate", true) }
   ic.load = F.load(CLASS, gate)
   ic.subRegions[2] = F.subborder()
   adopt(gCDs, ic)
   return ic
 end
 
+-- The classification, ability by ability (TBC 2.4.3 rotations, re-checked on icy-veins.com/
+-- tbc-classic and wowhead.com/tbc for v6):
+--   C1 Mangle (Bear)  ROTATIONAL. 6s cooldown, "use Mangle whenever available" is the bear's
+--                     #2 priority and every Lacerate/Maul decision is built around it.
+--   C2 Enrage         situational: a PRE-PULL rage generator that strips armour, already
+--                     out-of-combat gated. Absence now answers "can I open with it again".
+--   C3 Frenzied Regen situational/emergency, and the Alerts flow already owns its moment
+--                     (HP < 40% AND ready). Icy Veins: use it when "you are either getting
+--                     low or ... about to go into a period of high sustained damage".
+--   C4 Swiftmend      situational. It CONSUMES a Rejuvenation/Regrowth, so pressing it on
+--                     cooldown throws away a HoT that was already healing. Icy Veins puts it
+--                     on "targets taking heavy damage" and emergencies — "you want to be
+--                     casting other spells and only using it for emergencies".
+--   C5 Nature's Swift 3min emergency instant-cast enabler. Never a loop press.
+--   C6 Force of Nature situational burst on a 3-MINUTE cooldown, and explicitly NOT used on
+--                     sight: the guides hold it for "times where there are no abilities going
+--                     off that will kill your treants and against targets that will live
+--                     through its 30 second duration".
+--   C7 Barkskin       defensive, and it breaks shapeshift in 2.4.3 (already hidden from feral).
+--   C8 Innervate      mana cooldown with its own alert prompt at < 20% mana; likewise breaks
+--                     shapeshift, likewise hidden from feral.
 local mangleCD =                                                            -- C1
-addCD("Mangle",             "Mangle (Bear)",         CD_MANGLE,    GATE_F)
+addCD("Mangle",             "Mangle (Bear)",         CD_MANGLE,    GATE_F, true)
 addCD("Enrage",             "Enrage",                CD_ENRAGE,    GATE_F_PREPULL)  -- C2
 addCD("Frenzied Regen",     "Frenzied Regeneration", CD_FRENZIED,  GATE_F)  -- C3
 addCD("Swiftmend",          "Swiftmend",             CD_SWIFTMEND, GATE_R)  -- C4
@@ -385,9 +436,13 @@ addCD("Innervate",          "Innervate",             CD_INNERVATE, NOT_FERAL)  -
 
 -- Mangle (Bear) is the bear's every-6-seconds press, so it gets the "press it NOW" treatment
 -- the rest of the strip does not: an orange pixel glow the instant the cooldown clears, on top
--- of the shared desaturate-while-down readout.
+-- of the desaturate-while-down readout. subRegions[1] is ALREADY the icon prototype's subglow,
+-- so this replaces index 1 in place and shifts nothing — sub.1 keeps pointing at a subglow.
+-- v6 appends the third condition: out of combat the glow is forced back off, so a bear parked
+-- in a city is not staring at a lit icon (conditions apply in order, the last match wins).
 mangleCD.subRegions[1] = F.subglow(false, { 1, 0.55, 0.15, 1 })
 mangleCD.conditions[2] = F.condition(1, "onCooldown", "==", 0, "sub.1.glow", true)
+mangleCD.conditions[3] = F.condition(2, "inCombat", "==", 0, "sub.1.glow", false)
 
 -- ================= v2 additions =================
 -- APPEND-ONLY: every constructor below draws a uid AFTER all v1 ones, which is what keeps the

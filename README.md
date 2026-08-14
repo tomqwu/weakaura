@@ -24,12 +24,12 @@ use GitHub's copy button on the block to grab the whole string in one click.
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
 | Rogue — All Specs | Combat · Assassination · Subtlety | v45 | 56 | [string](tbc/rogue/README.md#import-string-v45) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v6 | 43 | [string](tbc/paladin/README.md#import-string-v6) · [raw](tbc/paladin/all-specs.txt) |
-| Druid — All Specs | Feral tank · Restoration · Balance | v5 | 46 | [string](tbc/druid/README.md#import-string-v5) · [raw](tbc/druid/all-specs.txt) |
-| Warlock — All Specs | Affliction · Demonology · Destruction | v5 | 38 | [string](tbc/warlock/README.md#import-string-v5) · [raw](tbc/warlock/all-specs.txt) |
-| Hunter — BM & Survival | Beast Mastery · Survival | v5 | 46 | [string](tbc/hunter/README.md#import-string-v5) · [raw](tbc/hunter/all-specs.txt) |
-| Priest — All Specs | Shadow · Holy · Discipline | v5 | 40 | [string](tbc/priest/README.md#import-string-v5) · [raw](tbc/priest/all-specs.txt) |
-| Mage — Arcane & Frost | Arcane · Frost | v5 | 42 | [string](tbc/mage/README.md#import-string-v5) · [raw](tbc/mage/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v7 | 43 | [string](tbc/paladin/README.md#import-string-v7) · [raw](tbc/paladin/all-specs.txt) |
+| Druid — All Specs | Feral tank · Restoration · Balance | v6 | 46 | [string](tbc/druid/README.md#import-string-v6) · [raw](tbc/druid/all-specs.txt) |
+| Warlock — All Specs | Affliction · Demonology · Destruction | v6 | 38 | [string](tbc/warlock/README.md#import-string-v6) · [raw](tbc/warlock/all-specs.txt) |
+| Hunter — BM & Survival | Beast Mastery · Survival | v6 | 46 | [string](tbc/hunter/README.md#import-string-v6) · [raw](tbc/hunter/all-specs.txt) |
+| Priest — All Specs | Shadow · Holy · Discipline | v6 | 40 | [string](tbc/priest/README.md#import-string-v6) · [raw](tbc/priest/all-specs.txt) |
+| Mage — Arcane & Frost | Arcane · Frost | v6 | 42 | [string](tbc/mage/README.md#import-string-v6) · [raw](tbc/mage/all-specs.txt) |
 
 Every pack is class-gated and auto-adapts to your spec through `spellknown` talent gates —
 import the one pack for your class and it shows the right elements after a respec, with no
@@ -45,7 +45,7 @@ and a partial DR tracker is worse than none.
 
 ## Packs
 
-- **tbc/rogue/all-specs.txt** — full HUD, v44 of a 44-iteration build: health/energy/threat
+- **tbc/rogue/all-specs.txt** — full HUD, v45 of a 45-iteration build: health/energy/threat
   bars with 35/40 energy threshold lines, combo pips (always-visible sockets, green→orange gradient),
   spec-adaptive cooldown row
   (15 spells, talent-gated, tooltips + keybind labels), animated alert flow (SnD missing,

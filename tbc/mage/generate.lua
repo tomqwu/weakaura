@@ -1,4 +1,4 @@
--- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v3.
+-- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v6.
 -- Run: lua5.1 tbc/mage/generate.lua   (toolkit libs live in tools/tbc-weakaura-creator/scripts/)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (internalVersion 45).
 --
@@ -53,6 +53,39 @@
 --     useGlowColor is true, so a subglow built WITHOUT a colour makes every glowColor
 --     condition a silent no-op. F.subglow(on, color) sets useGlowColor whenever a colour is
 --     passed, and this aura's subglow is subRegions[1], which is what "sub.1" resolves to.
+
+-- v6 (the cooldown row shows what you CANNOT press; NO new aura, no uid moved, nothing
+-- removed — only genericShowOn and the desaturate condition on six existing icons change):
+-- the default row was inverted. Ten icons sat on screen permanently and merely dimmed when
+-- down, so the row was busiest exactly when the mage had fewest options — and a mage knows
+-- their own spellbook. What they cannot know is what is unavailable and for how long. Every
+-- icon in the row was therefore classified, ability by ability, against
+-- references/rotation-design.md's "Show what the player CANNOT press":
+--   * PRESS-ON-COOLDOWN (stay showAlways, keep the ready-glow — a hidden icon can never fire
+--     one, and hiding the button you press most trades "press this now" for "you cannot"):
+--     Arcane Power, Icy Veins, Summon Water Elemental. These are the damage cooldowns both
+--     raid builds press the moment they come up (icy-veins.com/tbc-classic states Frost's
+--     rotation as "use Icy Veins and Summon Water Elemental when possible, and cast
+--     Frostbolt"; Arcane opens its burn phase with AP + IV stacked), and all three have
+--     glowed gold in combat since v2. Cold Snap keeps showAlways for a structural reason:
+--     its glow is a SEQUENCING instruction (it fires only once both cooldowns it resets have
+--     been spent), which is the one moment pressing an 8 min reset is correct — and that
+--     moment cannot be announced by an icon that is hidden while the ability is ready.
+--   * SITUATIONAL (now genericShowOn = "showOnCooldown"): Presence of Mind (spent inside the
+--     burn window Arcane Power's glow already announces — same 3 min cooldown, so a second
+--     glow would be a duplicate cue), Ice Block (emergency defensive, owned by the HP<30%
+--     prompt), Evocation (mana cooldown, owned by the mana<30% prompt), Counterspell
+--     (interrupt, owned by COUNTERSPELL NOW in the PvP alert flow), Blink (movement),
+--     Invisibility (threat dump, owned by the 70%-threat prompt). None of the six is part of
+--     the Arcane Blast / Frostbolt damage loop, so none of them earns a glow instead: no
+--     mage cooldown is a rotational filler the way a hunter's Arcane Shot or a destruction
+--     warlock's Conflagrate is.
+-- The desaturate condition goes with the conversion: under showOnCooldown every visible icon
+-- is on cooldown by definition, so greying the whole row would only make the abilities harder
+-- to tell apart. The row is a dynamic group, so the gap closes — ABSENCE IS THE READOUT.
+-- Subregion safety: F.icon's prototype already ships a subglow at subRegions[1] on every
+-- icon, so nothing was inserted or reordered here and every existing "sub.1.glow" condition
+-- still resolves to a subglow (audited on the decoded string, all 17 refs).
 
 math.randomseed(20260816)  -- FIXED pack seed; uid() call order is append-only forever
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -322,33 +355,46 @@ adopt(top, gCDs)
 -- v2: every icon is Spell Known gated (v1 left Evocation/Counterspell/Blink permanently lit
 -- for mages below level 20/24/32), and the three use-on-cooldown burst CDs glow the moment
 -- they come up IN COMBAT — out of combat the row stays still.
+-- v6: the third field is the CLASSIFICATION, not a glow flag (see the v6 note at the top):
+--   "glow" — press-on-cooldown damage cooldown: showAlways + the gold ready-glow in combat
+--   "seq"  — showAlways, glow supplied below (Cold Snap's is a sequencing cue, not a ready cue)
+--   "hide" — situational/utility/emergency: showOnCooldown, no desaturate, absence = available
 local cdList = {
-  { "Arcane Power",           12042, true  },  -- Arcane 31: 3 min burst, press on CD
-  { "Presence of Mind",       12043, false },  -- Arcane 21: instant cast, saved for a window
-  { "Icy Veins",              12472, true  },  -- both 40/0/21 arcane and frost talent it
-  { "Summon Water Elemental", 31687, true  },  -- Frost 41: 3 min pet, press on CD
-  { "Cold Snap",              11958, false },  -- Frost 21: 8 min, sequencing rebuilt below
-  { "Ice Block",              45438, false },  -- Frost 31: 5 min immunity, reactive
-  { "Evocation",              12051, false },  -- 8 min mana refill, prompted by mana
-  { "Counterspell",           2139,  false },  -- 24 s interrupt, reactive
-  { "Blink",                  1953,  false },  -- 15 s reposition
-  { "Invisibility",           66,    false },  -- 5 min threat drop, prompted by threat
+  { "Arcane Power",           12042, "glow" },  -- Arcane 31: 3 min burst, press on CD
+  { "Presence of Mind",       12043, "hide" },  -- Arcane 21: spent inside the AP burn window
+  { "Icy Veins",              12472, "glow" },  -- both 40/0/21 arcane and frost talent it
+  { "Summon Water Elemental", 31687, "glow" },  -- Frost 41: 3 min pet, press on CD
+  { "Cold Snap",              11958, "seq"  },  -- Frost 21: 8 min, sequencing rebuilt below
+  { "Ice Block",              45438, "hide" },  -- Frost 31: 5 min immunity, HP<30% prompt owns it
+  { "Evocation",              12051, "hide" },  -- 8 min mana refill, mana<30% prompt owns it
+  { "Counterspell",           2139,  "hide" },  -- 24 s interrupt, COUNTERSPELL NOW owns it
+  { "Blink",                  1953,  "hide" },  -- 15 s reposition
+  { "Invisibility",           66,    "hide" },  -- 5 min threat drop, 70%-threat prompt owns it
 }
 for _, e in ipairs(cdList) do
+  local kind = e[3]
   local icon = reg(F.icon("Mage CD - " .. e[1], CLASS, 32, 32, 0, 0, nil))
   icon.cooldownTextDisabled = false   -- swipe numbers here; no %p subtext (OmniCC doubles)
   icon.useTooltip = true
-  icon.conditions = { F.condition(1, "onCooldown", "==", 1, "desaturate", true) }
-  if e[3] then
-    -- Unit Characteristics is always active, so trigger 1 still drives icon and swipe.
-    icon.triggers = F.triggers({ F.cdTrigger(e[2], e[1], "showAlways"), F.unitCharTrigger() })
-    icon.subRegions[1] = F.subglow(false, { 1, 0.85, 0.2, 1 })
-    icon.conditions[2] = allOf({
-      { trigger = 1, variable = "onCooldown", value = 0 },
-      { trigger = 2, variable = "inCombat", value = 1 },
-    }, "sub.1.glow", true)
+  if kind == "hide" then
+    -- Exists only while the cooldown runs, carrying the swipe and its countdown, and gone the
+    -- moment the ability is back. No desaturate: every visible icon here is on cooldown, so
+    -- greying them all would just make them harder to tell apart at a glance.
+    icon.triggers = F.triggers({ F.cdTrigger(e[2], e[1], "showOnCooldown") })
+    icon.conditions = {}
   else
-    icon.triggers = F.triggers({ F.cdTrigger(e[2], e[1], "showAlways") })
+    icon.conditions = { F.condition(1, "onCooldown", "==", 1, "desaturate", true) }
+    if kind == "glow" then
+      -- Unit Characteristics is always active, so trigger 1 still drives icon and swipe.
+      icon.triggers = F.triggers({ F.cdTrigger(e[2], e[1], "showAlways"), F.unitCharTrigger() })
+      icon.subRegions[1] = F.subglow(false, { 1, 0.85, 0.2, 1 })
+      icon.conditions[2] = allOf({
+        { trigger = 1, variable = "onCooldown", value = 0 },
+        { trigger = 2, variable = "inCombat", value = 1 },
+      }, "sub.1.glow", true)
+    else
+      icon.triggers = F.triggers({ F.cdTrigger(e[2], e[1], "showAlways") })
+    end
   end
   icon.load.use_spellknown = true
   icon.load.spellknown = e[2]
@@ -360,6 +406,8 @@ end
 -- showing its own 8 min cooldown (trigger 1, showAlways, disjunctive "any"), and glows only
 -- when both resets are banked and Cold Snap itself is up. A mage who never learned Water
 -- Elemental simply never gets the glow — the icon still behaves as before.
+-- v6 keeps it on showAlways for exactly that glow: the sequencing cue fires while Cold Snap
+-- is READY, so an icon hidden until it goes on cooldown could never deliver it.
 local coldsnap = byId["Mage CD - Cold Snap"]
 coldsnap.triggers = F.triggers({
   F.cdTrigger(11958, "Cold Snap", "showAlways"),

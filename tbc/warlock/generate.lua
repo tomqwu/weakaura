@@ -1,4 +1,4 @@
--- generate.lua — Warlock TBC All-Specs HUD (v3).
+-- generate.lua — Warlock TBC All-Specs HUD (v6).
 -- Run: lua5.1 generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import).
 --
@@ -64,6 +64,46 @@
 --   * NEW per-opponent Enemy Mana row (arena only): the Power prototype's unit
 --     arg accepts "arena" on 2.5.x and clones one row per opponent. This is the
 --     Drain Mana / Curse of Tongues readout the v4 notes deferred as unverified.
+--
+-- v6 (the cooldown row shows what you CANNOT press):
+--   * Every icon in the cooldown row becomes genericShowOn = "showOnCooldown".
+--     The row is a dynamic group, so the gap closes and ABSENCE IS THE READOUT:
+--     an empty row means every cooldown you own is up, and two icons mean
+--     exactly two things are down, both counting themselves back. The old row
+--     was inverted — seven icons on screen at all times, busiest exactly when
+--     the warlock had fewest options — and a warlock knows their own spellbook.
+--   * The "onCooldown == 1 -> desaturate" condition goes with it: under
+--     showOnCooldown every visible icon is on cooldown by definition, so
+--     desaturating them all would grey the whole row and make the icons harder
+--     to tell apart. Full colour plus the swipe reads better.
+--   * NO icon here is exempt, because the exemption is for press-on-cooldown
+--     ROTATIONAL buttons, whose ready-glow is the instruction and cannot fire
+--     from a hidden icon (paladin Judgement/Crusader Strike, druid Mangle,
+--     priest Mind Blast). The warlock's press-on-cooldown loop is Shadow Bolt /
+--     Incinerate and the DoTs — none of which has a cooldown, and all of which
+--     are already rendered by the DoT row and the Alerts flow. Every one of the
+--     seven row icons is situational, and TBC (not Wrath, not retail) is
+--     explicit about the two that look rotational:
+--       - Conflagrate CONSUMES your Immolate, so firing it on cooldown is a
+--         DPS loss. Icy Veins: "Do NOT use Conflagrate on cooldown or at the
+--         end of your Immolate" — use it "only if you have to move and if you
+--         do not need to Life Tap". It is a movement answer, and v2 already
+--         wrote that into the README; a glow every 10 s would be an instruction
+--         to eat your own DoT.
+--       - Shadowburn costs a Soul Shard and eats Improved Shadow Bolt charges;
+--         the same guide reserves it for "you cannot finish a Shadow Bolt or
+--         you are moving", i.e. movement filler, execute and PvP burst windows.
+--       - Amplify Curse (3 min) only pays off on a Curse of Agony/Doom you are
+--         usually not assigned, Fel Domination (15 min) is the pet emergency,
+--         Shadowfury and Howl of Terror are CC, Death Coil is CC/self-heal.
+--     So this pack, like the rogue's, adds zero glows: not one row icon is a
+--     press-on-cooldown button. Note the latent subglow the icon prototype puts
+--     at subRegions[1] is left exactly where it is (glow = false, no condition
+--     reaches it) — nothing was inserted or reordered, so no sub.N condition
+--     anywhere in the pack changed meaning.
+--   * Not one W.uid() call was added, removed or reordered: v6 is a trigger and
+--     condition change on seven existing auras, so all 38 uids are stable and a
+--     v5 import offers Update.
 --
 -- UID ORDER IS SACRED: the two v2 auras are built at the BOTTOM of this file so
 -- every pre-v1 uid() call keeps its position in the seeded stream. v3 is a
@@ -340,21 +380,30 @@ soullink.load.use_spellknown = true
 soullink.load.spellknown = GATE.soulLink
 
 -- =====================================================================
--- Cooldowns (0,-66): horizontal row, desaturate while down.
--- No %p subtext here: the swipe (plus OmniCC) already shows the number.
+-- Cooldowns (0,-66): horizontal row of what you CANNOT press (v6).
+-- Each icon EXISTS ONLY WHILE ITS COOLDOWN RUNS and vanishes the moment the
+-- ability is back; the dynamic group closes the gap, so an empty row means
+-- everything is available. No %p subtext: the swipe (plus OmniCC) already
+-- shows the number, and there is no desaturate condition either — under
+-- showOnCooldown every visible icon is on cooldown, so greying them all would
+-- only make them harder to tell apart.
 -- =====================================================================
 local gCds = reg(F.dynGroup("Warlock - Cooldowns", 0, -66, nil, "HORIZONTAL", "CENTER", 4))
 gCds.animate = false
 adopt(top, gCds)
 
+-- NB: F.icon's prototype already carries a subglow at subRegions[1] (glow off,
+-- no colour) and the border below is appended at [2]. Nothing in this row drives
+-- sub.1.glow — see the v6 note at the top for why none of these seven is a
+-- press-on-cooldown button — and the layer is deliberately left untouched rather
+-- than removed, so no subregion index anywhere in the pack shifts.
 local function addCD(name, spellId, gated)
   local icon = reg(F.icon("Warlock CD - " .. name, CLASS, 32, 32, 0, 0, gCds.id))
-  icon.triggers = F.triggers({ F.cdTrigger(spellId, name, "showAlways") })
+  icon.triggers = F.triggers({ F.cdTrigger(spellId, name, "showOnCooldown") })
   icon.cooldownTextDisabled = false
   icon.useTooltip = true
   icon.zoom = 0.3
   table.insert(icon.subRegions, F.subborder())
-  icon.conditions = { F.condition(1, "onCooldown", "==", 1, "desaturate", true) }
   if gated then
     icon.load.use_spellknown = true
     icon.load.spellknown = spellId
