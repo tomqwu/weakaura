@@ -837,6 +837,7 @@ local outPath = dir .. "/all-specs.txt"
 -- compare against the previously shipped build BEFORE overwriting it: every future
 -- version gets the uid-continuity check for free (changed must stay 0)
 local cont = W.uidContinuity(encoded, outPath)
+W.assertUidContinuity(cont, "paladin")
 
 local out = io.open(outPath, "w")
 out:write(encoded)

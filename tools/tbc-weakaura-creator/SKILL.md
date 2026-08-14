@@ -30,7 +30,8 @@ cd scripts && ./setup.sh    # fetches LibDeflate + LibSerialize, ensures lua5.1
 2. **UID continuity = clean updates.** Fixed `math.randomseed` per pack; never reorder or
    remove `W.uid()` calls between versions; new auras append new calls at the END. Same UIDs
    make the in-game import show "Update" instead of duplicating. Verify with
-   `W.uidContinuity(encoded, prevFile)` every version after the first.
+   `W.uidContinuity(encoded, prevFile)` plus `W.assertUidContinuity(...)` every version after
+   the first. The repo suite also compares against the previous Git revision.
 3. **Verify before delivering.** `W.verify(transmit, encoded)` (round-trip + structure) must
    pass. Deliver the string as a `.txt` file the user copies whole.
 4. **internalVersion stays 45** (`tocversion 20501`). Modern WA migrates it forward on
@@ -58,7 +59,8 @@ cd scripts && ./setup.sh    # fetches LibDeflate + LibSerialize, ensures lua5.1
      one pack then auto-adapts across specs. Prefer the ability's own rank-1 id over the
      spec capstone: it also hides the element while levelling. Every UNGATED element loads
      for every spec and must be justified for all of them — audit with
-     `lua5.1 tools/spec-preview.lua <pack>`, which prints each spec's actual visible set.
+     `lua5.1 tools/spec-preview.lua <pack> pve`, which evaluates combined load and form gates
+     for explicit level-70 exemplar profiles (live trigger state is intentionally out of scope).
    - Icon polish: `zoom = 0.3` + `F.subborder()` on every icon.
 4. **Encode + verify + deliver**: `F.assemble` → `W.encode` → `W.verify` → write `.txt` →
    present the file. Tell the user: copy all → `/wa` → Import → paste.

@@ -814,6 +814,7 @@ W.verify(transmit, encoded)
 -- uid continuity vs the previously shipped string, checked BEFORE overwriting,
 -- so every future version gets the "same id keeps its uid" check for free.
 local cont = W.uidContinuity(encoded, OUT)
+W.assertUidContinuity(cont, "mage")
 
 local out = io.open(OUT, "w")
 out:write(encoded)

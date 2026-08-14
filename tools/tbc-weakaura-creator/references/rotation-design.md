@@ -6,8 +6,11 @@ tracker collection.** Everything below serves that. If a pack is beautiful, comp
 still leaves the player reading tooltips mid-pull, it failed.
 
 A WeakAuras pack is not a list of trackers — it is the spec's rotation rendered as UI.
-Before building anything, write out the priority rotation for each SPEC and each SCENARIO
-the user plays (leveling/dungeon single-target, raid single-target, AoE, PvP). Pull the
+Before building anything, declare the supported scope, then write out the priority rotation
+for each supported SPEC and SCENARIO (leveling/dungeon single-target, raid single-target,
+AoE, PvP). Any omitted spec or scenario belongs in the pack README and root pack table; an
+`all-specs.txt` filename is the one-string-per-class packaging rule, not permission to imply
+coverage that was never designed. Pull the
 rotation from a current-phase class guide and confirm it with the user; talents change
 rotations (e.g. Improved Sinister Strike changes the energy breakpoint from 45 to 40).
 
@@ -163,10 +166,11 @@ Two rules make that concrete:
   exists) and shows it to every build that actually has it, including hybrids. Reserve
   capstone gates for elements that only make sense inside that spec's rotation.
 
-There is no negated `spellknown`, so "show for Prot and Ret but not Holy" cannot be written as
-one gate. Either gate each shared element on its own ability id (preferred), or ship one copy
-per spec with positive gates — but check the hybrid case first: a 21-Prot/40-Ret paladin knows
-both capstones and would see a duplicated element twice.
+Current WeakAuras exposes a separate inverse load argument:
+`use_not_spellknown = true, not_spellknown = <id>` (WeakAuras 5.4.0+). It is not expressed as
+`use_spellknown = false`; that disables the positive gate. Prefer an ability's own positive
+gate when possible, use the inverse only for genuine complements such as "not deep Holy",
+and check the hybrid case before duplicating elements.
 
 Audit the result rather than trusting the build script:
 
@@ -174,9 +178,9 @@ Audit the result rather than trusting the build script:
 lua5.1 tools/spec-preview.lua <pack>
 ```
 
-It decodes the shipped string and prints, for every spec gate, exactly which elements that
-spec adds — plus the ungated list (read it critically) and the levelling case, which is what
-a player sees before any capstone talent exists.
+It decodes the shipped string and evaluates the combined load/form eligibility of explicit
+level-70 exemplar profiles. Pass `pve`, `arena` or `prepull` as the second argument. The result
+is the offline-eligible set; live aura/cooldown state still decides what is currently drawn.
 
 ## Scenario variants
 

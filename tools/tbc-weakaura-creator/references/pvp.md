@@ -355,9 +355,11 @@ spellSchool, extraSpellId/extraSpellName` (the interrupted spell, for `_INTERRUP
   Characteristics' `inRange` is retail-gated and dead on TBC.
 - **One item-cooldown trigger covering several trinket ids.** `itemName` has no `multiEntry`.
   N triggers with `disjunctive = "any"`, or the equipment-slot variant.
-- **Enemy mana as a verified primitive.** The Power prototype's unit arg was NOT verified for
-  arena units in this pass. It is the highest-value remaining unknown (Mana Burn / Viper Sting
-  / Drain Mana all read it) — verify it before planning around it.
+- **Enemy mana event cadence still wants a live smoke test.** The Power prototype accepts
+  `unit = "arena"`, expands it per opponent, and can require mana as the primary power type;
+  that source shape is verified and ships in the priest, hunter, warlock and mage packs.
+  Addon source cannot prove how frequently a 2.5.x client emits `UNIT_POWER_FREQUENT` for arena
+  units, so confirm refresh cadence in one live match before treating it as frame-perfect.
 
 ---
 

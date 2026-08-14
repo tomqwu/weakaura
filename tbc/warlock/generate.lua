@@ -751,6 +751,7 @@ W.verify(transmit, encoded)
 -- so re-running after any future edit compares against the shipped string)
 local txtPath = dir .. "/all-specs.txt"
 local cont = W.uidContinuity(encoded, txtPath)
+W.assertUidContinuity(cont, "warlock")
 
 local out = assert(io.open(txtPath, "w"))
 out:write(encoded)  -- single line, no trailing newline

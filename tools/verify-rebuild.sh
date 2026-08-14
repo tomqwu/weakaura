@@ -16,23 +16,11 @@ trap 'rm -rf "$SANDBOX"' EXIT
 cp -r "$ROOT/tbc" "$SANDBOX/tbc"
 ln -s "$ROOT/tools" "$SANDBOX/tools"
 
-# build script -> shipped string, relative to the repo root
-PACKS="
-tbc/paladin/generate.lua:tbc/paladin/all-specs.txt
-tbc/druid/generate.lua:tbc/druid/all-specs.txt
-tbc/warlock/generate.lua:tbc/warlock/all-specs.txt
-tbc/hunter/generate.lua:tbc/hunter/all-specs.txt
-tbc/priest/generate.lua:tbc/priest/all-specs.txt
-tbc/mage/generate.lua:tbc/mage/all-specs.txt
-"
-# NB: tbc/rogue/generate.lua is the historical v1->v41 iteration script and needs the
-# original workspace (dump.lua, prior-version strings); it is intentionally not rebuilt
-# here. tbc/rogue/all-specs.txt is covered by tools/verify-packs.lua.
-
 fails=0
-for entry in $PACKS; do
-  script="${entry%%:*}"
-  shipped="${entry##*:}"
+count=0
+while IFS= read -r shipped; do
+  script="${shipped%/*}/generate.lua"
+  count=$((count + 1))
   if [ ! -f "$ROOT/$script" ]; then
     echo "  ! missing build script $script"; fails=$((fails + 1)); continue
   fi
@@ -46,7 +34,27 @@ for entry in $PACKS; do
     echo "  ! $script output differs from committed $shipped"
     fails=$((fails + 1))
   fi
-done
+done < <(find "$ROOT/tbc" -mindepth 2 -maxdepth 2 -type f -name all-specs.txt \
+  -printf 'tbc/%P\n' | sort)
+
+if [ "$count" -eq 0 ]; then
+  echo "  ! no tbc/*/all-specs.txt packs discovered"
+  fails=$((fails + 1))
+fi
+
+if ! out="$(cd "$ROOT" && lua5.1 tools/test-wa-lib.lua 2>&1)"; then
+  echo "  ! verifier negative tests failed:"; echo "$out" | sed 's/^/      /'
+  fails=$((fails + 1))
+else
+  echo "  tools/test-wa-lib.lua                    rejects malformed history/structure"
+fi
+
+if ! out="$(cd "$ROOT" && lua5.1 tools/spec-preview.lua 2>&1)"; then
+  echo "  ! profile-aware spec audit failed:"; echo "$out" | sed 's/^/      /'
+  fails=$((fails + 1))
+else
+  echo "  tools/spec-preview.lua                   validates explicit build profiles"
+fi
 
 if [ "$fails" -ne 0 ]; then
   echo ""
@@ -54,4 +62,4 @@ if [ "$fails" -ne 0 ]; then
   exit 1
 fi
 echo ""
-echo "PASS: every shipped string reproduces byte-for-byte from its committed script"
+echo "PASS: all $count discovered strings reproduce byte-for-byte from their committed scripts"

@@ -45,6 +45,7 @@ but the scaffolding set must be present.
   existing `uid()` calls; new auras consume NEW calls appended after all existing ones.
   Restructuring (re-parenting, renaming, resizing) is free — only the uid() CALL ORDER
   is sacred.
-- `W.uidContinuity(newString, prevFile)` reports stable/changed counts — `changed` must be 0.
-  (Renamed auras show as neither: matched by the new id failing lookup — that's fine, the
-  UID itself carried over; eyeball those cases.)
+- `W.uidContinuity(newString, prevFile)` reports same-id stability and whether every previous
+  child UID survived. Always pass the result to `W.assertUidContinuity`; both changed UIDs and
+  missing UIDs fail, so renames remain safe without relying on their ids. The repository
+  verifier independently compares each deliverable with its preceding committed revision.
