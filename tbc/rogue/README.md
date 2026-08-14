@@ -56,6 +56,11 @@ down — the same information twice is how a HUD teaches you to stop reading it.
 cooldowns, enemy spec, and "only show casts I can interrupt" are impossible on 2.5.x;
 the reasons are in `../../tools/tbc-weakaura-creator/references/pvp.md`.
 
+**Live acceptance note:** `CC ON ME` uses WeakAuras' source-verified Crowd Controlled
+prototype, but addon source cannot prove that the 2.5.x client populates the underlying
+loss-of-control API. Get sapped and school-locked in a duel once before relying on it; the
+repo suite verifies its schema and gates, not live client events.
+
 **v43 — readable combo pips.** All five pips are now always on screen: unearned ones sit
 as dark empty sockets and light up green→orange left to right as you build points, so the
 row reads like a filled bar instead of floating dots you have to count. They are also

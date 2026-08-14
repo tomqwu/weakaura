@@ -1,4 +1,4 @@
--- generate.lua — Druid TBC "All Specs" HUD (v2).
+-- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v7).
 -- Run: lua5.1 generate.lua   (toolkit libs live in ../../tools/tbc-weakaura-creator/scripts/,
 -- fetch them once with that directory's setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (copy whole -> /wa -> Import).
@@ -46,6 +46,12 @@
 -- Mangle (Bear) is the one press-on-cooldown rotational button in the row, so it keeps
 -- showAlways + desaturate + its ready-glow, and gains a Unit Characteristics trigger purely so
 -- that glow can be silenced out of combat. See the classification table above addCD().
+--
+-- v7 (Cat no longer receives the Bear HUD) — the Mangle talent teaches both Bear and Cat
+-- versions, so spellknown alone cannot distinguish the forms. Every Bear-only element now
+-- ANDs its existing state with the verified Stance/Form/Aura trigger for form 1. No aura or
+-- uid was added, removed or reordered; Cat keeps the shared/PvP layer and Bear behavior is
+-- unchanged while actually in Bear/Dire Bear Form.
 
 math.randomseed(20260812)  -- FIXED pack seed; append-only uid order across versions
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -59,7 +65,7 @@ arg[0] = arg0
 local W = F.W
 
 local CLASS = "DRUID"
-local TOP = "Druid TBC - All Specs"
+local TOP = "Druid TBC - Bear, Restoration & Balance"
 
 local byId = {}
 local function reg(t) byId[t.id] = t; return t end
@@ -86,8 +92,9 @@ local GATE_F_PREPULL = { use_spellknown = true, spellknown = 33878, use_combat =
 --   * do NOT set use_exact_not_spellknown: with `exact` falsy, IsSpellKnownForLoad resolves the
 --     rank-1 id through the spell NAME to whatever rank the player has, so one id covers r1-r3.
 -- 33878 is Mangle (Bear), the 41-point Feral talent every other feral element gates on, so
--- NOT_FERAL is the exact complement of the bear HUD: what a bear loads, this hides, and vice
--- versa. Mangle (Cat) is a different spell NAME (33876), so the name resolution is unambiguous.
+-- NOT_FERAL keeps caster-only buttons hidden from both supported Bear builds and unsupported
+-- Cat builds. Mangle (Cat) is a different spell NAME (33876), so name resolution is
+-- unambiguous. The v7 Bear-vs-Cat distinction is enforced separately by the form trigger.
 local NOT_FERAL        = { use_not_spellknown = true, not_spellknown = 33878 }
 local NOT_FERAL_COMBAT = { use_not_spellknown = true, not_spellknown = 33878, use_combat = true }
 
@@ -704,6 +711,24 @@ ccOut.cooldownTextDisabled = true
 ccOut.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
 ccOut.subRegions[3] = F.subborder()
 
+-- Mangle (Bear) and Mangle (Cat) are granted by the same talent. A spell-known
+-- load gate therefore identifies the Feral build, not the active form. Make the
+-- distinction at runtime by ANDing every Bear-gated element with form 1
+-- (Bear/Dire Bear in the fully trained TBC druid form list). Trigger 1 remains
+-- the progress/icon source, so all existing conditions and displays keep their
+-- trigger indexes and behavior.
+local bearFormGated = 0
+for _, aura in pairs(byId) do
+  local load = aura.load or {}
+  if load.use_spellknown and load.spellknown == 33878 then
+    assert(aura.triggers and aura.triggers.disjunctive == "all",
+      aura.id .. ": Bear form gate requires all-trigger logic")
+    table.insert(aura.triggers, { trigger = F.formTrigger(1), untrigger = {} })
+    bearFormGated = bearFormGated + 1
+  end
+end
+assert(bearFormGated == 15, "expected 15 Bear-only elements, gated " .. bearFormGated)
+
 -- ================= assemble (v2000 nested), encode, verify, write =================
 local transmit = F.assemble(top, byId)
 local encoded = W.encode(transmit)
@@ -712,6 +737,7 @@ W.verify(transmit, encoded)
 local txtPath = dir .. "/all-specs.txt"
 -- continuity vs the PREVIOUS shipped string (read before overwriting it)
 local cont = W.uidContinuity(encoded, txtPath)
+W.assertUidContinuity(cont, "druid")
 
 local out = io.open(txtPath, "w")
 out:write(encoded)  -- single line, no trailing newline

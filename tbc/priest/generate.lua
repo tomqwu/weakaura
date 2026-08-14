@@ -835,6 +835,7 @@ W.verify(transmit, encoded)
 -- overwritten, so every future re-run is checked against the string that shipped
 local txtPath = dir .. "/all-specs.txt"
 local cont = W.uidContinuity(encoded, txtPath)
+W.assertUidContinuity(cont, "priest")
 
 local out = assert(io.open(txtPath, "w"))
 out:write(encoded)  -- single line, no trailing newline

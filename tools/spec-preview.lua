@@ -1,16 +1,11 @@
--- spec-preview.lua — show what each SPEC actually sees in a pack.
--- Run: lua5.1 tools/spec-preview.lua [packname]      (no arg = every pack)
+-- spec-preview.lua — profile-aware load/form eligibility audit.
+-- Run: lua5.1 tools/spec-preview.lua [pack] [pve|arena|prepull]
 --
--- A multi-spec pack is only usable if each spec loads its own rotation and nothing
--- else. Elements are gated with load.use_spellknown = <signature talent id>, so the
--- set of distinct gates in a pack IS its list of specs. This decodes the shipped
--- string and simulates, per spec, exactly which elements load — plus the "levelling"
--- case where the player has no capstone talent yet.
---
--- Read the UNGATED list critically: an ungated element loads for EVERY spec, so it
--- must be justified for every spec. An ungated element that only one spec presses is
--- noise in the other specs' HUDs (rotation-design.md: cut anything that doesn't
--- change which button gets pressed next).
+-- This does not pretend that cooldown/aura state is knowable offline. It does
+-- evaluate every load gate used by the packs plus Stance/Form/Aura state gates,
+-- against explicit level-70 exemplar builds. That makes combined positive and
+-- inverse spell gates, instance gates, combat gates and the Druid Cat/Bear split
+-- visible in one deterministic report.
 
 local ROOT = (arg and arg[0] or ""):match("^(.*)[/\\]tools[/\\]") or "."
 local SCRIPTS = ROOT .. "/tools/tbc-weakaura-creator/scripts"
@@ -19,91 +14,180 @@ arg = { [0] = SCRIPTS .. "/wa_lib.lua" }
 local WA = dofile(SCRIPTS .. "/wa_lib.lua")
 arg = savedArg
 
-local PACKS = {
-  { "rogue",   "tbc/rogue/all-specs.txt" },
-  { "paladin", "tbc/paladin/all-specs.txt" },
-  { "druid",   "tbc/druid/all-specs.txt" },
-  { "warlock", "tbc/warlock/all-specs.txt" },
-  { "hunter",  "tbc/hunter/all-specs.txt" },
-  { "priest",  "tbc/priest/all-specs.txt" },
-  { "mage",    "tbc/mage/all-specs.txt" },
+local function known(...)
+  local result = {}
+  for _, list in ipairs({ ... }) do
+    for _, id in ipairs(list) do result[id] = true end
+  end
+  return result
+end
+
+local ROGUE_BASE = { 1766, 1966, 5277 }
+local PALADIN_BASE = { 853, 1022, 1044, 4987, 24275 }
+local WARLOCK_BASE = { 5484, 6789, 28176, 29858 }
+local HUNTER_BASE = { 136, 982, 1495, 1499, 3034, 5384, 13165, 34026, 34074, 34477 }
+local PRIEST_BASE = { 586, 32375, 33076, 34433 }
+local MAGE_BASE = { 66, 1953, 2139, 12051, 30455 }
+
+-- Explicit exemplars, not inferred from arbitrary spell gates. Optional talents
+-- get separate profiles when they materially change a supported rotation.
+local PROFILES = {
+  rogue = {
+    { name = "Combat", known = known(ROGUE_BASE, { 13750, 13877, 14251 }) },
+    { name = "Assassination", known = known(ROGUE_BASE, { 14177 }) },
+    { name = "Subtlety", known = known(ROGUE_BASE, { 14183, 14185, 36554 }) },
+  },
+  paladin = {
+    { name = "Holy", known = known(PALADIN_BASE, { 20216, 20473, 31842 }) },
+    { name = "Protection", known = known(PALADIN_BASE, { 20925, 31935 }) },
+    { name = "Retribution", known = known(PALADIN_BASE, { 20375, 35395 }) },
+  },
+  druid = {
+    { name = "Bear", known = known({ 33878, 16864, 22812 }), form = 1 },
+    { name = "Cat (unsupported-scope guard)", known = known({ 33878, 16864, 22812 }), form = 3,
+      forbidSpellGate = 33878 },
+    { name = "Restoration", known = known({ 18562, 17116, 33891, 22812 }), form = 0 },
+    { name = "Balance", known = known({ 24858, 33831, 16864, 22812 }), form = 5 },
+  },
+  warlock = {
+    { name = "Affliction", known = known(WARLOCK_BASE, { 18094, 18265, 18288, 30108 }) },
+    { name = "Demonology", known = known(WARLOCK_BASE, { 18708, 18788, 19028 }) },
+    { name = "Destruction (0/21/40)", known = known(WARLOCK_BASE,
+      { 17877, 17962, 18708, 18788, 34935 }) },
+    { name = "Destruction (Shadowfury)", known = known(WARLOCK_BASE,
+      { 17877, 17962, 30283, 34935 }) },
+  },
+  hunter = {
+    { name = "Beast Mastery", known = known(HUNTER_BASE, { 19574, 19577 }) },
+    { name = "Survival", known = known(HUNTER_BASE, { 19386, 19503, 23989 }) },
+    { name = "Marksmanship (unsupported-scope guard)", known = known(HUNTER_BASE,
+      { 19503, 34490 }) },
+  },
+  priest = {
+    { name = "Holy", known = known(PRIEST_BASE, { 724, 6346, 13908, 14751 }) },
+    { name = "Discipline", known = known(PRIEST_BASE, { 10060, 14751, 33206 }) },
+    { name = "Shadow", known = known(PRIEST_BASE, { 15286, 15473, 15487, 34914 }) },
+  },
+  mage = {
+    { name = "Arcane (40/0/21)", known = known(MAGE_BASE, { 11958, 12042, 12043, 12472 }) },
+    { name = "Frost", known = known(MAGE_BASE, { 11426, 11958, 12472, 31687, 45438 }) },
+  },
 }
 
--- Readable names for the signature talents used as spec gates. Purely cosmetic;
--- an unknown id still prints, so nothing breaks when a pack adds a gate.
-local GATE_NAMES = {
-  [13750] = "Combat (Adrenaline Rush)", [14177] = "Assassination (Cold Blood)",
-  [36554] = "Subtlety (Shadowstep)", [14185] = "Subtlety (Preparation)",
-  [14183] = "Subtlety (Premeditation)", [14251] = "Riposte (Combat)",
-  [20473] = "Holy (Holy Shock)", [20925] = "Protection (Holy Shield)",
-  [35395] = "Retribution (Crusader Strike)", [31935] = "Protection (Avenger's Shield)",
-  [20216] = "Holy (Divine Favor)", [31842] = "Holy (Divine Illumination)",
-  [20375] = "Retribution (Seal of Command)",
-  [33878] = "Feral bear (Mangle)", [18562] = "Restoration (Swiftmend)",
-  [24858] = "Balance (Moonkin Form)", [16864] = "Omen of Clarity",
-  [17116] = "Nature's Swiftness", [33831] = "Force of Nature",
-  [30108] = "Affliction (Unstable Affliction)", [18708] = "Demonology (Fel Domination)",
-  [17962] = "Destruction (Conflagrate)", [18288] = "Amplify Curse",
-  [19574] = "Beast Mastery (Bestial Wrath)", [19386] = "Survival (Wyvern Sting)",
-  [34490] = "Survival (Silencing Shot)", [23989] = "Readiness",
-  [15473] = "Shadow (Shadowform)", [34914] = "Shadow (Vampiric Touch)",
-  [33206] = "Discipline (Pain Suppression)", [10060] = "Discipline (Power Infusion)",
-  [12042] = "Arcane (Arcane Power)", [12472] = "Frost (Icy Veins)",
-  [31687] = "Frost (Water Elemental)", [11426] = "Frost (Ice Barrier)",
-  [11129] = "Fire (Combustion)",
+local SCENARIOS = {
+  pve = { label = "grouped PvE combat", combat = true, ingroup = "group", size = "party" },
+  arena = { label = "arena combat", combat = true, ingroup = "group", size = "arena" },
+  prepull = { label = "grouped pre-pull", combat = false, ingroup = "group", size = "party" },
 }
 
-local function label(id) return GATE_NAMES[id] or ("spell " .. tostring(id)) end
+local function quote(s)
+  return "'" .. tostring(s):gsub("'", "'\"'\"'") .. "'"
+end
+
+local function discover()
+  local cmd = "find " .. quote(ROOT .. "/tbc")
+    .. " -mindepth 2 -maxdepth 2 -type f -name all-specs.txt -printf '%h\\n' | sort"
+  local pipe = assert(io.popen(cmd, "r"))
+  local result = {}
+  for directory in pipe:lines() do
+    local name = directory:match("([^/]+)$")
+    result[#result + 1] = { name = name, path = directory .. "/all-specs.txt" }
+  end
+  pipe:close()
+  return result
+end
+
+local function multiselectMatches(value, config, useValue)
+  if useValue == nil then return true end
+  if useValue == true then return config and config.single == value end
+  return config and config.multi and config.multi[value] == true
+end
+
+local function loadMatches(load, profile, scenario)
+  load = load or {}
+  if load.use_class and not multiselectMatches(profile.class, load.class, load.use_class) then
+    return false
+  end
+  if load.use_spellknown and not profile.known[load.spellknown] then return false end
+  if load.use_not_spellknown and profile.known[load.not_spellknown] then return false end
+  if load.use_combat ~= nil and load.use_combat ~= scenario.combat then return false end
+  if load.use_ingroup and not multiselectMatches(scenario.ingroup, load.ingroup, load.use_ingroup) then
+    return false
+  end
+  if not multiselectMatches(scenario.size, load.size, load.use_size) then return false end
+  return true
+end
+
+local function formMatches(aura, profile)
+  for _, wrapped in ipairs(aura.triggers or {}) do
+    local trigger = wrapped.trigger or {}
+    if trigger.event == "Stance/Form/Aura" and trigger.use_form ~= nil then
+      local matches = multiselectMatches(profile.form or 0, trigger.form, trigger.use_form)
+      if trigger.use_inverse then matches = not matches end
+      if not matches then return false end
+    end
+  end
+  return true
+end
 
 local only = arg and arg[1]
-for _, p in ipairs(PACKS) do
-  if not only or only == p[1] then
-    local f = io.open(ROOT .. "/" .. p[2], "r")
-    if f then
+local scenarioName = arg and arg[2] or "pve"
+local scenario = assert(SCENARIOS[scenarioName], "scenario must be pve, arena or prepull")
+local failures = {}
+local seen = {}
+local supportedLoadUses = {
+  use_class = true,
+  use_spellknown = true,
+  use_not_spellknown = true,
+  use_combat = true,
+  use_ingroup = true,
+  use_size = true,
+}
+
+for _, pack in ipairs(discover()) do
+  if not only or only == pack.name then
+    seen[pack.name] = true
+    local profiles = PROFILES[pack.name]
+    if not profiles then
+      failures[#failures + 1] = pack.name .. ": no explicit profile definitions"
+    else
+      local f = assert(io.open(pack.path, "r"))
       local T = WA.decode(f:read("*a")); f:close()
-
-      local elements, gates = {}, {}
-      for _, a in ipairs(T.c) do
-        if a.regionType ~= "group" and a.regionType ~= "dynamicgroup" then
-          local l = a.load or {}
-          local g = l.use_spellknown and l.spellknown or nil
-          -- inverse gate: element loads only for players who do NOT know this spell
-          local ng = l.use_not_spellknown and l.not_spellknown or nil
-          elements[#elements + 1] = { id = a.id, gate = g, notGate = ng }
-          if g then gates[g] = true end
+      print(("=========== %s — %s ==========="):format(pack.name, scenario.label))
+      for _, aura in ipairs(T.c or {}) do
+        for key, value in pairs(aura.load or {}) do
+          if key:match("^use_") and value ~= nil and not supportedLoadUses[key] then
+            failures[#failures + 1] = ("%s / %s uses unsupported load selector %s")
+              :format(pack.name, aura.id, key)
+          end
         end
       end
-      local gateList = {}
-      for g in pairs(gates) do gateList[#gateList + 1] = g end
-      table.sort(gateList)
-
-      local ungated, inverse = {}, {}
-      for _, e in ipairs(elements) do
-        if e.notGate then
-          inverse[#inverse + 1] = ("%s  (hidden from: %s)"):format(e.id, label(e.notGate))
-        elseif not e.gate then
-          ungated[#ungated + 1] = e.id
+      for _, profile in ipairs(profiles) do
+        profile.class = pack.name:upper()
+        local eligible = {}
+        for _, aura in ipairs(T.c or {}) do
+          if aura.regionType ~= "group" and aura.regionType ~= "dynamicgroup"
+             and loadMatches(aura.load, profile, scenario) and formMatches(aura, profile) then
+            eligible[#eligible + 1] = aura.id
+            if profile.forbidSpellGate and aura.load
+               and aura.load.use_spellknown and aura.load.spellknown == profile.forbidSpellGate then
+              failures[#failures + 1] = ("%s / %s incorrectly receives %s")
+                :format(pack.name, profile.name, aura.id)
+            end
+          end
         end
+        table.sort(eligible)
+        print(("  %-36s %2d eligible: %s")
+          :format(profile.name, #eligible, table.concat(eligible, ", ")))
       end
-
-      print(("=========== %s — %d elements, %d spec gates ==========="):format(
-            p[1], #elements, #gateList))
-      print(("  UNGATED (loads for EVERY spec, incl. while levelling): %d"):format(#ungated))
-      for _, id in ipairs(ungated) do print("     . " .. id) end
-      if #inverse > 0 then
-        print(("  INVERSE-GATED (loads for everyone EXCEPT one spec): %d"):format(#inverse))
-        for _, s in ipairs(inverse) do print("     - " .. s) end
-      end
-      for _, g in ipairs(gateList) do
-        local vis = {}
-        for _, e in ipairs(elements) do
-          if e.gate == g then vis[#vis + 1] = e.id end
-        end
-        print(("  + knows %-34s adds %d: %s"):format(label(g), #vis, table.concat(vis, ", ")))
-      end
-      print(("  LEVELLING (no capstone talent yet) sees only the %d ungated elements.")
-            :format(#ungated))
       print("")
     end
   end
+end
+
+if only and not seen[only] then failures[#failures + 1] = "unknown pack: " .. only end
+if #failures > 0 then
+  print("FAILURES:")
+  for _, failure in ipairs(failures) do print("  ! " .. failure) end
+  os.exit(1)
 end

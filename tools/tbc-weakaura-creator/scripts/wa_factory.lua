@@ -132,6 +132,17 @@ function F.unitCharTrigger()
   return trigStub{ type = "unit", event = "Unit Characteristics", unit = "player", use_unit = true }
 end
 
+-- Current shapeshift form by spellbook position. On a fully trained TBC druid,
+-- Bear/Dire Bear is form 1 and Cat is form 3. This is a state gate, not a load
+-- gate: append it to an aura's trigger list with disjunctive="all" so a Feral
+-- talent gate cannot make Bear-only elements appear while the player is in Cat.
+function F.formTrigger(formIndex)
+  return trigStub{
+    type = "unit", event = "Stance/Form/Aura",
+    use_form = true, form = { single = formIndex, multi = {} },
+  }
+end
+
 -- ================= REGIONS =================
 -- Icon (from the embedded, field-complete prototype).
 function F.icon(id, class, w, h, x, y, parent)

@@ -212,6 +212,12 @@ spec detection (impossible on TBC — every element here says
 (see above). Soul Link uptime and the Unstable Affliction timer already exist in
 the PvE HUD and are exactly right for arena, so they are not duplicated here.
 
+**Live acceptance note:** `CC ON ME` uses WeakAuras' source-verified Crowd Controlled
+prototype, but addon source cannot prove that the 2.5.x client populates the underlying
+loss-of-control API. Get sapped and school-locked in a duel once before relying on it; the
+repo suite verifies its schema and gates, not live client events. The Enemy Mana row's source
+shape is likewise verified, while its 2.5.x arena-unit refresh cadence still merits one match.
+
 ## v3 — per-spec load audit
 
 v3 asked one question of every element, for every spec that loads it: *does this

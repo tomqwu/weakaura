@@ -3,7 +3,7 @@
 Hand-built, programmatically generated WeakAuras for WoW Classic (TBC Anniversary).
 Every import string here is produced by Lua build scripts through the exact WeakAuras
 serialization pipeline, verified by round-trip decode before commit — no hand-edited
-exports, no custom code beyond a single one-line trigger combinator.
+exports, no custom code beyond the reviewed one-line trigger-combinator pattern.
 
 ## Structure
 
@@ -25,15 +25,17 @@ use GitHub's copy button on the block to grab the whole string in one click.
 |---|---|---|---|---|
 | Rogue — All Specs | Combat · Assassination · Subtlety | v45 | 56 | [string](tbc/rogue/README.md#import-string-v45) · [raw](tbc/rogue/all-specs.txt) |
 | Paladin — All Specs | Holy · Protection · Retribution | v7 | 43 | [string](tbc/paladin/README.md#import-string-v7) · [raw](tbc/paladin/all-specs.txt) |
-| Druid — All Specs | Feral tank · Restoration · Balance | v6 | 46 | [string](tbc/druid/README.md#import-string-v6) · [raw](tbc/druid/all-specs.txt) |
+| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v7 | 46 | [string](tbc/druid/README.md#import-string-v7) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v6 | 38 | [string](tbc/warlock/README.md#import-string-v6) · [raw](tbc/warlock/all-specs.txt) |
 | Hunter — BM & Survival | Beast Mastery · Survival | v6 | 46 | [string](tbc/hunter/README.md#import-string-v6) · [raw](tbc/hunter/all-specs.txt) |
 | Priest — All Specs | Shadow · Holy · Discipline | v6 | 40 | [string](tbc/priest/README.md#import-string-v6) · [raw](tbc/priest/all-specs.txt) |
 | Mage — Arcane & Frost | Arcane · Frost | v6 | 42 | [string](tbc/mage/README.md#import-string-v6) · [raw](tbc/mage/all-specs.txt) |
 
-Every pack is class-gated and auto-adapts to your spec through `spellknown` talent gates —
-import the one pack for your class and it shows the right elements after a respec, with no
-further action.
+Every pack is class-gated and auto-adapts across the **supported builds listed in the table**
+through Spell Known gates. The current product scope is primarily level-70 single-target
+raid/dungeon play plus the explicitly documented PvP layer; AoE, levelling and omitted specs
+are named in each pack README rather than implied by the `all-specs.txt` filename. Druid v7
+also adds an active-form state gate so Cat never receives the Bear rotation.
 
 Every pack also carries a **PvP layer**: elements that exist only inside an
 arena or battleground (CC-on-you with the break decision, trinket availability, enemy trinket
@@ -41,7 +43,9 @@ countdowns, interrupt and immunity prompts, your own CC timers on each opponent)
 load-gated per aura, so a PvE player sees no change at all. What is *not* built — and why —
 is in `tools/tbc-weakaura-creator/references/pvp.md`; most importantly there is **no
 diminishing-returns tracking**, because TBC WeakAuras cannot express it without custom code
-and a partial DR tracker is worse than none.
+and a partial DR tracker is worse than none. The source-verified Crowd Controlled primitive
+is still marked **live-smoke-required** on a 2.5.x client; every pack README carries that
+acceptance note instead of presenting static serialization as an in-game test.
 
 ## Packs
 
@@ -60,7 +64,8 @@ and a partial DR tracker is worse than none.
   Retribution adapt via Holy Shock, Holy Shield and Crusader Strike gates.
 - **tbc/druid/all-specs.txt** — rage/mana/health/threat bars, Lacerate stacks and Mangle
   debuff, Lifebloom/Rejuvenation/Regrowth timers, Moonfire and Insect Swarm, Omen of Clarity
-  proc; bear / Restoration / Balance gate on Mangle, Swiftmend and Moonkin Form.
+  proc; Bear / Restoration / Balance gate on Mangle, Swiftmend and Moonkin Form, with every
+  Bear element additionally requiring active Bear/Dire Bear form so Cat sees no tank HUD.
 - **tbc/warlock/all-specs.txt** — the five own-DoT timers (Corruption, Curse of Agony,
   Immolate, Unstable Affliction, Siphon Life), Nightfall and Backlash proc alerts, Life Tap
   and Soulshatter prompts, health/mana/threat bars.
@@ -81,10 +86,12 @@ and a partial DR tracker is worse than none.
 lua5.1 tools/verify-packs.lua && tools/verify-rebuild.sh
 ```
 
-`verify-packs.lua` round-trip-verifies every shipped string, checks each pack README's
-embedded copy block is byte-identical to its `.txt`, and enforces that aura ids **and** uids
-are globally unique across all packs. `verify-rebuild.sh` re-runs every build script in a
-sandbox and proves the shipped strings reproduce byte-for-byte.
+`verify-packs.lua` discovers every shipped string, round-trip-verifies it, checks bidirectional
+parent wiring and historical UID continuity, validates root/pack/generator versions, aura
+counts and seed registration, checks each README copy block byte-for-byte, and enforces global
+id/uid uniqueness. `verify-rebuild.sh` independently discovers the same deliverables, re-runs
+every build script—including Rogue's v41→v45 lineage replay—in a sandbox, and proves byte-for-
+byte reproduction.
 
 Uid uniqueness matters because WeakAuras matches auras across imports by uid: two packs built
 from the same `math.randomseed` produce identical uids, and importing both would make one
@@ -94,7 +101,7 @@ silently "Update" over the other. Seeds in use, one per pack — never reuse one
 |---|---|
 | 20260809 | rogue |
 | 20260810 | *retired* (paladin tank-starter, removed) — do not reuse |
-| 20260811 | paladin all-specs |
+| 20260811 | paladin |
 | 20260812 | druid |
 | 20260813 | warlock |
 | 20260814 | hunter |
@@ -106,6 +113,10 @@ silently "Update" over the other. Seeds in use, one per pack — never reuse one
 Re-importing a regenerated string offers an in-place **Update** (UIDs are deterministic and
 stable across versions). Uncheck the *Arrangement* category in the update dialog if you've
 dragged groups in game. Details: `tools/tbc-weakaura-creator/references/encoding.md`.
+
+After regenerating a pack, use
+`lua5.1 tools/sync-readme-strings.lua <pack>` to replace its README copy block from the
+canonical `all-specs.txt`; the verifier rejects missing, duplicate, or stale blocks.
 
 ## Building new packs
 

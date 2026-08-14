@@ -109,10 +109,12 @@ function M.verify(transmit, encoded)
   assert(ok, "round-trip mismatch at " .. tostring(where))
 
   local ids, uids = { [back.d.id] = true }, { [back.d.uid] = true }
+  local nodes = { [back.d.id] = back.d }
   for _, ch in ipairs(back.c or {}) do
     assert(not ids[ch.id], "duplicate id: " .. ch.id)
     assert(not uids[ch.uid], "duplicate uid: " .. tostring(ch.uid))
     ids[ch.id], uids[ch.uid] = true, true
+    nodes[ch.id] = ch
   end
   if (transmit.v or 1421) >= 2000 then
     for _, ch in ipairs(back.c or {}) do
@@ -123,6 +125,10 @@ function M.verify(transmit, encoded)
       for _, cid in ipairs(t.controlledChildren or {}) do
         assert(ids[cid], "controlledChildren references missing id: " .. cid)
         assert(not listed[cid], "id listed twice in controlledChildren: " .. cid)
+        local child = nodes[cid]
+        assert(child and child.parent == t.id,
+          ("parent mismatch on %s: declared %s, listed by %s")
+            :format(cid, tostring(child and child.parent), tostring(t.id)))
         listed[cid] = true
       end
     end
@@ -135,21 +141,54 @@ function M.verify(transmit, encoded)
 end
 
 -- Compares uids of a new build against the previous version's string.
--- Same id must keep the same uid, or the in-game Update flow breaks.
-function M.uidContinuity(encoded, prevPath)
-  local f = io.open(prevPath, "r")
-  if not f then return nil end
-  local old = M.decode(f:read("*a")); f:close()
+-- Every old uid must survive, even when an aura is renamed. A same-id uid
+-- change is reported separately because it is always an update-flow break.
+function M.uidContinuityStrings(encoded, previous)
+  local old = M.decode(previous)
   local new = M.decode(encoded)
-  local oldById = {}
-  for _, ch in ipairs(old.c or {}) do oldById[ch.id] = ch.uid end
-  local stable, changed = 0, 0
+  local oldById, oldUids, newUids = {}, {}, {}
+  for _, ch in ipairs(old.c or {}) do
+    oldById[ch.id] = ch.uid
+    oldUids[ch.uid] = true
+  end
+  for _, ch in ipairs(new.c or {}) do newUids[ch.uid] = true end
+
+  local stable, changed, retained, missing = 0, 0, 0, 0
   for _, ch in ipairs(new.c or {}) do
     if oldById[ch.id] then
       if oldById[ch.id] == ch.uid then stable = stable + 1 else changed = changed + 1 end
     end
   end
-  return { stable = stable, changed = changed, parentSame = old.d.uid == new.d.uid }
+  for uid in pairs(oldUids) do
+    if newUids[uid] then retained = retained + 1 else missing = missing + 1 end
+  end
+  return {
+    stable = stable,
+    changed = changed,
+    retained = retained,
+    missing = missing,
+    oldCount = #(old.c or {}),
+    newCount = #(new.c or {}),
+    parentSame = old.d.uid == new.d.uid,
+  }
+end
+
+function M.uidContinuity(encoded, prevPath)
+  local f = io.open(prevPath, "r")
+  if not f then return nil end
+  local previous = f:read("*a"); f:close()
+  return M.uidContinuityStrings(encoded, previous)
+end
+
+function M.assertUidContinuity(cont, label)
+  if not cont then return true end
+  label = label or "uid continuity"
+  assert(cont.parentSame, label .. ": top-level uid changed")
+  assert(cont.changed == 0, label .. ": existing ids changed uid: " .. cont.changed)
+  assert(cont.missing == 0,
+    ("%s: %d of %d previous child uids disappeared")
+      :format(label, cont.missing, cont.oldCount))
+  return true
 end
 
 return M

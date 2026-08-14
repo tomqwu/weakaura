@@ -950,6 +950,7 @@ W.verify(transmit, encoded)
 local txtPath = dir .. "/all-specs.txt"
 -- uid continuity vs the PREVIOUS version's string, read before it is overwritten
 local cont = W.uidContinuity(encoded, txtPath)
+W.assertUidContinuity(cont, "hunter")
 
 local out = io.open(txtPath, "w")
 out:write(encoded)
