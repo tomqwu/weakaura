@@ -1,6 +1,43 @@
--- generate.lua — "Paladin TBC - All Specs" (v6)
+-- generate.lua — "Paladin TBC - All Specs" (v7)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code).
+--
+-- v7 — the cooldown row shows what you CANNOT press. NOT ONE W.uid() call was added,
+-- removed or reordered, so the re-import is still an Update and every dragged position
+-- survives; only two fields on eleven existing row icons changed.
+--
+-- The row was inverted: 14 icons on screen at all times, dimmed when down, so it was
+-- busiest exactly when the paladin had the fewest options — and a paladin knows their own
+-- spellbook. What they cannot know is what is unavailable, and for how long. Every
+-- SITUATIONAL icon becomes genericShowOn = "showOnCooldown": it exists only while its
+-- cooldown runs, carrying the swipe and its countdown, and disappears the moment the
+-- ability is back. The row is a dynamic group, so the gap closes — ABSENCE IS THE READOUT.
+-- Their onCooldown == 1 -> desaturate condition goes with it: under showOnCooldown every
+-- visible icon is on cooldown by definition, so greying the whole row would only make the
+-- abilities harder to tell apart. Full colour + countdown reads better.
+--
+-- The exception is the PRESS-ON-COOLDOWN ROTATIONAL buttons, whose gold ready-glow is the
+-- instruction and cannot fire from a hidden icon. Those keep showAlways + desaturate +
+-- glow: Judgement, Crusader Strike, Avenger's Shield (all three already glowed) and —
+-- the one classification v7 changes — CONSECRATION, which now glows for the first time.
+--   * Consecration is Protection's largest threat source and an explicit press-on-cooldown
+--     line in the tank rotation (Holy Shield > Consecration > Judgement). v2 withheld the
+--     glow because the same icon also loads for Retribution, where Consecration is a
+--     mana-permitting filler, and a glow there overstates it. Under v7 that trade is no
+--     longer symmetric: withholding the glow now means HIDING a tank's biggest threat
+--     button whenever it is available, which is the wrong direction for the button they
+--     press most. Ret still reads it correctly — Judgement and Crusader Strike carry the
+--     same glow and sit ahead of it in the priority, so a lit Consecration means "the
+--     filler is up", spend it if mana permits.
+--   * Holy Shock deliberately still does NOT glow, and now hides while ready: TBC Holy is
+--     Holy Light / Flash of Light, and Holy Shock is the expensive instant kept for
+--     movement and emergencies — pressing it on sight is a mana bug, not a rotation.
+--   * Divine Favor (2 min, paired with a Holy Light on someone actually taking damage),
+--     Divine Illumination (3 min mana cooldown), Avenging Wrath (3 min burst, burns
+--     Forbearance), Divine Shield and Lay on Hands (panic buttons, and LoH already has its
+--     own alert prompt), Hammer of Justice (a stun/interrupt, with a HAMMER NOW alert in
+--     the PvP layer) and the three PvP blessings/stun are all "pressed when a circumstance
+--     calls for it" — the row only needs to answer when they come back.
 --
 -- v6 — two deferred questions came back from a source verifier, and both answers land
 -- on existing elements. NOT ONE W.uid() call was added, removed or reordered, so the
@@ -368,14 +405,24 @@ adopt(top, gCds)
 -- Divine Shield and Lay on Hands stay ungated on purpose — both are genuine
 -- emergency buttons for all three specs (bubble also strips debuffs), and they are the
 -- only Forbearance-burning presses left in the Holy row now Avenging Wrath is gone.
--- The 4th column marks the buttons the rotation says to press the moment they are up
--- (Judgement 10s/off-GCD, Crusader Strike 6s, Avenger's Shield on pull + on CD). Those get
--- the gold ready glow. Consecration and Holy Shock deliberately do NOT: Consecration is a
--- mana-permitting filler for Ret and Holy Shock is a Holy emergency instant, so a glow
--- would push the wrong button. Every other icon stays a passive readout.
+-- The 4th column is the v7 classification, and it decides BOTH how the icon shows and
+-- whether it glows — the two are the same question asked twice:
+--   true  = press-on-cooldown rotational. showAlways + desaturate-while-down + the gold
+--           ready glow, because the glow IS the instruction and a hidden icon can never
+--           fire one. Judgement (10s, off the GCD), Crusader Strike (6s), Avenger's Shield
+--           (on pull, then on cooldown) and — new in v7 — Consecration, Protection's
+--           largest threat source and an explicit press-on-cooldown line in the tank
+--           rotation. See the v7 note in the header for why Ret's filler use does not
+--           outweigh hiding a tank's biggest button.
+--   false = situational / utility / emergency / long cooldown. showOnCooldown, no
+--           desaturate: the icon exists only while the cooldown runs, and its ABSENCE is
+--           the readout that the ability is available. Holy Shock is here on purpose —
+--           an expensive instant kept for movement and emergencies, never pressed on
+--           sight — as are the two Holy cooldowns (Divine Favor 2 min, Divine
+--           Illumination 3 min), Avenging Wrath, and the two panic buttons.
 local CDS = {
   { "Judgement",           20271, nil,   true,  GATE_HOLY },  -- v4: hidden from deep Holy
-  { "Consecration",        26573, nil,   false, GATE_HOLY },  -- v3: hidden from deep Holy
+  { "Consecration",        26573, nil,   true,  GATE_HOLY },  -- v3: hidden from deep Holy; v7: now glows
   { "Hammer of Justice",     853, nil,   false, GATE_HOLY },  -- v4: hidden from deep Holy
   { "Avenging Wrath",      31884, nil,   false, GATE_HOLY },  -- v3: hidden from deep Holy
   { "Divine Shield",         642, nil,   false },
@@ -389,19 +436,28 @@ local CDS = {
 for _, e in ipairs(CDS) do
   local ic = reg(F.icon("Paladin CD - " .. e[1], CLASS, 32, 32, 0, 0, gCds.id))
   -- trigger 2 is the always-active state feeder that carries inCombat (disjunctive "all"
-  -- stays satisfied); trigger 1 keeps driving the swipe.
-  ic.triggers = F.triggers({ F.cdTrigger(e[2], e[1], "showAlways"), F.unitCharTrigger() })
+  -- stays satisfied); trigger 1 keeps driving the swipe. v7: the rotational icons stay
+  -- showAlways so their glow can fire; everything else exists only while it is DOWN.
+  ic.triggers = F.triggers({
+    F.cdTrigger(e[2], e[1], e[4] and "showAlways" or "showOnCooldown"),
+    F.unitCharTrigger(),
+  })
   ic.cooldownTextDisabled = false  -- WA swipe text; no %p subtext (OmniCC would double it)
   ic.useTooltip = true
-  ic.conditions = { F.condition(1, "onCooldown", "==", 1, "desaturate", true) }
+  ic.conditions = {}
   -- LAST condition: out of combat the row dims and the ready glow is forced off, so the
   -- HUD is still while you ride around (a later match overwrites the same property).
   local quiet = F.condition(2, "inCombat", "==", 0, "alpha", 0.5)
   if e[4] then
+    -- showAlways, so both states are on screen and both need saying: grey while down,
+    -- gold the instant it is up. (v7 leaves this branch byte-identical to v6.)
     ic.subRegions[1] = F.subglow(false, GOLD)  -- index 1 stays the glow; polish appends the border
+    ic.conditions[#ic.conditions + 1] = F.condition(1, "onCooldown", "==", 1, "desaturate", true)
     ic.conditions[#ic.conditions + 1] = F.condition(1, "onCooldown", "==", 0, "sub.1.glow", true)
     quiet.changes[2] = { property = "sub.1.glow", value = false }
   end
+  -- v7: NO desaturate on the situational icons — under showOnCooldown every visible icon
+  -- is on cooldown by definition, so greying them all would only blur them together.
   ic.conditions[#ic.conditions + 1] = quiet
   if e[3] then gate(ic, e[3]) end
   if e[5] then gateNot(ic, e[5]) end
@@ -742,16 +798,17 @@ table.insert(immune.subRegions, F.subtext("%p", 12, "INNER_BOTTOM"))
 immune.load.use_combat = nil
 applyLoad(immune, pvpLoad())
 
--- 42-44) cooldown row, PvP-only additions. Same language as the rest of the row
--- (swipe numbers, desaturated while down, 50% alpha out of combat) and deliberately
--- NO ready-glow: these are held for a moment, not pressed on cooldown.
+-- 42-44) cooldown row, PvP-only additions. Same language as the rest of the row (swipe
+-- numbers, 50% alpha out of combat) and deliberately NO ready-glow: these are held for a
+-- moment, not pressed on cooldown. v7 makes that classification literal — all three are
+-- situational by definition (a peel, a snare-break and a stun), so they show only while
+-- they are DOWN and the desaturate goes with the always-on display.
 local function pvpCd(label, spellName, spellId, gateSpell)
   local ic = reg(F.icon("Paladin CD - " .. label, CLASS, 32, 32, 0, 0, gCds.id))
-  ic.triggers = F.triggers({ F.cdTrigger(spellId, spellName, "showAlways"), F.unitCharTrigger() })
+  ic.triggers = F.triggers({ F.cdTrigger(spellId, spellName, "showOnCooldown"), F.unitCharTrigger() })
   ic.cooldownTextDisabled = false
   ic.useTooltip = true
   ic.conditions = {
-    F.condition(1, "onCooldown", "==", 1, "desaturate", true),
     F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   }
   gate(ic, gateSpell)

@@ -1,4 +1,4 @@
-# Hunter TBC — Beast Mastery & Survival (v5)
+# Hunter TBC — Beast Mastery & Survival (v6)
 
 A single WeakAuras pack for TBC Anniversary (2.4.3) hunters that covers both raid specs:
 Beast Mastery (41/20/0) and Survival (0/20/41). It is built from the rotation, not from a
@@ -9,6 +9,72 @@ does not change which button you press next was left out. Everything matches by 
 46 auras: one draggable top-level group `Hunter TBC - BM & Survival` anchored at screen
 centre `(0, -140)`, holding six sub-groups you can drag independently. Built for WeakAuras
 `internalVersion 45` / `tocversion 20501`; modern WA migrates it forward on import.
+
+## v6 — the cooldown row shows what you CANNOT press
+
+v6 changes **only the cooldown row**, and only how its eleven icons decide when to be on
+screen. No new auras, nothing removed, no load gate touched, no new custom code
+(`stable=45 changed=0` — every v5 aura keeps its UID, so re-importing offers **Update**).
+
+**The old row was inverted.** All eleven icons sat on screen permanently and merely dimmed
+when the ability was down, so the row was busiest exactly when you had the fewest options —
+and you already know your own spellbook. What you cannot know is what is *unavailable*, and
+for how long.
+
+So the situational buttons now appear **only while their cooldown is running**, carrying the
+swipe and the countdown, and vanish the moment the ability is back. The row is a dynamic
+group, so the gap closes: **absence is the readout.** An empty stretch of row means
+everything is up. Two icons means exactly two things are down, and both are counting back.
+The grey went with the change — under the new rule every visible icon is on cooldown by
+definition, so greying them all would only make them harder to tell apart at a glance.
+
+### The two buttons that stay, and now glow gold
+
+Hiding an icon is the wrong answer for a button you press the moment it is up, because a
+hidden icon cannot announce itself. Two shots in this row are exactly that, and neither had
+a glow before — v6 gives them one:
+
+| Icon | Why it stays visible |
+|---|---|
+| **Multi-Shot** | Both raid guides say to press it on cooldown in place of a Steady Shot — it is more damage per use than Steady Shot even on a single target. This is the button you press most. |
+| **Arcane Shot** | The other half of the same weave slot when mana allows, and the instant you fire while moving. A 6s shot inside the core damage loop. |
+
+Both are always on screen with two states and no third: **dim** while the cooldown runs,
+**full colour with a gold pixel glow** the instant it is back — the same gold *Kill Command*
+and the *Misdirection* prompt already wear, so the pack speaks one colour language. Out of
+combat the pair fades to half alpha and the glow is forced off, so an idle row is still.
+
+Arcane Shot was the closest call in the row: a mana-permitting filler is not Multi-Shot. It
+went the visible-and-glowing way because it is in the core loop, and for anything in the core
+loop a "press this now" signal is worth more than a "you cannot press this" one.
+
+### Everything else answers only "when is it back"
+
+**Intimidation, Readiness, Wyvern Sting, Misdirection, Feign Death** — plus the two
+arena/battleground icons, **Freezing Trap** and **Scatter Shot** — are all pressed when a
+circumstance calls for them, not on sight. They are gone from the row while ready.
+Misdirection and Feign Death are the clearest case: their moment is already owned by a
+threat-paired prompt in the *Alerts* flow (70% and 90%), which interrupts you; the row icon
+only ever had to answer "when does it come back".
+
+**Rapid Fire** and **Bestial Wrath** join them — a burst window is spent at a moment (the
+opener, and again after Readiness), not on sight — but they keep both of their existing
+states, because those states mean something the other icons do not have:
+
+- **absent** — ready, use it when the window is worth it;
+- **full colour + glow, swipe counting the buff** — the window is *live* (15s of +40% ranged
+  haste; 18s of +50% pet damage);
+- **dim, swipe counting the cooldown** — the window is spent and the button is recharging.
+
+That is why those two alone kept their grey: on them it does not mean "on cooldown", it means
+"the window is over", and it is the only thing that distinguishes the two visible states.
+
+### What this looks like in a pull
+
+Out of combat: two half-faded shots, nothing else. Pull, and the row fills only as you spend
+things — Bestial Wrath lit while its window runs, then grey, then gone at 2 minutes; Multi-Shot
+flashing gold every time it comes up. Glance down mid-fight and the row is a short list of
+what you *cannot* do, in the order it comes back.
 
 ## v5 — the CC glow speaks, and the arena stops lying
 
@@ -261,15 +327,23 @@ reflex prompt never moves:
 - *Revive Pet* — the pet is dead (this is also why Kill Command stopped working).
 
 **Cooldowns** `(0, -66)` — a horizontal, self-collapsing row of 32x32 icons with WA cooldown
-text, tooltips on hover and desaturation while the ability is down: Bestial Wrath,
-Intimidation, Readiness, Wyvern Sting, Rapid Fire, Multi-Shot, Arcane Shot, Misdirection,
-Feign Death. Talent and late-trained abilities load-gate on their own spell, so the row shows
-exactly the buttons your current build owns and the gaps close by themselves. In an arena or
-a battleground it grows two more: **Freezing Trap** and **Scatter Shot** (v4). Two of them do
-double duty: **Rapid Fire** and **Bestial Wrath** show their *active* window first (15s of
-+40% ranged haste; 18s of +50% pet damage) — full colour plus a glow while it runs, the
-cooldown swipe afterwards. Kill Command deliberately has no icon here — a 5-second cooldown
-says nothing useful; its reactive alert owns it.
+text and tooltips on hover. Since v6 the row shows what you **cannot** press (full reasoning
+under *v6* above):
+
+- **Always there:** *Multi-Shot* and *Arcane Shot*, the two shots you press the moment they
+  are up — dim while recharging, full colour with a gold glow when ready, both at half alpha
+  with the glow off out of combat.
+- **There only while on cooldown:** *Intimidation*, *Readiness*, *Wyvern Sting*,
+  *Misdirection*, *Feign Death*, and in an arena or battleground *Freezing Trap* and
+  *Scatter Shot* (v4). Each carries its own countdown and disappears when it is back, so a
+  gap in the row means the button is available.
+- **Both, plus a live-window state:** *Rapid Fire* and *Bestial Wrath* show their *active*
+  window first (15s of +40% ranged haste; 18s of +50% pet damage) — full colour plus a glow
+  while it runs, a dim cooldown swipe afterwards, and absent once it is ready again.
+
+Talent and late-trained abilities load-gate on their own spell, so the row shows exactly the
+buttons your current build owns and the gaps close by themselves. Kill Command deliberately
+has no icon here — a 5-second cooldown says nothing useful; its reactive alert owns it.
 
 **PvP** `(150, 96)` — a downward dynamic stack of state readouts that exists only in an arena
 or a battleground: trinket down, Will of the Forsaken down (Undead), enemy trinket countdowns,
@@ -393,7 +467,11 @@ re-parented into `Alerts`, the cooldown row and the new `Hunter - PvP` group —
 `stable=32 changed=0` against v3, with every pre-existing aura's load table, triggers and
 parent unchanged as well. v5 adds exactly one constructor (`Enemy Mana`), again at the very
 end of the file, and changes three existing auras in place without touching a single `uid()`
-call: `stable=44 changed=0` against v4.
+call: `stable=44 changed=0` against v4. v6 adds **no** constructors — it rewrites the
+cooldown row's display in place (one trigger field per icon, the conditions that go with it,
+and a glow subregion *replaced* at index 1 on the two rotational shots, never inserted, so no
+`sub.N` condition anywhere in the pack is silently retargeted): `stable=45 changed=0`
+against v5, with every load gate, position and parent untouched.
 
 ## Verified spell IDs
 
@@ -443,8 +521,8 @@ only one can ever be equipped, so they are ORed into one element):
 | Insignia of the Horde (Hunter) | 18846 | 5 min |
 | Insignia of the Alliance (Hunter) | 18856 | 5 min |
 
-## Import string (v5)
+## Import string (v6)
 
 ```
-!WA:2!L3vE0TXX5DVM2ns0hrIwsosYhW0wkKo2YaGe8qXhbaeKeuehAbOOKSK5Ua7qGvCXUl3DbjbBtQdJJRAABAktRZRP5Y0XoNojLnjT1nj9f9ADFVu)A)ESjUBABAA1R5SNwT9186F15ybWccqqkjklr3)qlxm7mZUZ8977A((MrChRTSFIh8S39kzeZoLKHMEynfnJrAPLws2I3dfqVTSAQwgAkkiPW5LvKmqQJCHHlQAHm88GEggjQyLFLk)oMOQy1NMoVbs0sF3RQapdQiAM)8z0mKqgHCET67iKI88ZlAi5jTMMILSUXCjMCstKfxgDr8B1sFFo9t6qHX9vOyEoONufnMrEgrLmSolVrjwBMEjduozn10L0r85m0kQVeRgPKNhDJllRoPMrbrlCnADz2dydBooUwwrSOvEnJe6KhB2Ag8eWKY5A1qmlTGE4nTenSAnZKYQYM5Bne(pwTUGLHCUCidZ4h0W52NjKf5Tlw0q0)5ixn1rkkYsM7RnVHkIBugDfXsiJfOLhvYS1ZBwmdAg8qnvXjNuEULNiCWuPNiv6G8PR8OKgi8J4tLmYOJEHIMOiZH)UsX6bbEvXciZwxscLb3dKbVXWrgn5GJn6I4Po2NvRlljBEMIQ4rZmi)Ikk67uKEFA2ZJPjH(8xNZ0vePCi9DMA6IykGNblQO4z88YwOZXEkBUE7lkQkZMm7b2ZGNdjAIszHPy5SY)MG9hsvtfTIeE8tQXeK5edteEsvYCbsvjFLG)qfeLvhe8HBa4h6c6gcG)7TV6sw0ePmzsnzvRmHJepDe(2LL0BRc(IhzQv0ilY8cYKsufvog(LHFTp(YtAGNAWFwIwITCbr1Syk8GKIiV(mPcZhjs8LS0YodR(Bl5U9xuwAzL56Du(Pp2jNl4u8MzfvqTSeMqWtXwMLHorvXZcTSezijZWmHu0eLADz2RH(5c9DwVlzIbYtnUSKv(DVKmU6POFS3X1bBNdUL)URdge6BfAD41SOZwC67SMFtOnHcow6eHinppS3N4GW(Eg8e0Db3d0opfGKHXtIl6UbpTUagImbbSja3lCFWbBfERqhqNT6UDqm9DngUkEcNxKGYrgYMwYznD6ciXQAlC)WBdEamgH8rmr2YYlAbo8Jd9c9TqgrhUPK3G3d5la5AV9rU6pqlyOPPOfbmGYFo6yJbIobhe6W7b2)YegfChmb(FNDp6TzHMZAcZ8IsAZEChXblslJCrFhhadMYIh05PJ5dCa9D4QbvzPppR0Yyh4i63gTemNUgb5MLsucfe)ZlqFaMfdjrl8DVcJkEcN3(5Op)mfXZqtwc6BjdcPbLgxyO4jIhb2VbgGqQZs0kwD2H9zpjwAQ(og0qEEphTOOebo6jDADVvgttWKmnrndSjKqzXSyktOBGVXKImCp1u(JBfAzZIrLJBiQVW4o3SsLxnvKqIXspA04rCMRCbsxoA84r4NGp6qdNwVZ15tcluvvIYoZpPIMMbBIzg8xxgfKq1xjrI7EDMeltc1pW605ScZeVyHmiJzG9ViEsLXSTc7poF2(XWKYLO5qGC(z2QuFNsk)T5W2obclCdou5FzI)oBjtEKCU8w3je5yls4CYI1uzkKXcZ5RATh(cfXkMALNw6bZykRMtbLz4XicIGNCpW7riewwE29apzRHiDh5MZtb5HWTxIW96p4adOVdCxhuIGHqsiPyIZLhAf6NjEiCv2PBR1vxtzmp)TA4WIa7Qv3CqhNBrk)OPSeINscbVe5XRwMApRVuwy34g2kC7TcVLwxM(kgMoT8igekwrdeFyfKOkVOIEEXwyFePzprVJOejVtkMfDQWIyMe1CHeno1yrFWQ)6btrLPrBwE4rXYAXsXHwcnVMwbo4T3c)SegV)KwHhgEe4XwwTNHqhp(OrpJ(SgYQeb0O8oFvYssiv(4rowe(L1mKX0iQyYLgobF0tMiE6GJcdSVdYNnpk7udc77gxygrdzrmgybz1WAfYiAXJnEOiIRDn92FKhXiBEr1CiZ9Dq4zPw)SGo2YeKHvjyryNTEbIjs5O4(kIwivR3Z6fgA3WWocY)ACeb5quoye4iWOosP)QvL2YNuBwKbr66I6K7i8qC1iODfc2RYZeAOmBi56jFgoQBXYa)imzWKRbOx7pqlqQ8qAhzVWyNDpWX4GXVqzXQ0pHdCa4eu(i4K4XZJdNco97gEcoycCFkaI42LbYYEtsacYXP3XAXDt7pxsoanipidNbMcuGcGUG(918MYkdSGP3lyWP)qnV21l1elkbkcZaZcZXbLyJQ5fGFE4qWVqlW7KW3dVlb4xKW5cV7dclaVhgJn8u0IEV0Rpn8lbNLYZc)YLzvH3hM1e(vWmLWVkh8RbV)nfUp4x)rGpa8Bal2c8bHFt43Qk7YnapdHxb(qv4t6lRV5nkCYrK6Sx43op8HHFh4JaFuyG7)GWhdd(Bb(4NZ9Sd8ST73lg332ddlra8u0rFbiaA)0lTaphWZA7ncFC4tapRdBcR(ugeCviCgWNCn4f(ix)Q5fI7gfVKf1HaIXhyzSg5qwyu85jG)QpqGaXJPVdhFhsjBvKYKtX8Bmap(7QpYLUAmC)ChG920ZAvbRR)a1bTQuPgGRAmRH(90KoPcuUo(h38enqtz1UOggjkhbMfA9H4pngIVmzsgloM4AKa1irIcR8mKVHZdW3Fq4nleYquwsyTyhMHhlk2QKGF9zW9e(B0Qubrvb)wivHLSMfd3knj27cSsu69cGFHRjyGUX6yG68iX0lgm(yhXBYAyGoCfgOfRm3J5E6LW90(J6Womc1F5Eix85IZb3i4BIRC)1wzM03QWZv1eEXCyca8ST4MHBesf7NAtTF2vAJwf7NhYS6fC0ttm(Jy1H(UcpAWyjX(nmAWWhbBcs00rpwegZ4lxMzCLQ8D4bOa8fGVirNYxsa(MT3Nxmxi2KZkqpIArrlndYqkg872iMXDInuIzmdDeYUqLXGP2zkiByOzKNkI4wXKOD16IzkBKegDmqRRb5Fsy)zW8DydEO)g)4V1su7qswuXeTqz)mBZhTj1Hn03j273Sgil0egLDYQg8Yhq)WvTGjOKucvZtnosCQGeh4pvmKKS4PCS1X8umhJNG6t8HSYjsbxeXpyCfwcebM9ZrKdUirWZcvFHp2YOab5hSFFJzDIJtrFePKVZdKH5nrEgpk8vfGFFhws4pWHze(dxBor4LeG)ib4RjaFDb4Bia)XuMTp0nCtN9UbUklPdC9JOVNkUmNczOJ5l9KIyCMRLQHDJPNyy7S03RRvWb5je2TDlpJlBLxwv)Tu5rrMtxZe5HmzPImnH3eSnYyVv4MGBgtNVzomD(nd74gja22yYLWC9y2D3t)v0pChWDUV28w2ehIfpei2beAGzopiw02dT9lDXfmk15RmqcveBqTdvKqBOe1hBzzLSZ0zSsDm8CJabBbc1keUfconsReQ3zVxQsp8i6wO2)TswnnfSRzQPMvgBc35k)tYkQKV(H8lWgYF2q(6V3(491vGU7NCnGx6vF0R(Px7IETB61a8(d4VF81E96RhdCVNqvblH9UWCU1pPzmCq(ydo2OUN6o8JFHPqi9Ge3wS4jOZ8uvNy1KHo8RUsofTzh0anDrKA2smPvHiLL)CyzfdP44ID(fjLLIT8iKBhLU2p7EzY9LDnLwNQo3qFwz3bzontkH(gtNxolfc1Yc0FI1VTsMIwwAQjWw)RiwI2xJkJRYoPVVqSf)7S3gvDE7hq)I0G1QkCphZd4qjsNormy67KPsDsQk1gQo9OBmlgVvyumJWRcB)vUEcskExr1ILtsxPp4pJ9H8mu7twOmkrOIAQv03v5cjIDgq2K4)cwDmwMYh6OWOceoiS2kg6NaP3ptSOd6FvLC71vcbHJDsQSQNZJMtxMjdnTCbe8ST1frj0d7OesaEoYkGDiFhImXtyLF7TSAOpylaF38RjB9iH85RlmUU7U83f9A30Rbwdyl8dQfWc)q3qu4hXGLWpop8tYd)0wG)5Dd)lCW)kBA9FdJTG)D4)Of41Gla)N7e(V2mqjW)9vcObrTWr7ku8ut1BKELoATid4)PkK4Vc(zBYK)wVKiK7JVRU7UxFBiz0BTOBZGPBu3qOln)uQuosgD8PQJAUu1kTTrNz1u1tGPQDmFYrprI8tPm9XxBQ63(Qnv9fQsvd41h8pj8gqgscHvVncLvvZQEQ75RTuc5C95BjuyPtiMmGuGjfhPV1Mc)DUIrH9gc7UWSTpws46)BCzd3rKvu8ewRa2Fmj9BVsXbtLms40EIfnvQOXhYLTGX0uZPrSHle2Ew99xP8brY5u9ma20)8EsAOvq3sFNvE4qAEog2chdxVxsm98yP5zyXzNs)oQ29YMsYyxMj6wQVFIHn(3tsKL(T5kCoZG9CKwy16foSNeX9elIRIgisWbozI4r03vvZAJoAK4HJ4jEIXDnathKFOiP9enwSXIhHAGkHR4Bs5kyMKswvYSOB5Y1M0LXE(uSGAksNXwpImmBk4fvWZLqFgMwIKOTXrSJeBbzvZZnyrtdjqTCoyly3gM1PFWMrtS19wpNujvXcYzPoPJTOoKj2RBW)I5mKzbT4MwGClXWP25hGxrUGS1nrCYFuYD5pFwnv8Rx1AqXSyx4YWhCGOJLkJHOKCrZN6MX2sVOOrwMrCyeVd8TAyDdQGmSmxAYIkkHLnYQG)uDSu(VKJyt82vUmmghZwWG1p2YHuselx(OtD8Hg5S3hmmxZfH9nWePNMj0Mgwn2AhT)fZsxNxfTClvTCmb8EmMyGGXcouKZrxNFdzlzSbScWR0wai2sSfh2ZOA5G7LNpy8HIWw)1N2M7(XDQn3BZM7bi9In3dAZDiNMzZ9queXgTQ8PghZaYQ(z3jVLbMVjejMu67K8rLdPImKZMkV2SjufwPMFUSj9p8irPs0vsMk1kUyb02EQFkSFE6pDcU3Ed7yajHPlh2VvtpDqJyCNmrHyaPMbsdBBng0Gewb7JVsQYD35ClezLk6ejpIUYCeCpB1NPbmHoge0VnY9isOPDxDc)rMSfnTWS(TX(RtqNXt0Yz17zsAyP1u7WQtpyF0lAO6PdRh33P9Oz4X6X9783UoDNEWFm476(0EWsnAUEiI6MFIa8A8jLNdPuvBeDPi87S4ly1s)ybIYkSIPRkkLS54wBlmS5UEcv1LEhBU3kjm(KeiikMBw)(RUMfKFBEQGzKvKTknbJPDccr0HgYm00ONPkEs9IZPmE01uHLn32xdnwKXZ3ccyqIFFIIw0vHzztfm6jJg2pTcWR4N0veE6gOl7S7yrAS0Po2zIrmKylrDFKWU8oYqFyjYxdwKGn3qScMJvWR0MpyrokwJwSqBLK2EBZXTiDrGiD5cL7sYlEf89QMkKq0IFK(ol)S0Llg)vTIdWLvGaTVP9MqTAzxFzqUmJ6dJDq3xpbiU24Rp61(PU5WC8Xh9QFQ779qCFV7UXMD5T3Uxbl6pBEKjJlFfgxowXjjwJxcgAF)1ZhyZfUwMawe69fObCbnh3(0LXTmelf9UevAkv6PqDy4UkSkmSn3a6hC1qxQONjItYsa0e8IZGuhuZOad2gm3mzX)CadJPxnSnFvyBRnh2IHuueRn3WWRyZfDTXP2CJyZDekQ0MB0QisBUyUrJ2CXlddT5syZLK0v2Ch1MJh3z2CPWJ(0x0GPVaZQdSceIYkI1ArgWLYdBoFliHmTy6ZOAXkGXjeyUa9xLFOWcLlNFGeduwtw5E2MlBnkVS5KG72MdH)KNe)VC2C5lRGYMZVnxx2CDJlhpl0dbpAZ1R1PjDvFmLn2C9BZDyCfE7RuJ1K2CpYQuxyZ9O4Q9ymTc0j4G6hA9uauwWFxxec(Dd4PuTwyxV2xOpEMTE(L1tuFQzLN0kLLH8uigpJ35s2BaVPdoN8qnru)n9gcEMNWDanG)0AdIr)KGyaVC9HSOzO7TT7T1q49YUCkADa3xYsM7oWAzEsZXwVqnrlWnaJfuHAHzC4)jqLpJhQ1J36yTWB8A5kIMGonqNfyOT0kJPoVYGhn84J2e02n)gg02pSmAtF31K7bLdqwBpm8IT73lgX98eefnJEQjlfeGxO2K)a(uUs4JYlkJn3PT5EcBUj28ncGsDObpSLnftaiOP6u9)E3xdGwp06ikJfwcTjTYJOlXadHfBY59fC8mkw(J2eBaUL34HWS5Orq(fjrJ1bozZnDZXpptv8ZvgKZARnDtc50iJgT5ezyHmDuC0WNPqhzYLRjyHBDlaw4EHHVXldDB9EjPB7PFXgQB7CUxPURuk3wBFVVYOCdpwRfhXqq58E8PrNiZX6zSXAcc6nV1ab9MAocsTM09OMmUT9UjYuId3LFDAsyrO4eQDcb2ArvtLf03tTPRRlLDvqDVCvXwZ2MtNBZnxn9Tnxj8)MVThDdawFQgBh2cLx34Ra40lh5BBe77FQT1qiz4yJD0Whl5XtYpEtGK74nEc1wFKcjo0Rpur6rAiuzPQXt4kLqTl51szJaxWdRgbx6FA1CdOiFed9snbUSZTgWLnsGkNHIxCSKPmfmM(ocBOnRKNWv2VAea0gjsLxkuZxpxQGjjA2QKiyRrajpipztYjstaSAXhj7YS0qOmf825anbF021W4JpCLStzzNDJiDtJ9SHsLES41KIKRIS9CxOAUQqZ9OkDKn3cWZUcP9tels4HdgpA4M2r2CpvTTn0GrcYxx6z2llnJBudwH0Gg)YwNwAeor8bhlvK6At3oPrkjSHn8BKprI011Qk(61G3KtytRFQWjXWB4alzWWrh8exknvFhPcpCIeJoruYwOHFSKPxNMFr54KRTCXY8Kn2HNWKnccjTg4ni)UT(WsrOl3p9NLDG680FvnfxDRZH2N0agKxZ0I6TQGR9JXxSgpXwSsDmy3HUkUA9Z4wksDEA5wsIn3twJyeIR6DUER6OfjsKPYRzXe6KnxpQ6rgmsxr7OjcDUT3WydJRnMtiYoDQoSqnggxX4KvcYYgIXOz1hX(dSDkNpfgPOMvwnNhYeAJSvHypd29Tx6Yt)wfwRRuQ327gr92tZaMRBeqXJ2gcpzaUILgA4ZmEOzJJ0AcGBxVXXkiNv2595VNU9hYNx)Ejx8hkqG(7NhFxV9X3DGU7Qp(U853p(vEDRv2C1X)pYgPgdD6zGJ1XG9EYbl5lwtGo7Ela0XRn32GpkC9VuLm2p8aK8XcHv(iQ4zCS(S8vYyF6JWI1LlilrZ33kzWf9jKulHKI1M12GXlndYq1z7cSNAAGOUSKNbLnq1wEmYMM9bjsYQKdA0YdAKvufrfXv7RW9QpvBtCfZLAhHdAGqZteyM2quV2ElvwrlYpO6MkNYxpWn4kNVS52Z2VCt4lBUBV8(oZMBVKl7R(u7YMB)LZQlBU7OA(CzZDNWoUrBU7cWUZE33KnNN25hWM7EW31owU49AZDF2ChGMzw2ChSAkz56KpOCk(yAZ1XQthlUnLSXQ)Jh64r8FMyZ6)4e7VwprupH78e2x)b6TBMt9RX8y9UZVej3hcQmRyjZYlx5OZ04inxd(EDCT3VOAPnJWXLFdA5vWny(9uBMdBZ9IKmPW5KqrGjNAsKIXi(sxmyX5BsO1wc(z5PYPcUzLLP3FLnb6sAQLbARAZPjaphKQIX9Hi0ox14(DQX)l(V5j1SQD8BevD1TqpFPkiIsnEbSDlw7YCTE2W5X8MbiO0Qab2C)EoeFVNX7ru6S7mr9DYMq8FUnDI)(C5X2xPre9nls5P)knKuUyf9qBHOJ4XYArh7iMP3J1TsSJonFtOJFYTU0XJ8snML0THdBHiLh5LwtsP)H141hj3i93tQMqkF(RLjLU1shQlVDhOz260mYE6VXASK7vmkCDZaSLVudKOBVyViulVH3Cw1q0p(GDF85cyviTrZKd)cxbvcVgeDxGIV6RdQE7(5BmbVQ1(xBWKFPrL7CYODzCMOd7TKutOYFQTSsPhOXSRl7YNSTYKV0DmCxIQ(e7CManH89P36QKDnsCdBUIBHuTU6mYWfbuczgtX3i5gEMMLfHFMTUeW1iRsT5kSvMVlyU(lgCQm89lE8Mq2(SBzjBF51iv3Rz5NU2GaUbxv9V8PB4kJ62GNzv1osFM5gtTzR6WNBRlR4OpuJDyX9chULIMsgrRdrvAG5cNX0A(0hFUMqu)8x1iQ0fY(9dx)(CTLEpAr5StrPgMvwhxFxPwg3qJgzW0V(TsUvp8zsAOLTrlI73BtzrChQ7SjdDKb8gF4U3Whla0fInSIMkYuOSRI94lG3lVZ9HRLdk5fN(VxHXsfipAm(PMoZ4hnFtyP(wLJI0QyPObf(DWcJeHUrI)tc4pNfRiAyI8rqDXC(BCbcrMSlldqJcudyaD3JKk2hUpBRexBZ9AxuHtk0ajgpoC9NX9P4THS6uilpKNO3ELIhNSrH1M0JvEKNb1mmfNcPYQt1nGFevuHsL7ax70FIEtpbnkGKCDGsrZ5F2cg5jrr3vN1nKdB8gUj(XscULnnjb(tNi5RFccoxvbbZKSbIbK2C2A9sdoG)Hlm(09O6FJih4DrY8LfKTqfO7W8zEFSS1SBbiM(BPb7U8O4A2jl)nX6AppBxSwjYb4PC6guSC)HLQq2IGfCLLn2CFVT9b)XvFl2C)9v6oBUVpBJk(pq3E9)JRQzr)yxAn7tFr1SgUGvcxju6Fjfz7)wMmjlj)Ni6mjrf7yGMit6BVPRM)ImvgQZ2SVFzBZUR3rdTntFxnsyZfTrAcxnnsdp0AcLZ7GXosp9xOtLCnJY9DUAt5iPIBmdN)dmyF8D73F)(HeStxuNsfWAF8r2aC67IUZU9qspkpPkMnlICMwtIk8t(6Pr0Bi(P9qPk1ss6zY(919aAJHg(enHK8QxtqsS5(bhoKVU7NEMd4JEMd4Zhnn6)ry6r794LuLFcvp41INLtRVjArVC9WTmr1QOE)ZFKE7QuWMqu)RlB1w0Rse1x1M7VqO8XNxxE7ICK55Vxc11FFEPh)J9Tm2yjY29NCaQUG4KtIYAH5UiNIx4r(5jhjdYQOKS6iS15y9AZek8j)6RjZ9a9ptWZmtSPp5qZ0eCG9vmCqnNA2Cn6qZ(LDD0V)8uIQ(UOPUmA6IYgi6zkp9WFyT3pOxkhm8JWoPSzeZmhG8FWmh4sMGUe741K4Bnm9UzuwNdHB4tFX2RFM6o94Hpl5KHN2VFU17OEFVxAOMYNC1eGZvRJUABUVB5ZU6xZ5ORwQWqZFIXlyLRJJwZrxD11BbEX6oW3xv61V6Js62k0MuBsN9UQ5Od(mq)WRsZj8xe75lzwW5y(LCe)(kB7A7J4xSBA1DQ(E0tEYtejS(CZB2vdovFBZKVRdf4qEBBMB4D()n
+!WA:2!L3xE0TXX997v0Urc(is0sYrs(aM2sHsXwgaKGhk(iaGGKGI4qlafLKLm3fyhcSIl2D5UlijyBsDyCCvtBttzADEn)YLPJDoDskBsARBsAJETUVxI7RFFSnUBYl)6HEnTjPxXQTVMx(RohlawqccsjrAj58hCXUZoZSZmF)89AMVZqUJ3AUpXdEU7zPSI5MqYqtpIMIMXqT0slPAX3HdQ3AonvldnffKuKcYksgi1HU4GLuTqgEFqVdIevSkSu1NJlQkw7TzkyGeT031YsWB)kIMfUqwndjKryNpR(2dRip7SIgsEZOPPyjRBmtYXh3ezXLvxe)vT03Rt9KjCeCDfoU3d4nDjJPKNsujlRYkyuMvMjxWaLxwtntzDeFEdTs6lWYrA5zr30IYQJRzuu0cNdplYEbRBZXX1YsILSkOzKuN8AtpzXdaJlN3JHyoAcDXBAjAy5j74YQYMf8eg)JLN5SmKZNhzyM4ago3(mHTiFDXsgIbop5QPosrrwYCVT6lCjCHYQRiwgzmhn9ysMEUGzPSOPWD10LgFC5zwCSiHsNzS0zcXNP6RszGWVIpDQOdp8flzIIodUDLMvdc8QIfrMEwqcLfxdKoVXGrhov)Jm884HowZYZIsYMNTKkU3mfkGOII(oeP3NH9(4AsOp)n4mCfvkpsFhPNSeMc4T)skkEhTGSf68S3YgR328IQYSbZUGD3)5rIMO0wykwERcVjyFHv1urljH7)KCmgzmXWeHhuLmNJKvsReceUOOSA)GFCbGaqhqNqq8V3XYtzEtKY4P0KvTYgjAImr5BtwsV1Q4lEKPwjJCiZlktsrvu544pg(Z(4loUbEOb3SeTeB5IIQ5Wu4(jjr(8zthHpA0elyPLBkw(3AQDfOKS0IkZ09W8tE8tntOj4nZjQGAzbmHGNITmRaDIPIhfAzbsxsMHzcROjk5zr2NH2CHEoNVfmXa5jgvwYQWUwqgN900g7DEdW24GB97Fdq)qplrZdVMfD0ItFh19mH2eo0izsgMu8cWEEIda79zWdq3nCVqB8uaswgpjoP7b86zomezmcytaUp4(Hd4bERq7Wb94UCqC9DocolEJuqKGYrgYMwY5mDQci5YklCi4TbpagJqAeJLRI8IwGJ84q3qpZLv0HBk1n67W(dsU2DpKRbc2cgAAkAradOcNN23yGOtYbHpYUH9TiHrbxbJH)7C7wVvl0mwJzwqusB6t4ioyEAAKl6BF)yWuoCNUaTpV)9RVDxfOgl9fyPwb7ahv)2PPG501ii3CuIs4q4hVi9fywmKenX39smQ4jD(6NN((ZwcpcnEzONfmiKgugCIHtKmruyFgyacjplqZyTrhwZECS0u9T3VH8SEpwjrjcC0BMm6(Q2NgJjzAS66yJjHYHzXugt3aFJjfz4EOPsJBjAAtJrLJAiQp3Oo3Su1pnvKqYrYmCSerDgRCbsxmwIer5hJp2adMr)GRrtcluvvIYoZpUIMMbBGzkCRlRcsO2NKiXDpodIviH67FnQCwIztuQywKXuW(MhpOYy2wI9JtZoagMujfnhcKZJ5Qr9DsPsBZHTDmew4gC4kpzIBNTKTasoFbR7cIE85jCo5WAQmfYAH58vT2nFXsyftE4PPEGSMYQ5vqzhCeIGi4j3n8EecJLLNB3Wt6jmP6i3CbkipmU8seU3aH6Rp9TJR6qsemescjfxCMcGhOxM4Hi1yNUDplpNYyE(BZWHfb2Ph3CqNGBEk)OPSeINscbFe5XlxMAxRTuwyx4c6bUdpWBXZI0pXG0HLhXGqXkzG4JOGev5fv0li2cRrKH9g92JrK8oUyo0PJiIzsuZhw040Je7bR90dMMktJwScWJIL1ILIdTeEwnTICWBVf(PjmE)zEGhgEe4XwuTRbqNiXWXoR(0gYQeb0OcoTkzjjKkFIOhpk)IAgYyAevm5cdMKp2PsMitOHH(27b4ZvaLBI(H9EtZnLOHSigdmNSAeTIzfT4XgpucX1MMEBpYJyKRGOAEK5Epa8SuRFMthBzcYWQmmpSdpxKyIuEkUVQOfs26(C(Gb2fmOJG8VghrqoeJdgcokmSJu6VAnPT8P0MgzqKUoVo5ocpexDcAxIG9Q(oHgkZgsTwYNHJ5wSmWpetgm5Aq61Ed2cKUaKXr2lmY52nCCoy0lwrSkTjS)9dNKYhbNc3FEC40WzE3WtWbJHRtbqexUSqo2xscqqEo92xnUBA95sYbObfaz4SWeGcue0f0V)MxuwAGfm5Eado9hQ55ELsnXIsGsWuW0WmCqzwVAwb4xeom8l1c8oj89W7sa(LjCUW7(aWCW7HXydpfnP3l96td)kW5O8SWVAfwv49HznHFnmtj8RZb)gW7FdH7d(nFe4da)wW8TaFq43g(DQXUCJWZq4vGpuv(KEY5FwJINAiPd2n87wa(WW)p4JaFuOVdDa4JHb)TaF8Z7E0bE22c4dJ7B9HHfiaEk6ONGeaDa6LwGNd4zL9MGpo8jGN1HnHLFkdcoleod4tUk8cFKTSCEHeUrXlyrDiGy8bwgRrEKfgfFbc4V2leiq846B3X3H0YwLOm5um)6dWJBx9qU0rJH7NF)SVMEoRQyD9hyfqRQzQb4QgZAOFVnPsQcLxb)JBEIgOPSwvuhJeLJaZcT2q8NgdXxKmiJfhtCnsGAKirHvbgY3W5f47pa8MfcBikljSASdtXJffBvwiG(u4Ac3gTkxuuviGfsvybRPXWTYJJ9UaReLEVaeq4AcgOBAfmqh8OX1lfkXih1xQ6yGosvgO5Ro2J5E6MW902J6Wome1F5Uix87IZbxi4BIZCV1NzM03AWZLveEX8yca8ST4MHBisg7LAtDa2vAHwg7NxYO6fD0ttm(Jy1H(oJmCO4PW(nmCOihfBcsSmXoEugZ4lxHzCPA8D4oOa8fGVirNYxsa(MT1Jpmxi2KZQqpIArrlndsxko871iMXDGnuIzmdThYUqLXGP2zlkByOzuGkI42WKOD6z(SvmscJo6ZZQq(hh2xwmFh2Gh6Z4x)TwGAhsQskMO5Q4NzR(Pfzfyd9DG9(nNbYcnMrfNSQdV8b0psnlycjjLu180JIeNieXb(thhjjlEAhBDmpnZX4XO(eFyR8IuWfr8dgxHLarGz)ce5GZte8mxTp4JTikyi((71)iwN8eu0hrk57C)zzEtuGXJcFvb4pWHLe(dDygH)OvNteEjb4pwa(AcWxxa(gcWFcLz7dDJ385UhGR6u6aBzi9Dx1L50idDmFP30eJZCnvnSBm9ghBNL(ECndoiVHXUTB5DuzRcYQ6VLQVk6m6AMiVKblvKPj8MGTs67EGBgUfmD(w4W053mS9BIayBLjxcZ1Jz3Dp8xv)WDc31EB1xftCiw8qGy7xObM58GyrBp02U8fxWOuxOAhjCjSb1ourcTHsuFSfLvYn1bJxU9bNziiulqypqKwi40OEiuVZDFuLE4E0TsT)BPCAAkyxZutpTm2eUZx5rYmQuyLD5xG1L)SH93B39W7VJGD2l5AqF0R(PxdqV2b9AN0Rb5demqV4RD7ZFxg4ApPQcwc7DJ5Cx5GMXGH4J3)id7EO7ip(fNaH0drCBXINGolqvDIvtg(iV6s5v0MUFd0KLqQ5kZKwfMKwHZJLvmGIJl2fMNKwA20JqUDy6C)SRfj3xX1uAEQ5Cd9DvChK50mjf6xmtb5CuiulZrFeRFBPSLSS0utIT(xrSmTUgwgNLDq)EHzt(35UDQ6822V(LObR1u4EEMhWHtMjtY4WK3ftL64uvQnuD6XwFwmEBWWygHxf22RSfcskrhX0INxsxPh4VG1qEgQ9jZvbLiuvn1s67SsIeXo9jBs8FbRoglt5dDmyybchewBfd9tG07Jjw0b9VSuUJvKcbHJDsQIQNlGMrxMjdnJCre8ST2brj0d7OesaEoYmGDy)hMmWtyLF7TSCOpylaF3cRkB9qH97VdmUUZoc0b9AN0Rbxfyl8dQhWc)ZUHOW)cdwc)WcWpQa8JBb(x3f8VXb)7SH1)dm2c(pHFslWRbxe(V2b8FVrGsG)NndObrTWX6iCI0t0D0ULow9id4)TgK4Vg(PBWKFpxweY9Y3rND2T)1Lm6RVOBtHPBu3qOtn)eQuosgD8Pwb1CHAzARdp1YPQNetvBF2udFYKfMqzYtS6u1)MR2u1xOgvnOp)W)KWBazijew9wjuwvnRvsDVq9PsiNRnFlHclDsXubLcoU4q9S6u4VZMgf2xyS7ct32iPGT89Czd3rLvu8grRi2Fmj97OAYHsNkAKmEJhlD6yjgWLTGX1uZRrSHlm2Ew99vn9(rY5v92h20)cEtzOvu3sFhvF5aAEpo2chdxFxYA651sZ7GItpH(DwR6LnLKXUmt0TSY6jo24FVPqw63URLZzkSNJ0eRLVir8MmH34rDLuFrd13PsMiQ(oRzwBSHJMisuVjsoQRoyMq8denJ3yXJpsIOudujCfFtkxbZKuYSsMdDRxP2KUi2ZNsfvttQm28rKLztbVOcESe6XW0sKSABCe7iXwqwZ8Cd2QPHeOwohQfSBdt7upyZOj26EBNxQSQyr5CuN0Xwuh2e71ney(8gYSfT4MNJClXWP247JxrUOS1ntCYFyYDfUqonv8Nx1QFXCyx4YYhQVyJKoRHOKCjZN6wW2spVOroMrCyeVd8T2Y6gsbzyzUW4LuuIiBKtb3uDSu(VIJyt82uUcmghZwWG1p2IHvsgpFHytCIbg6C3pmixZfH9nWePNMj0MUSAS5oAFZNJopVkA5xOw6yc49AmwFHIhAGONNop)gYwYydyfGxP1Gq8fytoS3H1Yd3hpFOedeLn)RpTn3HWvQn3BZM7bi1In3dAZDyNIzZ9queX6nR8PhfZaYY(52bVLbMVjmznP03bPrLhPImKZLUG20jvfwQUhx0K(dpsuQmDMKPsTsiweT1N6hd7JN(OZI7TNiogqsy6YJ9B10B70vm(GmrHyaPMbsdBBng0Gewc7JVs6kv35DlezPQ6ejVIoZCeCpB2NPlycTpiOF7K7rKLM2D2j8hzZvY0cZ63k7xNfDgpqlNtVRXPllTMA7wh0l2h9sgQEB36X9FgVAgETE8ao)2XzoOxCJbFxNNXlwQrZ1dru38JeGxJpL8miLAAJOtfraNjFbRw6hkquwHvmDvrPKnh3QBHHn3wiuvx6DS5ERKLXNeabXWCZ6hQ2CwqE280HYkRiBvEmgt7yeIOdnKzOPrxtu6u6LMrz0yRQclBUTTkASi9NVfe0GS(9jlzrNfMfnvWONSAy)0kcVsasvr4PBGUSZT95PRLo1XotmIHS2su3hjSlVJS0xwM0AWIeS5gGLWmSeELw9dZZrXA0KfATS02ADgU5PtcePkNRsvs(WlHVx1uHSeT4xPVJkVltLKXTQLCaUSeeO1nT2eQxl7AldYLzuFySd6(7kiX1g)9qV2l1nhMJp(PxdqDFVlI77D2j2SlFD35syr)5kGmzC5lX4YXkojR14LHH2hAL8b2CrQNjGTc9(d2aUGMJBF6k4wgILIExGknLk9uyfy4okUmmSnxF6hy5qxQONXsqIsa0y8ItHu7xZOid2gk)u5Wp2NHXKlh2wOgS1tZHTyiffXAZni8k2CXwDCQn3q2ChLIkT5gUgI0MlUB0OnxIkWqBUK2CPivLn3XS54XvMnxACVpZLmy6lWS6aRaHOSIyTw0(CP8WMZ)CsitlM(mQwSIyCcbMlqFQYlfMRs689LSVkAYQuZ2C5Qt5LnNeCp2CiCtEC8F5T5kurbLnxaBUoS56eNoEuOlcE0MRBRZqQQEykBS561M7i4m82xQoRjT5EKLPUWM7rXz7XyAfOdWH0p8APaOIG)oUee87gWtPATWUETVqF8i7k5xwlr9PNwECR0wgYtGy8m(Mjv3b9Lj0mYd0er938Bi4zEc3lOb8Nx)Iy0lzrmGxELlzrZq3BDxBTHW7fD5u0AaUVSLm3zWvZ8KMJTEH6wTa3am2IkupmJd)Nav(mURUs8w7RgEJxlFj0y0Hb6OadTLrze1zv6)yrgD4MG2UL3WG2(NRG203vDXEqLfiR1hgEX2c4dJ4EEcIIgrp1fLccWluFWFaFkxb8rLjLXM7m2CpHn3yB8gbqPo0fpSLnetaiOPvO6)9U3gaTEO1qugBzj0g3QaIofdmew8XN1FOrZQyfiwtSb4wFJhcZMJUcYViz1yDGt2Ct2C8ZZud)S5GCwDTPBqiNgz0OnNidlKT9sdh5SfBpB(8nblCBxhGfUpyWB6kq3w3xw62E6xSH62oV7zQBZs52Q779MJYnCFTECedbL33jMeDYShVRrgPjiO381hiO3uZrqQ1fUh1fXTT1jrMsc4UdOtdclcfNqTtkWMlQ6YSG(URpCDDPSRkQ7LRj2A6wDQCBUzQRUT5kJ)B2wF01by9PASDyZvzEJ3eWPxjY3wp23)uBTHqYiXh5yroEQtKIF0Maj3(B8eQT2ifY6qV2qfPhPHqLfQTEcBwc1USNlL1dCb3TAeCP3jvZ3NI8rn0l3e4YoU(aUSEwOYPO4fhlzQqbJRV9igAtl5ns19RgbaTEwPYlhQ5RNtvW4enBvdeSvzbjpapztYjsdaS6XhP6WS8aOSf9DW(Ac(O1RHXhF4QrNYIo7gr6Mg7zdNoZijQlejxgz75UyTyvHg7rvRiBU5GNDjs5hlE0idgkrSinTIS5EQ6lB4(JgIFfHNz3SWmUrfyjsbA8hBnkPrKKj6FK0rxrz60jmsjlBydBJ8jtMzfLQQVEn4l5SSPRCOWjWWByhlvOiX6)KxofvF7PJmyYKdpwmYwOHFKuzwJIFj54KRTCXI8Kn2H3iKnccjSg4nip3ApyPi0P7N(yfhOUa9PAH4QBDo06KUGbf0mTOERk4A)y8fRZtS5RMhd2DORIZw)uULIScpTCljXM7jRtmcXv9dUwZ6OfzLitxqZIj0jx(Uu1J2F0oI1Ete6C7VHXggxBmNWKD60kWc1zyCvJtwkelAigHgvFe7pW2PCH0yKIAoz18EjdOnYwfI9my33EPRm9BvzT2SuVTN1J6TNMbmxZvaf3BBi8Kb4kvEGbp7OHNobsRjaUD(ghRGCMzN3xGU6mqy)(c4JCjq4Gb7TxE8DD3dFNb7SJE47WFGa4p5nSArZv7)CKnsng60vFhV9(7(u9x2F8MaD211bqhF2CBf(OWwEPQrSFK(iXJfcR8ruX7Oy9zfQgX(0xHfRlxuwIgVVvJGl6BiHwcjeRnRVaJwEkKHQZ2fy31varDzjV9lBGQp94Knn7dsKKvng0OPhYiNOkIkIR(pH7zFQ(I4AnxQVh2VbcnlrGzgdr96RT05eTipq1nvjKVEGB0vmFzZT7TDLgWx2C3rL9DMn3Eix27kdTlBU9vjQUS5UZAXZLn3DbB)MS5UBa7o79CZ2CEBJVpBU7fFxBy5I3Nn39BZTFAKzzZDGAHKLRt(GkH4JPnx7lpCS42qIgREpr4tenWzJpDGtqS)ATer9eUJty)9gS7ozo1VkJJR0D(lWI9HkDSktz5Wt14vBUom(A4EFar1YBeljxH1P1xHwNX4t9rpSn3lsIMcNtdfbMSQXrkgd5ptPqLMTjlV2cWpTavwvOnQin9qv3iOlOvJMu)gutaEoiDvd8dtOFUYXHCYXpd)BbsoRzl)6rD3kMSNVuver5gpj2UfTDfoFpR7yzEJaeuEzGaBUFFhIVVZ67OkhSZSX8FQMq8FUnCIVNnks1z(knKunFvDnxhrNW9LvJo1ECtFhVtL4hBs(MqN(Kx7sNo6l1ywk3k)VoIuD0xAvjvbguJxFO8d1BxPBcP65VAsQCRjnCh(6myZShPzK1mFJvzAXRA42AgLwlE5UyFU908sqT56Eduvhr9e935jMjOvXmgnto5lSjQK0M7R0uLJ2CF1ngvJpXkj4lqu8gszAXYMoe(oF(gt4RzzEtj8xYN7ixHlg8Mo(4GJhRdJZgBqFLLAc(4tTHJpoIl6)AHp(kl742WbF0OtJJd5(04Wbc9ZUIGq2C)PoqN(ASmJfD582vpSZp5g)BE9bWKP9b7qu1V4bNkytamF6FobW0CBhwLykXMR01rwmS8GfXfwqczgxX)q5hCQMfGJFMRDnUBvcOvBUIxBqGU8yrdLV3sHMilFVINOjKLp71SKLV8Qef91nZwxBqGwNty)x(mnCsxDBN20QAhThZ8JO2SjZ4ZDTlR0WpuJ9tY9CoEDfnJ0JwdIMuFZejRP1SzoXmnHO9530iA054(9dBzVU2TVhRKCUjOJ2MvNIx)BwZWB4HJ2FMx)MK3ANlnPm0Y1O539))gY87oqN5sf(O95lXGDUUpXaOUAerrtfzkuXd1U8h03v2rcX1YRx5LM(P)sgltWcOr4NyYSJEScnHL5BxzbMwgldD9IFhSvyIq3ilnus4BZwgj6ki5NG6I78BcbcrMSbmdsxGOgWG5UgjzShCD2AzUwN51UKwPPW9LC0eWwoR7d4Bdz1jqwEjVrVTQjpkzpeRnUxRciV9RzykobsLLNA7n)OQOILRubUoeai698gYOisY1znfD7aWMhkVjl5o7SQHCoK3W93pwsWTUHjjiqMKPE9tqW5RjiyQunqmG0gZUUxQ)(cmyXrNSl1aRh5aVlsqXmNSfQiDZNp17JfiNDkaX1FlnyJNhdNZdYcTthDP4Hz6(vSsDGLKq2XGfDf0n2C)DB9d(dRvZ2C)9lVkS5(hO72()XLvSyFSlVI9PVKkwdNBmHndf5xwl093NjhYskWjJnvkuP27RjYH(oBAQUVVRu7TU73rdT3sFNnsaZLSHxcxnn8c31AcLZx)XpAx9w8Gk5BgL7vVAt5irMBCdN)FgSx(odeO3aqs2HnQtQcyno(j7ho9Ds3O3EjrlL30LYLdroIRjls8t(6PHXRl(PDtPk1ts6A8E93zFAJGg8KnHK83EnbjXM7hCKW(7Sx6rqGF6rqGF)0OQ)FbtpARlFKS8JO6(Uw8ODATnll2vQxPviQwL07D2J2DhLd1eIQDfl1IDvIO(Q2C)vcvon96WxhKtqVaDtOUb6Xh90GSNfXgir29)KZt15ehFCuolm3f5q9c3ZVa5eAqwfLILhHRFoLV2iHcFYV(QYC3xVtf6StfFYtnWunbh8D30Wb1DiAZ1OZq7x21SQ)8uIQ(oPrYmAYsYgi6rmp9SGy13EOxoNt8dXo4SzeZS7N8)BM9FztqxGDABs8NgMCxmkRZzYn8PVuR1pZkom5Hpl5GINwVFU16KFFpxEOMkhK1eGZvRtYABUVxLJY6xZ5KSwQ4aZEYrlALV9Jv3jzDTJ5t4fxX5)(YI2(LFYs3AXwLAv6C3DDNKWNf6fEvAiI)IyVDjJcoN6VKt83xzRxBFI)IDnBfhYVh7uN6KrJOpZSMD0Gd53wn574WbpSVwN6gFN)Fp
 ```

@@ -1,4 +1,4 @@
--- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v5).
+-- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v6).
 -- Run: lua5.1 tbc/hunter/generate.lua   (toolkit libs must be fetched once:
 --      tools/tbc-weakaura-creator/scripts/setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game.
@@ -46,6 +46,33 @@
 --     prototype is NOT pruned on TBC and its unit arg accepts "arena" (the deletion
 --     of arena units is gated on IsClassicEra, not IsTBC), so this is a plain
 --     multi-unit clone row with zero custom code.
+--
+-- v6 (see README "v6 — the cooldown row shows what you CANNOT press"): no new auras, no
+-- new uids, no load-gate changes. The row is re-split along the one line that matters —
+-- which of these buttons is pressed the moment it is up, and which is pressed when a
+-- circumstance calls for it (references/rotation-design.md, "Show what the player CANNOT
+-- press"). Each of the eleven icons was classified against the BM (41/20/0) and SV
+-- (0/20/41) raid priorities, not converted wholesale:
+--   * ROTATIONAL, stay showAlways and GAIN the gold ready-glow they never had:
+--     Multi-Shot and Arcane Shot. Both guides are explicit that Multi-Shot replaces a
+--     Steady Shot on cooldown (it is more damage per use than Steady Shot even on one
+--     target), and Arcane Shot is the same weave slot's other half plus the instant you
+--     press while moving. Hiding the two buttons a hunter presses most would trade a
+--     "press this now" signal for a "you cannot press this" one.
+--   * SITUATIONAL, become showOnCooldown and lose the now-meaningless desaturate:
+--     Intimidation, Readiness, Wyvern Sting, Misdirection, Feign Death, and the two
+--     PvP-gated ones, Freezing Trap and Scatter Shot. Misdirection and Feign Death are
+--     the two whose moment is already owned by a threat-paired prompt in the alert flow,
+--     so the row icon only has to answer "when does it come back".
+--   * Rapid Fire and Bestial Wrath are burst cooldowns spent at a window (the opener,
+--     and again after Readiness), so they are situational too and become showOnCooldown.
+--     They KEEP their desaturate: on those two it is not the generic dimmer, it is the
+--     second half of the v2 active-window readout (full colour + glow = the window is
+--     live, dim = the window is spent and the button is recharging), and it is overridden
+--     during the window by the later sub.1.glow condition. The stated reason for dropping
+--     desaturate — "every visible icon is on cooldown, so greying them all makes the
+--     abilities harder to tell apart" — does not hold for an icon whose visible states
+--     include a live buff window.
 --
 -- Every spell id was verified on wowhead.com/tbc. Aura triggers carry EVERY
 -- rank as strings; cooldown triggers carry the numeric rank-1 id; spellknown
@@ -397,13 +424,52 @@ adopt(gAlerts, viper)
 local gCDs = reg(F.dynGroup("Hunter - Cooldowns", 0, -66, nil, "HORIZONTAL", "CENTER", 4))
 adopt(top, gCDs)
 
--- 19-26. one recipe: desaturate while down, WA cooldown text on, tooltip on hover
-local function addCD(name, spellId, gate)
+-- 19-26. one recipe, two displays. WA cooldown text on and tooltip on hover for both.
+--
+-- v6: which display an icon gets is a CLASSIFICATION, made per ability against the raid
+-- priority, not a blanket conversion (references/rotation-design.md, "Show what the player
+-- CANNOT press").
+--
+--   rot = true  — a press-on-cooldown rotational button. Stays showAlways and carries the
+--     gold ready-glow, because the glow IS the instruction and a hidden icon can never fire
+--     one. Two states and no third: dim = still coming back, full colour + gold = press it.
+--     Trigger 2 is the always-active state feeder that carries inCombat (disjunctive "all"
+--     stays satisfied, and trigger 1 keeps driving the swipe), so out of combat the icon
+--     fades and the glow is forced off — the row is still while you ride around.
+--
+--   rot = false — situational / utility / emergency / burst-window. genericShowOn becomes
+--     showOnCooldown: the icon exists only while its cooldown runs, carrying the swipe and
+--     the countdown, and disappears the moment the ability is back. The row is a dynamic
+--     group, so the gap closes — ABSENCE IS THE READOUT. The desaturate goes with it: every
+--     visible icon is on cooldown by definition, so greying them all would only make the
+--     abilities harder to tell apart. (withActiveWindow below re-adds a desaturate to the
+--     two burst icons, where it means something else entirely — see its comment.)
+local GOLD = { 1, 0.82, 0.1, 1 }   -- this pack's "press it now" colour: Kill Command,
+                                   -- the Misdirection prompt, SILENCE NOW — and now the row
+
+local function addCD(name, spellId, gate, rot)
   local ic = reg(F.icon("Hunter CD - " .. name, CLASS, 32, 32, 0, 0, nil))
-  ic.triggers = F.triggers({ F.cdTrigger(spellId, name, "showAlways") })
   ic.cooldownTextDisabled = false
   ic.useTooltip = true
-  ic.conditions = { F.condition(1, "onCooldown", "==", 1, "desaturate", true) }
+  if rot then
+    ic.triggers = F.triggers({ F.cdTrigger(spellId, name, "showAlways"), F.unitCharTrigger() })
+    -- subRegions[1] is ALREADY a subglow — the icon prototype ships one with glow = false —
+    -- so this REPLACES index 1 in place. Nothing shifts, and every sub.N condition in the
+    -- pack keeps pointing at the subregion it was written for (the border stays index 2).
+    ic.subRegions[1] = F.subglow(false, GOLD)
+    -- LAST condition wins on a shared property: out of combat the icon dims and the ready
+    -- glow is forced back off, so an idle hunter's row does not sit lit.
+    local quiet = F.condition(2, "inCombat", "==", 0, "alpha", 0.5)
+    quiet.changes[2] = { property = "sub.1.glow", value = false }
+    ic.conditions = {
+      F.condition(1, "onCooldown", "==", 1, "desaturate", true),
+      F.condition(1, "onCooldown", "==", 0, "sub.1.glow", true),
+      quiet,
+    }
+  else
+    ic.triggers = F.triggers({ F.cdTrigger(spellId, name, "showOnCooldown") })
+    ic.conditions = {}
+  end
   ic.zoom = 0.3
   table.insert(ic.subRegions, F.subborder())
   if gate then
@@ -416,10 +482,18 @@ end
 
 -- A burst cooldown owns its ACTIVE window too: trigger 1 is the buff (so
 -- first-active mode drives the swipe off the window's own timer) and trigger 2 the
--- cooldown, joined with disjunctive "any" so the icon never leaves the row. While
--- the window is live the icon is lit and full colour; afterwards it desaturates
--- for the rest of the cooldown. This is what tells you the haste/damage window is
--- still running, which is the part of the button that changes the next 15-18s.
+-- cooldown, joined with disjunctive "any". While the window is live the icon is lit and
+-- full colour; afterwards it desaturates for the rest of the cooldown. This is what tells
+-- you the haste/damage window is still running, which is the part of the button that
+-- changes the next 15-18s.
+--
+-- v6: trigger 2 is now showOnCooldown, so the icon leaves the row while the button is
+-- ready — absence means available here exactly like everywhere else in the row. The two
+-- visible states are unchanged: buff up (trigger 1 active, glow on, full colour, swipe =
+-- the window) and recharging (trigger 2 only, glow off, dim). That is why THIS desaturate
+-- survives the v6 pass while the plain row icons lost theirs: it does not mean "on
+-- cooldown", it means "the window is spent", and the later sub.1.glow condition overrides
+-- it for as long as the window is live.
 local function withActiveWindow(ic, unit, auraIds, glowColor)
   local cd = ic.triggers[1].trigger
   ic.triggers = F.triggers({ F.auraTrigger(unit, true, auraIds), cd }, { disjunctive = "any" })
@@ -430,14 +504,19 @@ local function withActiveWindow(ic, unit, auraIds, glowColor)
   return ic
 end
 
-local cdBWrath = addCD("Bestial Wrath", BWRATH,  BWRATH)   -- BM 31-pt
-addCD("Intimidation",  INTIMID, INTIMID)  -- BM
-addCD("Readiness",     READY,   READY)    -- SV 41-pt
-addCD("Wyvern Sting",  WYVERN,  WYVERN)   -- SV 31-pt, skipped by raid builds
-local cdRapid = addCD("Rapid Fire",    RAPID,   nil)      -- baseline, lvl 26
-local cdMulti = addCD("Multi-Shot",    MULTI,   nil)      -- baseline, lvl 18
-addCD("Misdirection",  MISDIR,  MISDIR)   -- trained at 70
-addCD("Feign Death",   FEIGN,   nil)      -- baseline, lvl 30
+-- The 4th column is the v6 classification. Only Multi-Shot is a press-on-cooldown button
+-- in this block: both raid guides say to press it on cooldown in place of a Steady Shot
+-- because it is more damage per use than Steady Shot even on a single target.
+local cdBWrath = addCD("Bestial Wrath", BWRATH,  BWRATH, false)  -- BM 31-pt; opener burst
+addCD("Intimidation",  INTIMID, INTIMID, false)  -- BM; a 3s stun, pressed at a moment
+addCD("Readiness",     READY,   READY,   false)  -- SV 41-pt; spent to re-arm the opener
+addCD("Wyvern Sting",  WYVERN,  WYVERN,  false)  -- SV 31-pt; CC, no raid rotation slot
+local cdRapid = addCD("Rapid Fire",    RAPID,   nil, false)  -- baseline lvl 26; burst window
+local cdMulti = addCD("Multi-Shot",    MULTI,   nil, true)   -- baseline lvl 18; ROTATIONAL
+-- Misdirection and Feign Death both already have a threat-paired prompt in the alert flow
+-- (70% and 90%), and the alert owns the moment. The row icon only answers "when is it back".
+addCD("Misdirection",  MISDIR,  MISDIR, false)  -- trained at 70
+addCD("Feign Death",   FEIGN,   nil,    false)  -- baseline, lvl 30
 
 -- Rapid Fire's 15s +40% ranged haste is the bigger of the two haste windows the
 -- pack sees (Quick Shots is the 12s +15% one), so the icon shows the window, not
@@ -471,7 +550,12 @@ adopt(gProcs, quick)
 
 -- 29. Arcane Shot — the other half of the "Multi-Shot or Arcane Shot" slot in the
 --     1:1.5 weave, and the instant you press while moving. Same row recipe.
-local arcane = addCD("Arcane Shot", ARCANE, nil)  -- baseline, 6s cd (r1 = 3044)
+--     v6: ROTATIONAL. It is a 6s instant inside the core damage loop — the weave slot's
+--     other half when mana allows, and the shot you press on cooldown the moment you have
+--     to move — so it gets the ready-glow rather than being hidden. This is the closest
+--     call in the row (a mana-permitting filler is not Multi-Shot), and it goes the
+--     showAlways way on the tie-break rule: anything in the core loop keeps its glow.
+local arcane = addCD("Arcane Shot", ARCANE, nil, true)  -- baseline, 6s cd (r1 = 3044)
 
 -- 30. Back to Hawk — the return half of the aspect swap. Viper is a flat damage
 --     loss (Hawk r8 = +155 ranged AP), so the moment mana is back you swap out.
@@ -785,9 +869,13 @@ adopt(gPvP, viperOut)
 -- 43-44. Scatter -> Trap is the hunter's entire opening game plan, and neither button
 --        is in the PvE cooldown row. Both join it under the PvP gate, so the row is
 --        byte-for-byte the same row in a raid and grows two icons in arena.
-local cdTrap = addCD("Freezing Trap", FRZTRAP[1], nil)
+-- v6: both are CC openers held for a moment, never pressed on sight, so they are
+-- situational like the rest of the row — showOnCooldown, and their PvP load gates are
+-- untouched. In arena the row therefore reads "the trap is on cooldown for 22 more
+-- seconds", and an empty row means the whole opener is available.
+local cdTrap = addCD("Freezing Trap", FRZTRAP[1], nil, false)
 cdTrap.load = pvpLoad(PVP_SIZE, { use_spellknown = true, spellknown = FRZTRAP[1] })
-local cdScatter = addCD("Scatter Shot", SCATTER, nil)
+local cdScatter = addCD("Scatter Shot", SCATTER, nil, false)
 cdScatter.load = pvpLoad(PVP_SIZE, { use_spellknown = true, spellknown = SCATTER })
 
 -- ===== v5 addition: the one new aura, constructed last =====

@@ -20,12 +20,12 @@ arg = savedArg
 -- pack dir, string file, README, version label used in the "## Import string (vN)" heading
 local PACKS = {
   { "rogue",        "tbc/rogue/all-specs.txt",       "tbc/rogue/README.md",   "v45" },
-  { "paladin",      "tbc/paladin/all-specs.txt",     "tbc/paladin/README.md", "v6"  },
-  { "druid",        "tbc/druid/all-specs.txt",       "tbc/druid/README.md",   "v5"  },
-  { "warlock",      "tbc/warlock/all-specs.txt",     "tbc/warlock/README.md", "v5"  },
-  { "hunter",       "tbc/hunter/all-specs.txt",      "tbc/hunter/README.md",  "v5"  },
-  { "priest",       "tbc/priest/all-specs.txt",      "tbc/priest/README.md",  "v5"  },
-  { "mage",         "tbc/mage/all-specs.txt",        "tbc/mage/README.md",    "v5"  },
+  { "paladin",      "tbc/paladin/all-specs.txt",     "tbc/paladin/README.md", "v7"  },
+  { "druid",        "tbc/druid/all-specs.txt",       "tbc/druid/README.md",   "v6"  },
+  { "warlock",      "tbc/warlock/all-specs.txt",     "tbc/warlock/README.md", "v6"  },
+  { "hunter",       "tbc/hunter/all-specs.txt",      "tbc/hunter/README.md",  "v6"  },
+  { "priest",       "tbc/priest/all-specs.txt",      "tbc/priest/README.md",  "v6"  },
+  { "mage",         "tbc/mage/all-specs.txt",        "tbc/mage/README.md",    "v6"  },
 }
 
 local function read(path)
