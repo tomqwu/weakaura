@@ -1,4 +1,4 @@
--- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v8).
+-- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v9).
 -- Run: lua5.1 tbc/hunter/generate.lua   (toolkit libs must be fetched once:
 --      tools/tbc-weakaura-creator/scripts/setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game.
@@ -110,6 +110,28 @@
 --   * Six NEW auras, all constructed at the very bottom: two cluster groups, the two
 --     live unit portraits (`model` regions bound to the unit) and the target's own
 --     health and mana rings. stable=46 changed=0 missing=0 — nothing is orphaned.
+--
+-- v9: PURE GEOMETRY. Not one trigger, load gate, condition, colour, spell id or region
+-- type moved; no aura was added or removed (stable=52 changed=0). v8 shipped seven packs
+-- that each invented their own orb sizes, and inside this pack the player and target
+-- clusters did not even agree with each other — the player orb read 84px across, the
+-- target 108, which is what a player sees as "uneven". v9 adopts the ONE canonical orb
+-- geometry now shared by all seven packs (see the CANON block below):
+--   * Ring_20px replaces Ring_10px on every ring. At these diameters the 10px art scaled
+--     down to a ~3px hairline and read as a wire, not an arc.
+--   * Both clusters now present the SAME outer diameter (104) and the SAME portrait (46).
+--     The target simply nests one more ring inside: threat 104 / health 78 / mana 54,
+--     against the player's health 104 / mana 78. Nothing else about either side changed.
+--   * The readouts move to the shared baselines (health 14pt at -60, power 11pt at -76,
+--     threat 11pt at +60), so the target's health number is no longer 20px lower than the
+--     player's. Both clusters move to the shared anchor: absolute (-260, -60) and
+--     (+260, -60), which is also what lifts a 104px orb clear of the cooldown row.
+--   * THE TRAP: the mana ring's two aspect-swap ticks are `subtexture` marks placed by
+--     TRIGONOMETRY from the ring RADIUS (x = r*sin, y = r*cos). Growing the ring 60 -> 78
+--     without re-deriving them would leave both marks floating 9px inside their own arc.
+--     They are computed from G.mpRing here, so they moved with it: the 20% mark from
+--     (26.63, 8.65) to (35.19, 11.43) and the 80% mark from (-26.63, 8.65) to
+--     (-35.19, 11.43). Both still land on the ring's circumference at their own angle.
 --
 -- Every spell id was verified on wowhead.com/tbc. Aura triggers carry EVERY
 -- rank as strings; cooldown triggers carry the numeric rank-1 id; spellknown
@@ -232,28 +254,61 @@ end
 -- field, so what is emitted here is what the current client runs.
 local IV, TOC = 45, 20501
 
--- Bundled WeakAuras media, present for everyone. Ring_10px is a true annulus (the number
--- is the stroke weight in the 256x256 source art). Circle_Smooth2.tga — the texture the
--- rest of this repo uses — is a SOLID DISC and would fill as a pie wedge, not a ring.
-local RING = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_10px.tga"
+-- ===== v9 CANON: the orb geometry every pack in this repo shares =============
+-- These seven constants are IDENTICAL in all seven packs and are the whole point of v9.
+-- Do not scale, round or "improve" them here: the moment one pack drifts, the player sees
+-- two differently-sized orbs the instant they run two classes, which is the bug v9 fixes.
+-- Change them in all seven build scripts or not at all.
+--
+-- Ring_20px, not Ring_10px: the number is the stroke weight in the 256x256 source art, so
+-- the drawn stroke is diameter * N/256. On the 104px outer ring the 10px art rendered a
+-- 4px hairline; 20px renders an 8px arc that reads as a ring at a glance. (Circle_Smooth2
+-- — the texture the rest of this repo uses — is a SOLID DISC and would fill as a pie
+-- wedge, not a ring, so it is not an option at any weight.)
+local RING_TEX  = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_20px.tga"
+local ORB_OUTER = 104   -- outermost ring, on BOTH clusters, in EVERY pack
+local ORB_MID   = 78    -- one ring in
+local ORB_INNER = 54    -- two rings in (target cluster only in this pack)
+local PORTRAIT  = 46    -- the live 3D face at the centre of both clusters
+local CLUSTER_X = 260   -- ABSOLUTE screen x: player cluster at -260, target at +260
+local CLUSTER_Y = -60   -- ABSOLUTE screen y of both cluster centres
 
--- One place to retune the layout. Absolute screen y for both clusters is
--- -140 (top group) + 40 = -100.
---   clusterX 250: the Alerts flow sits at x=-150 and the PvP stack at x=+150, both 40px
---   wide, so 250 keeps a 120px-wide orb clear of either column by ~20px. The cooldown
---   row's top edge is at y=-190 and the readouts stop at y=-170.
+-- RING ASSIGNMENT, and it is what makes the two sides match:
+--   PLAYER  health = OUTER, mana   = MID,                      portrait = PORTRAIT
+--   TARGET  threat = OUTER, health = MID,  mana = INNER,        portrait = PORTRAIT
+-- Both clusters therefore present the same outer diameter and the same face; the target
+-- just nests one more arc inside. Threat stays the outermost target ring (v8's reasoning
+-- is unchanged: it is YOUR threat on THAT target, so it belongs around that target).
+
+-- The shared readout baselines. Offsets are from the CENTRE of the cluster, so the same
+-- pair of numbers sits at the same height under the player orb and the target orb.
+local PCT_MAIN   = { size = 14, y = -60 }   -- health, just under the outer ring
+local PCT_SUB    = { size = 11, y = -76 }   -- power, under the health number
+local PCT_THREAT = { size = 11, y =  60 }   -- threat, ABOVE the ring
+
+-- Pack-local geometry, all of it derived from the canon above so the two can never drift.
+--   clusterY is CLUSTER_Y expressed in the top group's frame: `top` sits at -140, so the
+--   Resources group offsets back UP by 80 to land its children at an absolute -60. That
+--   also lifts the whole cluster clear of the cooldown row (top edge y = -190) now that
+--   the outer ring is 104 across and the power readout hangs 76px below centre.
+--   flashRing is the only size NOT in the canon (no other pack's halo can be seen next to
+--   this one). It is derived: a halo of diameter D at the 20px weight has an inner edge at
+--   D/2 - D*20/256, which must clear the outer ring's outer edge at ORB_OUTER/2 = 52 —
+--   so D >= 123.3, i.e. ORB_OUTER + 20 is the tightest halo that does not sit ON the arc.
+local TOP_Y = -140
 local G = {
-  clusterY   = 40,
-  clusterX   = 250,
-  hpRing     = 84,    -- health, the more-read arc
-  mpRing     = 60,    -- power, inside it
-  thRing     = 108,   -- threat, OUTSIDE both — target orb only
-  flashRing  = 120,   -- the 80% threat halo, outside the threat ring
-  portrait   = 26,    -- the live 3D face in the middle
-  hpTextSize = 15, hpTextY = -52,
-  mpTextSize = 11, mpTextY = -70,
-  tgtHpTextY = -72,   -- the target's health % has to clear the threat/flash rings
-  thTextSize = 12, thTextY = 74,
+  clusterY   = CLUSTER_Y - TOP_Y,
+  clusterX   = CLUSTER_X,
+  hpRing     = ORB_OUTER,       -- PLAYER health — outermost on the player cluster
+  mpRing     = ORB_MID,         -- PLAYER mana — one ring in
+  tgtHpRing  = ORB_MID,         -- TARGET health — one ring in, inside threat
+  tgtMpRing  = ORB_INNER,       -- TARGET mana — two rings in
+  thRing     = ORB_OUTER,       -- threat — outermost on the target cluster
+  flashRing  = ORB_OUTER + 20,  -- the 80% threat halo, just outside the threat ring
+  portrait   = PORTRAIT,        -- the live 3D face in the middle
+  hpTextSize = PCT_MAIN.size,   hpTextY = PCT_MAIN.y,
+  mpTextSize = PCT_SUB.size,    mpTextY = PCT_SUB.y,
+  thTextSize = PCT_THREAT.size, thTextY = PCT_THREAT.y,
 }
 
 -- Colours carried over UNCHANGED from the v7 bars, so the HUD keeps speaking one language.
@@ -344,7 +399,7 @@ local function ring(id, size, color, triggers)
     orientation = "CLOCKWISE", startAngle = 0, endAngle = 360,
     inverse = false, mirror = false,
     compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
-    foregroundTexture = RING, backgroundTexture = RING, sameTexture = true,
+    foregroundTexture = RING_TEX, backgroundTexture = RING_TEX, sameTexture = true,
     desaturateForeground = false, desaturateBackground = false,
     foregroundColor = color, backgroundColor = ORB.track,
     backgroundOffset = 0,
@@ -485,6 +540,11 @@ mana.subRegions[1] = pct("percentpower", G.mpTextSize, G.mpTextY, ORB.mpText)
 -- APPEND-ONLY: no condition in this pack points at sub.N on this aura today, but the
 -- readout must stay index 1 if one ever does. Radius is the ring's outer edge less 2px,
 -- which puts a 7px mark astride the stroke at any of the four Ring_Npx weights.
+-- v9: this is the one place where a size change is NOT self-correcting by luck — it is
+-- self-correcting by construction. Both marks are placed from G.mpRing, so growing the
+-- ring 60 -> 78 re-derives r = 37 (was 28) and carries them with it. Hard-coding either
+-- offset would leave the marks orbiting where the ring used to be. At r = 37 the 20px
+-- stroke spans r 32.9..39.0, so a 7px mark centred on 37 still straddles the arc.
 mana.subRegions[2] = ringTick(0.20, G.mpRing / 2 - 2, 7, { 0.85, 0.2, 0.2, 1 })   -- Go Viper
 mana.subRegions[3] = ringTick(0.80, G.mpRing / 2 - 2, 7, { 0.4, 1, 0.4, 1 })      -- Back to Hawk
 mana.conditions = {
@@ -542,7 +602,7 @@ threat.load.size = noArenaSize()
 --    overlay — only the shape changed. A plain `texture` region draws the whole annulus
 --    at once, so this is a static halo, not a second progress arc.
 local flash = reg(F.texture("Hunter - Threat Flash", CLASS, G.flashRing, G.flashRing, 0, 0, nil,
-  RING, { 1, 0.1, 0.1, 0.85 }))
+  RING_TEX, { 1, 0.1, 0.1, 0.85 }))
 flash.blendMode = "ADD"
 flash.triggers = F.triggers({ threatTrigger(80) })
 flash.load.use_ingroup = true
@@ -1233,9 +1293,13 @@ adopt(gRes, gTargetOrb)
 
 -- 49. Target health — the kill-window read (execute range, swap decisions, and whether
 --     the pull is going anywhere). No combat fade: you only have a target when you mean to.
-local tHealth = reg(ring("Hunter - Target Health", G.hpRing, ORB.health,
+--     v9: MID ring, not the outer one — the target's outer ring is threat, so its health
+--     nests one in and the two clusters end up the same size overall. The number moves to
+--     the shared PCT_MAIN baseline (G.hpTextY), the same height as the player's, instead
+--     of the v8 one-off that hung 20px lower to dodge the old threat ring.
+local tHealth = reg(ring("Hunter - Target Health", G.tgtHpRing, ORB.health,
   F.triggers({ unitHealth("target") })))
-tHealth.subRegions[1] = pct("percenthealth", G.hpTextSize, G.tgtHpTextY, ORB.hpText)
+tHealth.subRegions[1] = pct("percenthealth", G.hpTextSize, G.hpTextY, ORB.hpText)
 tHealth.conditions = { F.condition(1, "maxhealth", "<=", "0", "alpha", 0) }
 
 -- 50. Target mana — deliberately a SHAPE and not a number. Rogues, warriors and every
@@ -1244,7 +1308,7 @@ tHealth.conditions = { F.condition(1, "maxhealth", "<=", "0", "alpha", 0) }
 --     Shot read in the open world, where the arena-only Enemy Mana bars do not load. The
 --     percentage is left off on purpose: three stacked numbers under one orb is a bar
 --     stack again, just rounder.
-local tMana = reg(ring("Hunter - Target Mana", G.mpRing, ORB.mana,
+local tMana = reg(ring("Hunter - Target Mana", G.tgtMpRing, ORB.mana,
   F.triggers({ unitMana("target") })))
 tMana.conditions = { F.condition(1, "maxpower", "<=", "1", "alpha", 0) }
 

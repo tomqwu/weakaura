@@ -1,4 +1,4 @@
--- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v7.
+-- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v8.
 -- Run: lua5.1 tbc/mage/generate.lua   (toolkit libs live in tools/tbc-weakaura-creator/scripts/)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (internalVersion 45).
 --
@@ -118,6 +118,32 @@
 --     line on a bar; it is still two auras precisely so it can keep its Arcane-only gate,
 --     which a `subtexture` tick welded to the shared mana ring could not have.
 
+-- v8 (PURE GEOMETRY: the orbs are one shared size across all seven packs. NO aura added or
+-- removed, no uid moved, and not one trigger, load gate, condition, colour, spell id or
+-- region type touched — diff the decoded strings and only width/height/xOffset/yOffset,
+-- two font sizes and one texture path move):
+--   * THE BUG WAS DISAGREEMENT, NOT ANY SINGLE NUMBER. v7 shipped a 120 px target cluster
+--     beside a 100 px player cluster, and each of the seven packs had picked its own sizes
+--     (96/84/88/100 outer rings across the repo). Side by side that reads as sloppiness,
+--     which is what the live-client review reported as "the size uneven".
+--   * ONE CANONICAL SET, declared as named constants at the top of the orb section so the
+--     next edit cannot drift them apart again: ORB_OUTER 104, ORB_MID 78, ORB_INNER 54,
+--     PORTRAIT 46, CLUSTER_X 260, CLUSTER_Y -60. Both clusters now present the SAME outer
+--     diameter and the SAME portrait; the target just nests one more ring inside, since it
+--     is the side that carries threat. Player 104/78, target 104/78/54.
+--   * Ring_10px is gone. Its stroke is 10/256 of the drawn size — 4.7 px on a 120 px ring —
+--     which read as a wire rather than a band. Every ring is Ring_20px now, so the threat
+--     arc is a real band and the three concentric arcs read as one system.
+--   * The read-outs are one set of offsets for both sides (health 14 pt at -60, power 11 pt
+--     at -76, threat 11 pt at +60). They can be, because every ring in a cluster is
+--     concentric and each subtext anchors CENTER: the offset is measured from the cluster
+--     centre, not from whichever ring happens to carry the text. v7 needed four numbers
+--     because its two clusters had different outer diameters.
+--   * THE TRAP THIS PACK HAD: the Arcane conserve bead is positioned by trigonometry on the
+--     mana ring's circumference (ringPoint), so resizing that ring without re-deriving the
+--     bead would leave a mark floating in empty space. It is computed from G.pMpRing and
+--     moves 31.56,-10.26 -> 34.19,-11.11 on its own; both bead auras share the one call.
+
 math.randomseed(20260816)  -- FIXED pack seed; uid() call order is append-only forever
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
 -- wa_factory/wa_lib resolve their own dependencies (wa_lib.lua, assets/icon_proto.lua)
@@ -213,33 +239,58 @@ end
 -- verified reference build for this layout. Everything else (triggers, subtext,
 -- conditions, load gates, assembly) still goes through the factory.
 --
--- Ring_10px/Ring_20px.tga ship inside WeakAuras (Private.texture_types -> "Shapes"), so
--- no media addon is needed. They are true annuli; Circle_Smooth2.tga — the texture the
--- rest of this pack uses — is a SOLID DISC and would fill as a pie wedge, not a ring.
-local RING_10 = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_10px.tga"
-local RING_20 = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_20px.tga"
+-- Ring_20px.tga ships inside WeakAuras (Private.texture_types -> "Shapes"), so no media
+-- addon is needed. It is a true annulus; Circle_Smooth2.tga — the texture the rest of this
+-- pack uses — is a SOLID DISC and would fill as a pie wedge, not a ring.
+--
+-- v8: Ring_10px is GONE from this pack. The 10 px stroke is measured in the texture's own
+-- 256x256 space, so a ring drawn at S px carries a band of S*10/256 — 4.7 px at 120 px.
+-- At orb diameters that reads as a wire, not as a band, which was the first thing the live
+-- client review complained about. Every ring in both clusters is now Ring_20px.
+local RING_TEX = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_20px.tga"
 
--- One place to retune after the first in-game look. Both source ring textures are
--- 256x256 and the number in the file name is the stroke weight in THAT space, so a ring
--- drawn at S px carries a stroke of S*N/256: Ring_20px at 100 px = 7.8 px of band, at
--- 72 px = 5.6 px. The outer/inner pair is 100/72 with the fat art and the threat ring is
--- 120 with the THIN art, so the three bands read as a hierarchy rather than a target.
+-- ===== CANONICAL ORB GEOMETRY (v8) — IDENTICAL IN ALL SEVEN PACKS ===========
+-- These numbers are not this pack's to tune. Before v8 every pack picked its own ring
+-- sizes AND the two clusters inside a pack disagreed with each other (mage shipped a
+-- 120 px target orb next to a 100 px player orb), which is what the live-client review
+-- saw as "the size uneven, looks bad". Seven packs now emit the same six numbers, so a
+-- reviewer can diff any two strings and get the same diameters.
+--
+-- Change them in all seven packs or not at all — a local "improvement" here silently
+-- re-breaks the thing v8 exists to fix.
+local ORB_OUTER = 104   -- outermost ring, on BOTH clusters, in EVERY pack
+local ORB_MID   = 78
+local ORB_INNER = 54
+local PORTRAIT  = 46
+local CLUSTER_X = 260   -- cluster centres, SCREEN coordinates: player -X, target +X
+local CLUSTER_Y = -60
+local TOP_Y     = -140  -- the pack's top group; the orb layer offsets back out of it
+
+-- RING ASSIGNMENT. Both clusters present the SAME outer diameter and the SAME portrait;
+-- the target simply nests one more ring inside, because it carries threat as well.
+--   player: health = ORB_OUTER, mana = ORB_MID,   portrait = PORTRAIT
+--   target: threat = ORB_OUTER, health = ORB_MID, mana = ORB_INNER, portrait = PORTRAIT
+-- The percentages are subtexts on their own rings, anchored CENTER, and every ring in a
+-- cluster is concentric — so one Y offset per read-out places it identically on both
+-- sides, measured from the cluster centre rather than from whichever ring carries it.
 local G = {
-  orbY        = 40,    -- inside `top` (which sits at -140) -> clusters land at y = -100,
-                       -- the same band the v6 bar stack occupied
-  orbX        = 260,   -- player at -X, target at +X. Must clear the Alerts column (-150,
-                       -- 44 px icons -> -172) and the PvP column (+150 -> +168): the
-                       -- widest cluster is 124 wide, so +-260 puts its inner edge at 198.
-  threatRing  = 120,   -- OUTERMOST, target only. Thin art: threat is the secondary read.
-  flashRing   = 124,   -- the 80% threat pulse, sized to sit ON the threat ring
-  hpRing      = 100,   -- OUTER of the pair. Longer arc = the more-read number.
-  mpRing      = 72,    -- INNER of the pair.
-  portrait    = 40,    -- live 3D portrait in the middle (mana ring inner radius ~30.4,
-                       -- so a 40 px square just fits: half-diagonal 28.3)
-  hpTextSize  = 16, mpTextSize = 11, threatTextSize = 12,
-  hpTextY     = -62, mpTextY = -80,        -- player cluster: clear of the 100 px ring
-  hpTextYT    = -78, mpTextYT = -96,       -- target cluster: clear of the 124 px flash
-  threatTextY = 78,                        -- above the target cluster, nothing else there
+  orbY        = CLUSTER_Y - TOP_Y,   -- +80: the orb layer hangs off `top` at (0, -140),
+                                     -- so this lands both cluster centres at y = -60
+  orbX        = CLUSTER_X,           -- must clear the Alerts column (-150, 44 px icons
+                                     -- -> -172) and the PvP column (+150 -> +168): the
+                                     -- cluster is 108 wide, so +-260 puts its inner
+                                     -- edge at 206.
+  threatRing  = ORB_OUTER,   -- OUTERMOST of the target cluster
+  flashRing   = ORB_OUTER + 4,        -- the 80% threat pulse, a halo just outside its ring
+  pHpRing     = ORB_OUTER,   -- player: health is the outer arc, the more-read number
+  pMpRing     = ORB_MID,     -- player: mana nests inside it
+  tHpRing     = ORB_MID,     -- target: health nests inside the threat ring
+  tMpRing     = ORB_INNER,   -- target: mana innermost
+  portrait    = PORTRAIT,    -- live 3D portrait in the middle
+  hpTextSize  = 14, mpTextSize = 11, threatTextSize = 11,
+  hpTextY     = -60,   -- health %: just under the ORB_OUTER ring (radius 52), both sides
+  mpTextY     = -76,   -- power %: under the health number, both sides
+  threatTextY = 60,    -- threat %: above the ring, where nothing else sits
 }
 
 local COL = {
@@ -420,7 +471,7 @@ end
 -- ===== top-level group, anchored below the character ========================
 -- NOTE: the top group takes the factory's own uid() call (no extra W.uid() here);
 -- that choice is permanent — changing it would reshuffle every uid downstream.
-local top = F.group(TOP, 0, -140, nil)
+local top = F.group(TOP, 0, TOP_Y, nil)
 
 -- ===== Resources -> UNIT ORBS (v7) ==========================================
 -- The four regions below occupy the uid slots the v6 health / mana / threat bars and the
@@ -437,7 +488,7 @@ adopt(top, gOrbs)
 -- PLAYER HEALTH, outer ring. Trigger 1 is the only progress source (see ring()); the Unit
 -- Characteristics trigger is there purely to feed the out-of-combat fade, exactly as it did
 -- on the v6 bar.
-local hp = reg(ring("Mage - Player Health", G.hpRing, RING_20, COL.health,
+local hp = reg(ring("Mage - Player Health", G.pHpRing, RING_TEX, COL.health,
   { unitHealthTrigger("player"), F.unitCharTrigger() }))
 hp.subRegions[1] = pct("percenthealth", G.hpTextSize, G.hpTextY, COL.hpText)
 -- v2's escalating colour tiers, carried over intact. The property is `foregroundColor`, NOT
@@ -458,7 +509,7 @@ hp.conditions = {
 }
 
 -- PLAYER MANA, inner ring: the mage's real resource clock — Evocation pacing reads off it.
-local mana = reg(ring("Mage - Player Mana", G.mpRing, RING_20, COL.mana,
+local mana = reg(ring("Mage - Player Mana", G.pMpRing, RING_TEX, COL.mana,
   { unitManaTrigger("player"), F.unitCharTrigger() }))
 mana.subRegions[1] = pct("percentpower", G.mpTextSize, G.mpTextY, COL.mpText)
 -- Power is the one prototype that cannot hit total == 0 — its init floors the total at
@@ -473,7 +524,7 @@ mana.conditions = {
 -- prototype is progressType = "static" and stores hidden value/total args just like Health
 -- and Power (threattotal = threatvalue * 100 / threatpct), so value/total is threatpct/100
 -- and the ring fills 0-100% of the pull threshold with no custom code.
-local threat = reg(ring("Mage - Target Threat", G.threatRing, RING_10, COL.threat,
+local threat = reg(ring("Mage - Target Threat", G.threatRing, RING_TEX, COL.threat,
   { orbThreatTrigger() }))
 threat.subRegions[1] = pct("threatpct", G.threatTextSize, G.threatTextY, COL.thText)
 threat.conditions = {
@@ -507,7 +558,7 @@ threat.load.size = NOT_ARENA
 -- load gates as v6 — only the geometry and the texture changed. Ordered after the threat
 -- ring in controlledChildren so it layers above it (+4 frame levels per child).
 local flash = reg(F.texture("Mage - Threat Flash", CLASS, G.flashRing, G.flashRing, 0, 0, nil,
-  RING_20, { 1, 0.1, 0.1, 0.85 }))
+  RING_TEX, { 1, 0.1, 0.1, 0.85 }))
 flash.blendMode = "ADD"
 flash.triggers = F.triggers({ orbThreatTrigger(80) })
 flash.animation.main = F.animPreset("alphaPulse", "1")  -- duration required or it is invisible
@@ -719,7 +770,11 @@ coldsnap.conditions[2] = allOf({
 -- switch into — and a tick welded onto the shared mana ring would show for Frost too,
 -- silently undoing that audit. Two auras also keep the "lit" pop as a real animation.
 local MANA_CONSERVE_PCT = 30
-local MANA_BEAD_X, MANA_BEAD_Y = ringPoint(G.mpRing, 20, MANA_CONSERVE_PCT / 100)
+-- v8: derived from the ring it marks, so the bead follows the ring's diameter instead of
+-- being left behind in empty space. ORB_MID (78) -> stroke centre radius 35.95 -> the 30%
+-- angle (108 deg clockwise from 12 o'clock) lands at (34.19, -11.11); at the v7 diameter
+-- of 72 the same bead sat at (31.56, -10.26). Nothing here is hand-entered.
+local MANA_BEAD_X, MANA_BEAD_Y = ringPoint(G.pMpRing, 20, MANA_CONSERVE_PCT / 100)
 local manaLine = reg(F.texture("Mage - Mana Conserve Line", CLASS, 8, 8,
   MANA_BEAD_X, MANA_BEAD_Y, nil,
   F.TEX_CIRCLE, { 1, 0.75, 0.2, 0.55 }))
@@ -1126,17 +1181,17 @@ adopt(gPlayerOrb, pPortrait)
 -- whole right-hand orb is simply not there.
 adopt(gTargetOrb, threat)
 adopt(gTargetOrb, flash)   -- the 80% halo layers over the threat ring
-local tHealth = reg(ring("Mage - Target Health", G.hpRing, RING_20, COL.health,
+local tHealth = reg(ring("Mage - Target Health", G.tHpRing, RING_TEX, COL.health,
   { unitHealthTrigger("target") }))
-tHealth.subRegions[1] = pct("percenthealth", G.hpTextSize, G.hpTextYT, COL.hpText)
+tHealth.subRegions[1] = pct("percenthealth", G.hpTextSize, G.hpTextY, COL.hpText)
 -- Same zero-total guard as the player ring, and it earns its keep here: a target's max
 -- health genuinely has not streamed in for the first moments after a target change.
 tHealth.conditions = { F.condition(1, "maxhealth", "<=", "0", "alpha", 0) }
 adopt(gTargetOrb, tHealth)
 
-local tMana = reg(ring("Mage - Target Mana", G.mpRing, RING_20, COL.mana,
+local tMana = reg(ring("Mage - Target Mana", G.tMpRing, RING_TEX, COL.mana,
   { unitManaTrigger("target") }))
-tMana.subRegions[1] = pct("percentpower", G.mpTextSize, G.mpTextYT, COL.mpText)
+tMana.subRegions[1] = pct("percentpower", G.mpTextSize, G.mpTextY, COL.mpText)
 -- The last gap requirePowerType leaves: most NPCs report mana as their primary bar with a
 -- 0/0 pool, and the prototype's total = math.max(1, UnitPowerMax(...)) floor turns that into
 -- a valid 0% state — an empty ring on a powerless mob. A real caster has maxpower in the

@@ -1,4 +1,4 @@
--- generate.lua — Priest TBC All-Specs HUD (v7).
+-- generate.lua — Priest TBC All-Specs HUD (v8).
 -- Run: lua5.1 tbc/priest/generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import -> paste).
 --
@@ -137,6 +137,34 @@
 --     `subtexture` — the aurabar `subtick` used elsewhere in this repo is aurabar-
 --     only and cannot ride a ring.
 --   * Untouched: buffs, alerts, the cooldown row, procs and the whole PvP layer.
+--
+-- v8 (one orb geometry for all seven packs — pure layout, no aura added or removed):
+--   * v7 shipped each class pack with its own diameters, and the two clusters inside
+--     a pack did not agree either: priest drew 128/96/64 rings with a 28px face, and
+--     the player cluster's outer ring (96) was a different size from the target's
+--     (128). Seven packs times two clusters read as fourteen differently-scaled
+--     gauges. v8 replaces all of it with ONE canonical set, identical in every pack:
+--     ORB_OUTER 104, ORB_MID 78, ORB_INNER 54, PORTRAIT 46, clusters at x = +-260.
+--     Priest: player health 96 -> 104 (ORB_OUTER) and mana 64 -> 78 (ORB_MID); target
+--     threat 128 -> 104 (ORB_OUTER), health 96 -> 78 (ORB_MID) and mana 64 -> 54
+--     (ORB_INNER); both faces 28 -> 46. Both clusters now present the SAME outer
+--     diameter and the SAME face; the target simply nests one more ring inside.
+--   * Ring_10px -> Ring_20px everywhere. The number is the stroke weight in the art's
+--     own 256x256 space, so the old texture drew a ~3.8px arc at 96px and thinner on
+--     the inner rings: a wire, not a gauge. The 20px art gives ~8.1px at ORB_OUTER.
+--   * The percentages become one shared set too — health 14px at y = -60, power 11px
+--     at y = -76, threat 11px at y = +60 — and the target cluster now uses the same
+--     offsets as the player cluster instead of its own (-84 / -102).
+--   * The breakpoint pips were RE-DERIVED, not left where they were: their x/y come
+--     from the ring radius, so resizing a ring without recomputing them leaves a mark
+--     floating in empty space. The radius formula is now the stroke CENTRE of the
+--     actual art, size * (1 - 20/256) / 2, replacing v7's flat `size/2 - 5` inset.
+--     40% health pip: r 43 -> 47.9375, (25.275, -34.788) -> (28.177, -38.782).
+--     50% mana pip:   r 27 -> 35.953125, (0, -27) -> (0, -35.953). Both still land on
+--     their own ring's circumference at their own threshold angle.
+--   * NOTHING else changed: no aura added, removed or reordered, no trigger, no load
+--     gate, no condition, no colour, no spell id, no region type. All 44 uids are
+--     byte-identical to v7, so this imports as a clean Update.
 
 math.randomseed(20260815)  -- FIXED pack seed; the uid() call order below is append-only forever
 
@@ -223,28 +251,46 @@ end
 -- Modernize block at IV >= 45 renames any progresstexture fill field.
 -- =====================================================================
 
--- Bundled WeakAuras media. Ring_10px is a true annulus (10px is the stroke weight
--- of the source art); Circle_Smooth2.tga — what the rest of this repo uses — is a
--- SOLID DISC and would fill as a pie wedge instead of a ring.
-local RING = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_10px.tga"
+-- Bundled WeakAuras media. Ring_20px is a true annulus; the number is the stroke
+-- weight of the source art in ITS OWN 256x256 space, so a ring drawn at S px carries
+-- a band of S*20/256 — 8.1 px at 104, 6.1 px at 78, 4.2 px at 54. Circle_Smooth2.tga
+-- — what the rest of this pack uses — is a SOLID DISC and would fill as a pie wedge
+-- instead of a ring.
+-- v8: Ring_10px is gone from this pack. At orb diameters its band renders ~4 px wide
+-- and thinner still on the inner rings, which read as a wire, not as a gauge.
+local RING_TEX = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_20px.tga"
+local RING_PX  = 20   -- stroke weight of RING_TEX in the source art's 256x256 space
 
--- One place to retune the whole orb layer. x/y are relative to the Resources
--- group at (0, 56), which hangs off the top group at (0, -140): the orb centres
--- therefore land at (-250, -100) and (250, -100) on screen.
---   orbX = 250 is not arbitrary. The Alerts column reaches x = -172 and the Procs
---   row reaches x = 178, so 250 +/- the outermost ring radius (64) clears both
---   without moving a single element outside this group.
-local G = {
-  orbX = 250, orbY = -16,
-  threatRing = 128,   -- OUTERMOST, target orb only
-  hpRing     = 96,    -- outer, both orbs. Bigger arc = the more-read number.
-  mpRing     = 64,    -- inner, both orbs
-  portrait   = 28,    -- the live face in the middle
-  hpTextY = -60, hpTextSize = 16,   -- player: clear of the health ring (radius 48)
-  mpTextY = -78, mpTextSize = 11,
-  tHpTextY = -84, tMpTextY = -102,  -- target: clear of the THREAT ring (radius 64)
-  threatTextY = 84, threatTextSize = 13,
-}
+-- ===== CANONICAL ORB GEOMETRY — IDENTICAL IN ALL SEVEN PACKS =====
+-- These are not priest tuning knobs. Every pack in this repo ships this exact set.
+-- Before v8 each pack had drifted to its own diameters (priest was 128/96/64/28) and
+-- the two clusters inside a pack disagreed with each other as well, which is what a
+-- player actually sees: orbs of uneven size. Named constants exist so the seven
+-- copies cannot drift apart again — change them in all seven or in none.
+local ORB_OUTER = 104   -- outermost ring — the SAME diameter on BOTH clusters
+local ORB_MID   = 78
+local ORB_INNER = 54
+local PORTRAIT  = 46    -- the live face in the middle — the SAME on BOTH clusters
+local CLUSTER_X = 260   -- player cluster at -X, target cluster at +X
+local CLUSTER_Y = -60
+-- x/y are relative to the Resources group at (0, 56), which hangs off the top group
+-- at (0, -140), so the cluster centres land at (-260, -144) and (260, -144).
+-- CLUSTER_X clears the neighbours by construction: with an outer radius of 52 the
+-- inner edge of each cluster sits at 208, outside the Alerts column (which reaches
+-- x = -172) and the Procs row (x = 178). Nothing outside this group moves.
+
+-- Ring assignment. Both clusters present the same outer diameter and the same face;
+-- the target simply nests one more ring inside:
+--   PLAYER   health ORB_OUTER · mana ORB_MID                  · portrait PORTRAIT
+--   TARGET   threat ORB_OUTER · health ORB_MID · mana ORB_INNER · portrait PORTRAIT
+-- Threat lives on the TARGET because it is your threat ON THAT TARGET.
+
+-- Percentage read-outs, also shared across the seven packs: health just under the
+-- outer ring, power below it, threat above. Identical on both clusters, so the two
+-- columns of numbers line up instead of each finding its own baseline.
+local PCT_MAIN   = { size = 14, y = -60 }   -- health
+local PCT_SUB    = { size = 11, y = -76 }   -- power
+local PCT_THREAT = { size = 11, y =  60 }   -- threat, above the ring
 
 local COL = {
   health = { 0.15, 0.78, 0.25, 1 },   -- the v2-v6 health bar green, unchanged
@@ -300,7 +346,7 @@ local function ring(id, size, color, x, y, trigger)
     orientation = "CLOCKWISE", startAngle = 0, endAngle = 360,
     inverse = false, mirror = false,
     compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
-    foregroundTexture = RING, backgroundTexture = RING, sameTexture = true,
+    foregroundTexture = RING_TEX, backgroundTexture = RING_TEX, sameTexture = true,
     desaturateForeground = false, desaturateBackground = false,
     foregroundColor = color, backgroundColor = COL.track,
     backgroundOffset = 0,
@@ -336,7 +382,7 @@ local function portrait(id, unit, x, y)
     model_st_tx = 0, model_st_ty = 0, model_st_tz = 0,
     model_st_rx = 270, model_st_ry = 0, model_st_rz = 0, model_st_us = 40,
     sequence = 1, advance = false, rotation = 0,
-    width = G.portrait, height = G.portrait, alpha = 1,
+    width = PORTRAIT, height = PORTRAIT, alpha = 1,
     selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
     xOffset = x, yOffset = y, frameStrata = 1,
     border = false, borderColor = { 1, 1, 1, 0.5 }, backdropColor = { 1, 1, 1, 0.5 },
@@ -364,11 +410,13 @@ end
 -- Both spellings are emitted, and text_* is the one that does the work.
 -- (text_anchorPoint is the opposite case and is fine: Modernize < 80 renames it to
 -- anchor_point, which is what current code reads, so the factory value survives.)
-local function pct(sym, size, yOffset, color)
-  local st = F.subtext("%" .. sym .. "%%", size, "CENTER", sym)
-  st.anchorYOffset = yOffset
+-- `spec` is one of the shared PCT_* tables, so a number's size and its distance from
+-- the centre come from the canonical set rather than from a per-call literal.
+local function pct(sym, spec, color)
+  local st = F.subtext("%" .. sym .. "%%", spec.size, "CENTER", sym)
+  st.anchorYOffset = spec.y
   st.text_anchorXOffset = 0
-  st.text_anchorYOffset = yOffset
+  st.text_anchorYOffset = spec.y
   st.text_color = color
   return st
 end
@@ -387,9 +435,19 @@ end
 --   textureRotate is the GATE that makes textureRotation do anything (it is passed
 --   through as canRotate). The art here is a solid square, which is rotation-
 --   invariant, so neither is needed and both stay off — no silent no-op to miss.
+--
+-- THE RADIUS IS DERIVED FROM THE RING, NEVER HARD-CODED. A pip whose radius still
+-- belongs to the old ring is a mark floating in empty space, so this is the one
+-- thing in a resize pass that cannot be left alone. r is the STROKE CENTRE, not the
+-- quad edge: the art's band occupies RING_PX/256 of the texture measured inward from
+-- the outer edge, so the mid-line sits at size * (1 - RING_PX/256) / 2. (v7 used the
+-- flat `size/2 - 5` inset that only approximated the old 10px art; with the 20px art
+-- and the canonical diameters it would have sat inside the band.) At ORB_OUTER = 104
+-- that is r = 47.9375 and at ORB_MID = 78 it is r = 35.953125; the band itself is
+-- ~8.1 px wide at 104, which is exactly the 8x8 pip below.
 local function pip(percent, ringSize)
   local theta = math.rad(percent / 100 * 360)
-  local r = ringSize / 2 - 5   -- the stroke band of a Ring_10px annulus, not the quad edge
+  local r = ringSize * (1 - RING_PX / 256) / 2
   local function round(v) return math.floor(v * 1000 + 0.5) / 1000 end
   return {
     type = "subtexture",
@@ -425,10 +483,10 @@ adopt(top, gRes)
 -- PLAYER health ring (outer). Trigger 1 is the progress source; trigger 2 (Unit
 -- Characteristics) feeds the inCombat fade, exactly as the v6 bar did.
 -- Conditions apply in order and a later match wins, so the alpha guard is LAST.
-local health = reg(ring("Priest - Health", G.hpRing, COL.health, -G.orbX, G.orbY))
+local health = reg(ring("Priest - Health", ORB_OUTER, COL.health, -CLUSTER_X, CLUSTER_Y))
 health.triggers = F.triggers({ F.healthTrigger(nil), F.unitCharTrigger() })
-health.subRegions[1] = pct("percenthealth", G.hpTextSize, G.hpTextY, COL.hpText)
-health.subRegions[2] = pip(40, G.hpRing)   -- the Desperate Prayer line, marked on the ring
+health.subRegions[1] = pct("percenthealth", PCT_MAIN, COL.hpText)
+health.subRegions[2] = pip(40, ORB_OUTER)  -- the Desperate Prayer line, marked on the ring
 health.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   -- red below 40%: the same number the Desperate Prayer prompt fires at, so ring
@@ -443,11 +501,12 @@ health.conditions = {
 }
 adopt(gRes, health)
 
--- PLAYER mana ring (inner): the resource all three specs plan around.
-local mana = reg(ring("Priest - Mana", G.mpRing, COL.mana, -G.orbX, G.orbY))
+-- PLAYER mana ring (ORB_MID, the primary-power slot): the resource all three specs
+-- plan around.
+local mana = reg(ring("Priest - Mana", ORB_MID, COL.mana, -CLUSTER_X, CLUSTER_Y))
 mana.triggers = F.triggers({ F.powerTrigger(0), F.unitCharTrigger() })
-mana.subRegions[1] = pct("percentpower", G.mpTextSize, G.mpTextY, COL.mpText)
-mana.subRegions[2] = pip(50, G.mpRing)     -- the Shadowfiend window, marked on the ring
+mana.subRegions[1] = pct("percentpower", PCT_SUB, COL.mpText)
+mana.subRegions[2] = pip(50, ORB_MID)      -- the Shadowfiend window, marked on the ring
 mana.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
 adopt(gRes, mana)
 
@@ -455,9 +514,9 @@ adopt(gRes, mana)
 -- state for a hostile unit you are on the threat table of, so the ring self-hides
 -- out of combat and while you have a friendly targeted (no fade condition needed).
 -- Green -> orange at 70% -> red on aggro; conditions run in order, most severe last.
-local threat = reg(ring("Priest - Threat", G.threatRing, COL.threat, G.orbX, G.orbY))
+local threat = reg(ring("Priest - Threat", ORB_OUTER, COL.threat, CLUSTER_X, CLUSTER_Y))
 threat.triggers = F.triggers({ threatTrigger("target", nil) })
-threat.subRegions[1] = pct("threatpct", G.threatTextSize, G.threatTextY, COL.thText)
+threat.subRegions[1] = pct("threatpct", PCT_THREAT, COL.thText)
 threat.conditions = {
   F.condition(1, "threatpct", ">=", "70", "foregroundColor", COL.warn),
   F.condition(1, "aggro", "==", 1, "foregroundColor", COL.danger),
@@ -1086,9 +1145,9 @@ adopt(gPvP, emana)
 -- unit is overridden here — the same one-line pattern the v5 Enemy Mana bars use.
 local tHealthTrigger = F.healthTrigger(nil)
 tHealthTrigger.unit = "target"
-local tHealth = reg(ring("Priest - Target Health", G.hpRing, COL.health,
-  G.orbX, G.orbY, tHealthTrigger))
-tHealth.subRegions[1] = pct("percenthealth", G.hpTextSize, G.tHpTextY, COL.hpText)
+local tHealth = reg(ring("Priest - Target Health", ORB_MID, COL.health,
+  CLUSTER_X, CLUSTER_Y, tHealthTrigger))
+tHealth.subRegions[1] = pct("percenthealth", PCT_MAIN, COL.hpText)
 -- same zero-total guard as the player ring, and it matters more here: a target
 -- whose max health has not streamed yet would otherwise flash a full green ring
 tHealth.conditions = { F.condition(1, "maxhealth", "<=", "0", "alpha", 0) }
@@ -1106,9 +1165,9 @@ adopt(gRes, tHealth)
 local tManaTrigger = F.powerTrigger(0)
 tManaTrigger.unit = "target"
 tManaTrigger.use_requirePowerType = true
-local tMana = reg(ring("Priest - Target Mana", G.mpRing, COL.mana,
-  G.orbX, G.orbY, tManaTrigger))
-tMana.subRegions[1] = pct("percentpower", G.mpTextSize, G.tMpTextY, COL.mpText)
+local tMana = reg(ring("Priest - Target Mana", ORB_INNER, COL.mana,
+  CLUSTER_X, CLUSTER_Y, tManaTrigger))
+tMana.subRegions[1] = pct("percentpower", PCT_SUB, COL.mpText)
 -- Power is the one prototype whose total has a floor: math.max(1, UnitPowerMax()).
 -- That floor turns a powerless mob into a valid 0% state rather than no state, so
 -- the guard is written <= 1, not <= 0. A real caster has maxpower in the thousands.
@@ -1120,14 +1179,14 @@ adopt(gRes, tMana)
 -- (alpha is a region-prototype property, present on a model region because its
 -- default table goes through AddAlphaToDefault). The target portrait takes the
 -- target Health trigger and therefore vanishes with the rest of the target orb.
-local pPortrait = reg(portrait("Priest - Player Portrait", "player", -G.orbX, G.orbY))
+local pPortrait = reg(portrait("Priest - Player Portrait", "player", -CLUSTER_X, CLUSTER_Y))
 pPortrait.triggers = F.triggers({ F.healthTrigger(nil), F.unitCharTrigger() })
 pPortrait.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
 adopt(gRes, pPortrait)
 
 local tPortraitTrigger = F.healthTrigger(nil)
 tPortraitTrigger.unit = "target"
-local tPortrait = reg(portrait("Priest - Target Portrait", "target", G.orbX, G.orbY))
+local tPortrait = reg(portrait("Priest - Target Portrait", "target", CLUSTER_X, CLUSTER_Y))
 tPortrait.triggers = F.triggers({ tPortraitTrigger })
 adopt(gRes, tPortrait)
 

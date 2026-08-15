@@ -1,7 +1,46 @@
--- generate.lua — "Paladin TBC - All Specs" (v9)
+-- generate.lua — "Paladin TBC - All Specs" (v10)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code)
 -- except the two unit-orb region tables, which wa_factory has no builder for.
+--
+-- v10 — ONE ORB SIZE ACROSS EVERY PACK. Pure geometry: not one trigger, load gate,
+-- condition, colour, spell id or region type changed, no aura was added or removed, and
+-- every uid is byte-identical to v9. What changed is that the seven class packs had each
+-- picked their own ring diameters (paladin 118/88/60, mage 120/100/72, warlock 128/96/64,
+-- ...) and, worse, the two clusters INSIDE this pack disagreed: the player orb was 88 wide
+-- and the target orb 118, so the same two faces read as different sizes side by side.
+-- Every pack now builds from the same seven canonical constants (see ORB_OUTER below):
+--
+--   ring          v9 (paladin)   v10 (all seven packs)
+--   player health      88                104   ORB_OUTER
+--   player mana        60                 78   ORB_MID
+--   target threat     118                104   ORB_OUTER
+--   target health      88                 78   ORB_MID
+--   threat halo       132                104   ORB_OUTER (pulses ON the threat ring)
+--   portrait           28                 46   PORTRAIT
+--   cluster x        +-252              +-260   CLUSTER_X
+--
+-- Both clusters now present the SAME outer diameter and the SAME portrait; the target
+-- simply nests one more ring inside. ORB_INNER (54) is the third target ring in the packs
+-- that draw target power — paladin deliberately draws none (see the note at the target
+-- cluster), so it is defined and left unused rather than absorbed into another ring.
+--
+-- The art changed with the size: Ring_20px.tga replaces Ring_10px.tga everywhere. The
+-- stroke of these annuli is proportional to the drawn size (the number is the weight in
+-- the 256x256 source), so Ring_10px at 104px is a 4px wire — it read as a hairline, which
+-- was the first thing anyone said about v9. Ring_20px at 104px is an 8.1px band.
+--
+-- NO BREAKPOINT MARKS TO RE-DERIVE. Rogue/druid/mage/hunter position "spend at N" ticks by
+-- trigonometry off the ring RADIUS, so their marks had to be recomputed for the new
+-- diameters. This pack has none, and never did: its one resource threshold ("mana under
+-- 20%") is a colour condition, not a mark. Nothing here is anchored to a radius except the
+-- percentages, which hang below/above the cluster centre and moved with the canonical
+-- PCT_* offsets.
+--
+-- The Swing Timer stayed exactly where it was on screen (absolute y = -170): the Resources
+-- anchor moved so the cluster groups could carry the canonical offsets, and the bar's own
+-- offset absorbed that, so the runway keeps its clearance from the cooldown row while
+-- gaining room under the now-smaller orb (22px from the mana percentage instead of 5px).
 --
 -- v9 — THE CENTRE OF THE SCREEN IS EMPTY. The 172px health / mana / threat bar stack
 -- that sat under the character since v1 is gone, replaced by two UNIT ORBS flanking it:
@@ -295,24 +334,72 @@ local function threatTrigger(minPct)
   return tr
 end
 
--- ===== v9 unit-orb geometry and palette =====================================
--- One place to retune after an in-game look. All offsets are relative to the group
--- that owns the region; the top-level group sits at (0, -140).
+-- ===== v10 CANONICAL unit-orb geometry ======================================
+-- THESE SEVEN CONSTANTS ARE SHARED BY ALL SEVEN CLASS PACKS. They are not paladin tuning
+-- knobs: retuning one pack in isolation is exactly how v9 ended up with seven different
+-- orb sizes on one screen. Change them in every pack or in none.
+--
+-- Ring assignment (identical in every pack, which is what makes the two sides match):
+--   PLAYER cluster: health = ORB_OUTER, primary power = ORB_MID, portrait = PORTRAIT
+--   TARGET cluster: threat = ORB_OUTER, health = ORB_MID, power = ORB_INNER, portrait
+-- so both clusters present the same outer diameter and the same face, and the target just
+-- nests one more ring. A pack with no target power ring leaves ORB_INNER unused rather
+-- than resizing anything else — which is this pack (no target mana ring; see below).
+local ORB_OUTER = 104   -- outermost ring, BOTH clusters, EVERY pack
+local ORB_MID   = 78
+local ORB_INNER = 54    -- unused here on purpose: paladin draws no target power ring
+local PORTRAIT  = 46    -- the live 3D face in the middle of both clusters
+local CLUSTER_X = 260   -- player cluster at -260, target cluster at +260
+local CLUSTER_Y = -60   -- both cluster centres, in screen coords (see G.bandY)
+-- Ring_20px.tga is a true annulus and ships inside WeakAuras. The number is the stroke
+-- weight in the 256x256 source, so a ring drawn at S px carries a band of S*20/256:
+-- 8.1px at ORB_OUTER, 6.1px at ORB_MID. Ring_10px — what v9 used — is half that, a 4px
+-- wire at these diameters, which is what read as "thin and cheap" in game.
+-- (F.TEX_CIRCLE / Circle_Smooth2.tga, what the rest of this repo uses, is a SOLID DISC
+-- and would fill as a pie wedge, not a ring.)
+local RING = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_20px.tga"
+
+-- Percentage placement, also canonical across the seven packs. Each number rides on its
+-- own ring as a subtext anchored CENTER, i.e. offsets are from the CLUSTER CENTRE, so the
+-- two clusters put their numbers on the same baselines even though their rings differ.
+local PCT_MAIN_SIZE,   PCT_MAIN_Y   = 14, -60   -- health, just under the outer ring
+local PCT_SUB_SIZE,    PCT_SUB_Y    = 11, -76   -- power, under it
+local PCT_THREAT_SIZE, PCT_THREAT_Y = 11,  60   -- threat, ABOVE the ring: three numbers
+                                                -- stacked under one orb is a queue, not a
+                                                -- readout
+-- ===== pack-local layout ====================================================
+-- Everything below is paladin's own stacking, not shared geometry. All offsets are
+-- relative to the group that owns the region; the top-level group sits at (0, -140).
+local TOP_Y = -140
 local G = {
-  bandY      = 62,    -- Resources group inside the top group -> absolute (0, -78)
-  clusterX   = 252,   -- player at -X, target at +X. Clears the Alerts column (x = -150,
-                      -- 40px icons) and the PvP column (x = 150) by ~20px on both sides,
-                      -- and sits ENTIRELY above the cooldown row (top edge y = -190).
-  thRing     = 118,   -- OUTERMOST, target orb only: threat toward the pull threshold
-  flashRing  = 132,   -- the >=80% threat halo, just outside the threat ring
-  hpRing     = 88,    -- health, on both orbs
-  mpRing     = 60,    -- mana, player orb only (see the target-orb note below)
-  portrait   = 28,    -- the live 3D face in the middle
-  hpTextY    = -56, hpTextSize = 15,   -- below the health ring (radius 44)
-  mpTextY    = -73, mpTextSize = 10,
-  thTextY    = 68,  thTextSize = 11,   -- ABOVE the threat ring (radius 59): three numbers
-                                       -- stacked under one orb is a queue, not a readout
-  swingY     = -92, swingW = 140, swingH = 9,
+  -- Resources holds the two cluster groups and the Swing Timer, and nothing else. It
+  -- anchors at the SCREEN ORIGIN (which is what -TOP_Y means: it cancels the top group's
+  -- own drop), so the cluster groups' offsets ARE their screen position and can carry the
+  -- canonical (+-CLUSTER_X, CLUSTER_Y) verbatim, exactly as every other pack's cluster
+  -- groups do. Give this band a drop of its own again and the cluster offsets stop being
+  -- the canonical numbers, which is the drift this whole version exists to end. v9 had the
+  -- band at 62 and the clusters at 0 — centres at -78; they now sit at -60, the 18px of
+  -- headroom the percentages needed once they moved to the shared baselines.
+  bandY      = -TOP_Y,
+  clusterX   = CLUSTER_X,   -- clears the Alerts column (x = -150, 40px icons) and the PvP
+                            -- column (x = 150): the widest cluster is ORB_OUTER, so its
+                            -- inner edge sits at 208, and the whole cluster stays above
+                            -- the cooldown row (top edge y = -190).
+  clusterY   = CLUSTER_Y,
+  thRing     = ORB_OUTER,   -- OUTERMOST, target cluster only: threat toward the pull point
+  flashRing  = ORB_OUTER,   -- the >=80% threat halo, pulsing ON the threat ring
+  hpRing     = ORB_OUTER,   -- PLAYER health: the outer ring of the player cluster
+  tHpRing    = ORB_MID,     -- TARGET health: one ring in from the target's threat ring
+  mpRing     = ORB_MID,     -- player mana, inside the player's health ring
+  portrait   = PORTRAIT,
+  hpTextY    = PCT_MAIN_Y,   hpTextSize = PCT_MAIN_SIZE,
+  mpTextY    = PCT_SUB_Y,    mpTextSize = PCT_SUB_SIZE,
+  thTextY    = PCT_THREAT_Y, thTextSize = PCT_THREAT_SIZE,
+  -- The runway keeps its v9 SCREEN position (absolute y = -170, between the mana
+  -- percentage at -136 and the cooldown row at -190); the offset changed only to absorb
+  -- the band move above. It is a child of Resources, not of the player cluster, so it is
+  -- measured from the band anchor and not from CLUSTER_Y.
+  swingY     = -170, swingW = 140, swingH = 9,
 }
 
 -- The bar colours are carried across byte-for-byte so the HUD still speaks the same
@@ -332,10 +419,7 @@ local COL = {
   thText  = { 0.72, 0.95, 0.74, 1 },   -- orb never need labels to tell them apart
 }
 
--- Bundled WeakAuras media. Ring_10px.tga is a true annulus (10 = the stroke weight of the
--- source art); Circle_Smooth2.tga — F.TEX_CIRCLE, what the rest of this repo uses — is a
--- SOLID DISC and would fill as a pie wedge, not a ring. Ships inside WeakAuras itself.
-local RING = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_10px.tga"
+-- RING (the bundled Ring_20px.tga annulus) is declared with the canonical geometry above.
 local IV, TOC = 45, 20501
 
 -- wa_factory's stub() is local to the factory, so the two hand-written region types below
@@ -461,7 +545,7 @@ adopt(top, gRes)
 -- Trigger 2 is the existing Unit Characteristics state feeder and drives the out-of-combat
 -- fade ONLY; progress comes from trigger 1 (Automatic progress = first active trigger).
 -- v9 adds the low-health tier the bar never had: at ring scale colour does far more work
--- than length, and "I am about to die" is the one state a 44px radius must shout.
+-- than length, and "I am about to die" is the one state a 52px radius must shout.
 local hp = reg(ring("Paladin - Health", G.hpRing, COL.health,
   { F.healthTrigger(), F.unitCharTrigger() }))
 hp.subRegions[1] = pct("percenthealth", G.hpTextSize, G.hpTextY, COL.hpText)
@@ -514,9 +598,11 @@ noArena(th)   -- v6: an arena party is still a party, but has no threat table
 -- adopted into the target cluster at the bottom of this script
 
 -- 6) >=80% threat HALO — Ret only (a tank AT aggro must not be alarmed). Was a 176x18
--- rectangle pulsing over the bar; it is now the same Ring_10px art at 132px, pulsing just
--- outside the threat ring, so the alarm still lands exactly on top of the thing it is
--- about. Same trigger, same threshold, same gates, same uid.
+-- rectangle pulsing over the bar through v8, then a 132px ring floating outside the 118px
+-- threat arc in v9. v10 draws it at ORB_OUTER with the same art as the threat ring, so the
+-- halo pulses exactly ON that ring (ADD blend over the same circle = the ring itself
+-- flaring red) instead of hovering in empty space 7px outside it — the same failure the
+-- other packs' breakpoint ticks had. Same trigger, same threshold, same gates, same uid.
 local flash = reg(F.texture("Paladin - Threat Flash", CLASS, G.flashRing, G.flashRing, 0, 0,
   nil, RING, COL.flash))
 flash.blendMode = "ADD"
@@ -774,7 +860,7 @@ end
 --   1. It is not a property of the player or the target — it is a property of your weapon
 --      swing, so there is no unit whose orb it would ring.
 --   2. A sub-second window is read as DISTANCE TO AN EDGE. On a 140px linear bar the 0.4s
---      window is ~15px of travel to a fixed right-hand edge; wrapped onto a 60px-radius
+--      window is ~15px of travel to a fixed right-hand edge; wrapped onto a 52px-radius
 --      arc it becomes a rotating tick with no edge to aim at, which is measurably harder
 --      to time and is exactly the judgement the twist depends on.
 -- So it stays an aurabar (and therefore correctly keeps `barColor`, which does not exist
@@ -789,6 +875,12 @@ end
 -- element people genuinely want to drag somewhere personal — right under the crosshair, say —
 -- without dragging their health and mana ring along with it. Its x offset therefore repeats
 -- the cluster's, rather than inheriting it.
+--
+-- v10 — it did not move on screen. The Resources anchor moved to the screen origin so the
+-- cluster groups could carry the canonical (+-260, -60) verbatim, and G.swingY absorbed
+-- exactly that re-anchoring (-92 -> -170, both of which are absolute y = -170). The bar is
+-- therefore where it always was: 22px below the mana percentage (was 5px, because v9's orb
+-- hung 18px lower and its numbers with it) and 15px above the cooldown row's top edge.
 local swing = reg(F.aurabar("Paladin - Swing Timer", CLASS, G.swingW, G.swingH,
   -G.clusterX, G.swingY, nil, { 0.55, 0.55, 0.62, 1 }))
 swing.triggers = F.triggers({ swingTrigger() })
@@ -1125,9 +1217,11 @@ pvpCd("Hammer of Justice (PvP)", "Hammer of Justice", 853, GATE_HOLY)
 
 -- 44/45) the two clusters. Separate groups so each orb can be dragged on its own, and so a
 -- player who wants only one of them can disable a single group.
-local gPlayerOrb = reg(F.group("Paladin - Player Orb", -G.clusterX, 0, gRes.id))
+-- v10: both carry the canonical (+-CLUSTER_X, CLUSTER_Y) — the same pair of offsets the
+-- cluster groups hold in every other pack.
+local gPlayerOrb = reg(F.group("Paladin - Player Orb", -G.clusterX, G.clusterY, gRes.id))
 adopt(gRes, gPlayerOrb)
-local gTargetOrb = reg(F.group("Paladin - Target Orb", G.clusterX, 0, gRes.id))
+local gTargetOrb = reg(F.group("Paladin - Target Orb", G.clusterX, G.clusterY, gRes.id))
 adopt(gRes, gTargetOrb)
 
 -- 46) TARGET HEALTH — the target orb's own ring, and the only fill it has besides threat.
@@ -1139,7 +1233,7 @@ adopt(gRes, gTargetOrb)
 -- unit = "target" with no target produces NO STATE and this entire cluster vanishes.
 local tHealthTrigger = F.healthTrigger()
 tHealthTrigger.unit = "target"
-local tHp = reg(ring("Paladin - Target Health", G.hpRing, COL.health, { tHealthTrigger }))
+local tHp = reg(ring("Paladin - Target Health", G.tHpRing, COL.health, { tHealthTrigger }))
 tHp.subRegions[1] = pct("percenthealth", G.hpTextSize, G.hpTextY, COL.hpText)
 tHp.conditions = {
   F.condition(1, "percenthealth", "<", "20", "foregroundColor", COL.lowHp),
@@ -1147,7 +1241,10 @@ tHp.conditions = {
 }
 -- adopted below, in back-to-front order with the rest of the target cluster
 
--- NO TARGET MANA RING, deliberately. Most TBC bosses report mana as their primary bar and
+-- NO TARGET MANA RING, deliberately — which is why ORB_INNER (the third target ring in the
+-- packs that do draw target power) is defined above and left unused instead of being spent
+-- on something else here: the target cluster's outer two rings must stay at the canonical
+-- ORB_OUTER / ORB_MID whatever this pack chooses not to show. Most TBC bosses report mana as their primary bar and
 -- sit near full all fight, so the ring would be a permanent blue circle carrying no
 -- decision — and v6 already settled the PvP half of this question for this pack: a paladin
 -- has no mana drain, burn or punish (Judgement of Wisdom GIVES the attacker mana), so an
