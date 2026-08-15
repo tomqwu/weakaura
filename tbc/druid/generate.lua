@@ -1,4 +1,4 @@
--- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v8).
+-- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v9).
 -- Run: lua5.1 generate.lua   (toolkit libs live in ../../tools/tbc-weakaura-creator/scripts/,
 -- fetch them once with that directory's setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (copy whole -> /wa -> Import).
@@ -92,6 +92,28 @@
 --   * current code reads a model region's unit from `model_fileId`; WA 3.5.0 read
 --     `model_path`, and the Modernize block that bridges them is gated on IsClassicEra(),
 --     which is NOT IsTBC(), so on 2.5.x it does not run. Both are emitted.
+--
+-- v9 (one orb size across every pack) — see README "## v9 — the orbs are one shared size".
+-- PURELY geometry and the ring art. No trigger, load gate, condition, colour, spell id or
+-- region type changed; NO aura added, removed or reordered, so every uid is byte-identical
+-- to v8 and the import dialog still offers Update. Each of the seven class packs had drifted
+-- to its own orb diameters and the two clusters inside a pack disagreed with each other, so
+-- the HUD read as uneven. Every pack now takes the SAME canonical numbers, declared once in
+-- the ORB block below and referenced everywhere:
+--   * outer diameter 104 on BOTH clusters. Player: health 104, power 78. Target: threat 104,
+--     health 78, mana 54 — the target simply nests one more ring inside the same footprint.
+--     Druid's TWO threat rings (Bear and Caster, mutually exclusive load gates) are both 104.
+--   * portrait 46 on both sides (was 28 — a face too small to recognise).
+--   * clusters at x = +-260, y = -60.
+--   * Ring_20px.tga replaces Ring_10px.tga. At 104 px the 10 px art draws a 4 px band, which
+--     read as a wire rather than an arc; the 20 px art draws 8 px at the same diameter.
+--   * the number sizes/offsets are shared too: health 14 at y -60, power 11 at -76, threat
+--     11 at +60, so the two clusters label themselves identically.
+-- THE TRAP THIS VERSION HAD TO CLEAR: the four bear rage pips are separate texture regions
+-- positioned by TRIGONOMETRY on the power ring's stroke, so growing that ring 64 -> 78 would
+-- have left them floating inside it. tickR is now DERIVED from ORB_MID and the Ring_20px
+-- stroke weight (see G.tickR) instead of being a literal, and it re-derives automatically if
+-- the canonical numbers ever move again.
 
 math.randomseed(20260812)  -- FIXED pack seed; append-only uid order across versions
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -106,6 +128,32 @@ local W = F.W
 
 local CLASS = "DRUID"
 local TOP = "Druid TBC - Bear, Restoration & Balance"
+
+-- ===== CANONICAL ORB GEOMETRY (v9) — SHARED BY ALL SEVEN CLASS PACKS =====
+-- These seven numbers are the contract. They are identical in every tbc/*/generate.lua and
+-- MUST NOT be edited in one pack alone: the whole point of v9 is that the player cluster, the
+-- target cluster and all seven classes present the same footprint. Derive from them, never
+-- hand-write a diameter or a cluster offset anywhere below.
+--
+-- RING ASSIGNMENT — this is what makes the two sides match:
+--   PLAYER cluster: health = ORB_OUTER, primary power = ORB_MID, portrait = PORTRAIT
+--   TARGET cluster: threat = ORB_OUTER, health = ORB_MID, mana = ORB_INNER, portrait = PORTRAIT
+-- Both clusters therefore show the SAME outer diameter and the SAME portrait; the target just
+-- nests one more ring inside. Druid has two threat rings (Bear and Caster) and BOTH are
+-- ORB_OUTER — their load gates are mutually exclusive, so only one is ever on screen.
+local RING_TEX  = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_20px.tga"
+local ORB_OUTER = 104   -- outermost ring, on BOTH clusters, in EVERY pack
+local ORB_MID   = 78
+local ORB_INNER = 54
+local PORTRAIT  = 46
+local CLUSTER_X = 260   -- player cluster at -260, target cluster at +260
+local CLUSTER_Y = -60
+
+-- Number placement, also shared: health under the outer ring, power under that, threat above.
+-- Anchored CENTER on the ring that owns them, so each number appears and vanishes with its arc.
+local PCT_MAIN   = { size = 14, y = -60 }  -- health
+local PCT_SUB    = { size = 11, y = -76 }  -- power / mana
+local PCT_THREAT = { size = 11, y =  60 }  -- threat, above the ring
 
 local byId = {}
 local function reg(t) byId[t.id] = t; return t end
@@ -180,22 +228,37 @@ adopt(top, gAlerts)
 adopt(top, gCDs)
 
 -- ================= v8 Unit orbs — state drawn AT the unit, centre freed =================
--- Two clusters flanking the character: player at x=-250, target at x=+250, inside the group
+-- Two clusters flanking the character: player at x=-260, target at x=+260, inside the group
 -- that used to hold the centre bar stack. Each cluster is a live 3D portrait with concentric
 -- progresstexture rings around it; the target cluster also carries the threat ring, because
 -- threat is YOUR threat ON THAT TARGET and that is where it belongs.
 --
--- x=+-250 is chosen against this pack's own furniture, not by eye: the Alerts column sits at
--- x=-150 and the PvP column at x=+150 (icons up to 40 wide, so |x| <= 170), and the widest
--- orb is the 120px target cluster (|x| >= 190). Nothing overlaps, and the entire middle of
--- the screen — where v7 parked a 172px bar stack — is now empty.
+-- v9: every diameter below is now DERIVED from the canonical constants at the top of the file
+-- rather than written here, which is what stops the seven packs drifting apart again. |x| is
+-- CLUSTER_X = 260 and still clears this pack's own furniture: the Alerts column sits at x=-150
+-- and the PvP column at x=+150 (icons up to 40 wide, so |x| <= 170), and the widest orb is now
+-- ORB_OUTER = 104, so the cluster's inner edge is at 260 - 52 = 208. Nothing overlaps, and the
+-- entire middle of the screen — where v7 parked a 172px bar stack — is still empty.
+--
+-- G.tickR is the ONE derived number that is not simply a canonical constant, and it exists
+-- because the four bear rage pips are positioned by trigonometry on the player POWER ring.
+-- Both bundled ring textures are 256x256 and the number in the file name is the stroke weight
+-- in THAT space, so a ring drawn at S px carries a band of S*20/256 hugging the OUTER edge of
+-- the region box (crop 0.41 is the identity crop, so the art exactly fills the box). The
+-- middle of that band therefore sits at S/2 - S*10/256 = S/2 * (1 - 20/256). At ORB_MID = 78
+-- that is 35.95, where v8's literal 30 was the same calculation for a 64 px ring with the
+-- 10 px art. Change ORB_MID and the pips follow it; see rageTick() in the v2 block.
+local RING_STROKE = 20 / 256  -- Ring_20px band weight, as a fraction of the drawn diameter
 local G = {
-  orbX     = 250,  -- player at -X, target at +X
-  hpRing   = 96,   -- outer ring: health
-  pwRing   = 64,   -- inner ring: primary power
-  thRing   = 120,  -- outermost ring, target cluster only: threat
-  portrait = 28,   -- the live unit model in the middle
-  tickR    = 30,   -- radius the bear rage pips sit at, i.e. on the power-ring stroke
+  orbX     = CLUSTER_X,   -- player at -X, target at +X
+  orbY     = CLUSTER_Y,
+  hpRing   = ORB_OUTER,   -- player cluster, outermost: health
+  pwRing   = ORB_MID,     -- player cluster, inside it: primary power (form-adaptive)
+  tHpRing  = ORB_MID,     -- target cluster, inside the threat ring: health
+  tMpRing  = ORB_INNER,   -- target cluster, innermost: mana
+  thRing   = ORB_OUTER,   -- target cluster, outermost: threat (Bear and Caster both)
+  portrait = PORTRAIT,    -- the live unit model in the middle of each cluster
+  tickR    = ORB_MID / 2 * (1 - RING_STROKE),  -- bear rage pips, on the power-ring stroke
 }
 
 local COL = {
@@ -212,10 +275,13 @@ local COL = {
   ptext  = { 0.72, 0.82, 1, 1 },     -- power numbers, tinted so they never need a label
 }
 
--- Ring_10px.tga is a true annulus and ships inside WeakAuras (Private.texture_types,
+-- Ring_20px.tga is a true annulus and ships inside WeakAuras (Private.texture_types,
 -- "Shapes"). Circle_Smooth2.tga — the texture the rest of this pack uses — is a SOLID DISC
 -- and would fill as a pie wedge, not a ring.
-local RING = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_10px.tga"
+-- v9 swaps Ring_10px for Ring_20px: the stroke is a fraction of the DRAWN size (S*N/256), so
+-- the 10 px art at these diameters resolved to a 3-4 px hairline that read as a wire instead
+-- of an arc. Same file family, same annulus geometry, twice the band.
+local RING = RING_TEX
 local IV, TOC = 45, 20501
 
 -- wa_factory has no progresstexture or model builder, so those two region tables are written
@@ -310,7 +376,7 @@ local function ring(id, size, x, color, triggerList, gate)
     regionType = "progresstexture", id = id, uid = W.uid(), parent = nil,
     width = size, height = size,
     selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
-    xOffset = x, yOffset = 0, frameStrata = 1, alpha = 1,
+    xOffset = x, yOffset = G.orbY, frameStrata = 1, alpha = 1,
     orientation = "CLOCKWISE", startAngle = 0, endAngle = 360,
     inverse = false, mirror = false,
     compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
@@ -349,7 +415,7 @@ local function portrait(id, unit, x)
     sequence = 1, advance = false, rotation = 0,
     width = G.portrait, height = G.portrait, alpha = 1,
     selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
-    xOffset = x, yOffset = 0, frameStrata = 1,
+    xOffset = x, yOffset = G.orbY, frameStrata = 1,
     border = false, borderColor = { 1, 1, 1, 0.5 }, backdropColor = { 1, 1, 1, 0.5 },
     borderEdge = "None", borderOffset = 5, borderInset = 11,
     borderSize = 16, borderBackdrop = "Blizzard Tooltip",
@@ -364,9 +430,12 @@ end
 -- progresstexture / icon / aurabar / empty — not model). Each number therefore rides on its
 -- own ring and appears and disappears with it: no target, no numbers; no mana pool, no mana
 -- number; no threat table, no threat number.
-local function pct(sym, size, yOffset, color)
-  local st = F.subtext("%" .. sym .. "%%", size, "CENTER", sym)
-  st.anchorYOffset = yOffset
+-- v9: the size/offset pair is no longer passed per call site — it comes from one of the three
+-- canonical placements (PCT_MAIN / PCT_SUB / PCT_THREAT) declared at the top of the file, so
+-- the player's health number and the target's health number cannot drift apart again.
+local function pct(sym, place, color)
+  local st = F.subtext("%" .. sym .. "%%", place.size, "CENTER", sym)
+  st.anchorYOffset = place.y
   st.text_color = color
   return st
 end
@@ -414,7 +483,7 @@ end
 -- has not streamed yet would flash a full green circle.
 local playerHP = ring("Druid - Player Health", G.hpRing, -G.orbX, COL.health,
   { orbHealth("player"), F.unitCharTrigger() })
-playerHP.subRegions[1] = pct("percenthealth", 16, -60, COL.text)
+playerHP.subRegions[1] = pct("percenthealth", PCT_MAIN, COL.text)
 playerHP.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "percenthealth", "<", "50", "foregroundColor", COL.hurt),
@@ -431,7 +500,7 @@ playerHP.conditions = {
 -- Feral-gated and Bear-form-gated, so a feral in caster form saw no resource bar whatsoever.
 local playerPower = ring("Druid - Player Power", G.pwRing, -G.orbX, COL.mana,
   { orbPower("player"), F.unitCharTrigger() })
-playerPower.subRegions[1] = pct("percentpower", 11, -78, COL.ptext)
+playerPower.subRegions[1] = pct("percentpower", PCT_SUB, COL.ptext)
 playerPower.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "powertype", "==", 1, "foregroundColor", COL.rage),
@@ -439,25 +508,27 @@ playerPower.conditions = {
   F.condition(1, "maxpower", "<=", "1", "alpha", 0),
 }
 
--- uid 8 (v7 "Druid - Mana (Resto)"). Outer ring, target cluster. New capability: v7 drew no
--- target state at all.
-local targetHP = ring("Druid - Target Health", G.hpRing, G.orbX, COL.health,
+-- uid 8 (v7 "Druid - Mana (Resto)"). MIDDLE ring of the target cluster, nested inside the
+-- threat ring that owns the outer slot on this side — the mirror of the player's health, which
+-- IS the outer ring because the player has no threat arc. New capability: v7 drew no target
+-- state at all.
+local targetHP = ring("Druid - Target Health", G.tHpRing, G.orbX, COL.health,
   { orbHealth("target"), F.unitCharTrigger() })
-targetHP.subRegions[1] = pct("percenthealth", 14, -74, COL.text)
+targetHP.subRegions[1] = pct("percenthealth", PCT_MAIN, COL.text)
 targetHP.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "maxhealth", "<=", "0", "alpha", 0),
 }
 
--- uid 9 (v7 "Druid - Mana (Balance)"). Inner ring, target cluster: the healing target's mana
+-- uid 9 (v7 "Druid - Mana (Balance)"). INNERMOST ring, target cluster: the healing target's mana
 -- for a resto druid, the caster target's mana in PvP. The maxpower guard catches the last
 -- honest gap in requirePowerType — most NPCs report mana as their primary bar with a 0/0
 -- pool, and the prototype's total = math.max(1, UnitPowerMax(...)) floor turns that into a
 -- valid 0% state. A real caster has maxpower in the thousands; a powerless unit has exactly
 -- 1, which is why the guard is `<= 1` and not `<= 0`.
-local targetMana = ring("Druid - Target Mana", G.pwRing, G.orbX, COL.mana,
+local targetMana = ring("Druid - Target Mana", G.tMpRing, G.orbX, COL.mana,
   { orbMana("target"), F.unitCharTrigger() })
-targetMana.subRegions[1] = pct("percentpower", 10, -92, COL.ptext)
+targetMana.subRegions[1] = pct("percentpower", PCT_SUB, COL.ptext)
 targetMana.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "maxpower", "<=", "1", "alpha", 0),
@@ -476,7 +547,7 @@ targetMana.conditions = {
 -- moment. alpha 0 removes the ring instead, matching what v7's aurabar did by accident.
 local threatF = ring("Druid - Threat (Bear)", G.thRing, G.orbX, COL.threat,
   { orbThreat() }, notInArena(GATE_F))
-threatF.subRegions[1] = pct("threatpct", 12, 72, COL.text)
+threatF.subRegions[1] = pct("threatpct", PCT_THREAT, COL.text)
 threatF.conditions = {
   F.condition(1, "aggro", "==", 0, "foregroundColor", COL.danger),
   F.condition(1, "threatvalue", "<=", "0", "alpha", 0),
@@ -486,7 +557,7 @@ threatF.conditions = {
 -- orange at 70% of the pull threshold, red when you pull (severe condition last, so it wins).
 local threatB = ring("Druid - Threat (Caster)", G.thRing, G.orbX, COL.threat,
   { orbThreat() }, notInArena(GATE_B))
-threatB.subRegions[1] = pct("threatpct", 12, 72, COL.text)
+threatB.subRegions[1] = pct("threatpct", PCT_THREAT, COL.text)
 threatB.conditions = {
   F.condition(1, "threatpct", ">=", "70", "foregroundColor", COL.warn),
   F.condition(1, "aggro", "==", 1, "foregroundColor", COL.danger),
@@ -759,10 +830,18 @@ mangleCD.conditions[3] = F.condition(2, "inCombat", "==", 0, "sub.1.glow", false
 -- Round pips, not lines: rotating a thin quad on a texture region rotates the ART INSIDE the
 -- quad (DoTexCoord -> GetRotatedPoints), so a 2x16 line rotated 126 degrees clips instead of
 -- tilting. A circle needs no rotation to point the right way.
+--
+-- v9 — THE TRAP. These are stand-alone texture regions anchored to the SCREEN, not sub-regions
+-- of the ring, so nothing moves them when the ring they mark changes size or position. Both
+-- happened in v9 (the power ring grew 64 -> 78, the whole cluster moved to y = -60), and a pip
+-- left at the v8 coordinates would be a mark floating in empty space. The fix is that BOTH
+-- coordinates are now derived rather than partly hard-coded: the centre is (-G.orbX, G.orbY)
+-- and the radius is G.tickR, itself computed from ORB_MID. v8's y line omitted the cluster's
+-- own y entirely because the cluster happened to sit at 0.
 local function rageTick(id, rageValue, size, color, minRage)
   local theta = math.rad(rageValue / 100 * 360)
   local x = math.floor(-G.orbX + G.tickR * math.sin(theta) + 0.5)
-  local y = math.floor(G.tickR * math.cos(theta) + 0.5)
+  local y = math.floor( G.orbY + G.tickR * math.cos(theta) + 0.5)
   local pip = reg(F.texture(id, CLASS, size, size, x, y, nil, F.TEX_CIRCLE, color))
   pip.triggers = F.triggers({ F.powerTrigger(1, minRage) })  -- rage only exists in bear form
   pip.load = F.load(CLASS, GATE_F)

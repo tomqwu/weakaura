@@ -1,4 +1,4 @@
--- generate.lua — Warlock TBC All-Specs HUD (v7).
+-- generate.lua — Warlock TBC All-Specs HUD (v8).
 -- Run: lua5.1 generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import).
 --
@@ -136,6 +136,32 @@
 --     arcs) are built at the very bottom of this file, after every existing
 --     uid() call, so all 38 v6 uids are byte-for-byte stable.
 --
+-- v8 (one orb size across all seven class packs — geometry and texture only):
+--   * Every pack invented its own orb dimensions in v7, and inside this pack the
+--     player cluster (96 outer) and the target cluster (128 outer) did not match
+--     each other either, which is what read on screen as "the sizes are uneven".
+--     The whole repo now shares ONE canonical set, declared as named constants at
+--     the top of the orb section so the next edit cannot drift them apart again:
+--       ORB_OUTER 104 / ORB_MID 78 / ORB_INNER 54 / PORTRAIT 46,
+--       clusters at (-260, -60) and (+260, -60).
+--     Ring assignment is what makes the two sides match: the PLAYER shows health
+--     on the outer ring and mana on the mid ring; the TARGET shows threat on the
+--     outer ring, health on the mid and mana on the inner. Both clusters
+--     therefore present the same outer diameter and the same face size, and the
+--     target simply nests one more ring inside.
+--   * Ring_10px -> Ring_20px everywhere (arcs and halo). At 104 px the 10px art
+--     drew a ~4 px wire; the 20px annulus reads as a band at these diameters.
+--   * The readouts move onto the canonical baseline shared by every pack: health
+--     14 pt at y = -60 (just under the 104 ring), power 11 pt at y = -76, threat
+--     11 pt at y = +60 above the orb. Both clusters use the SAME offsets, which
+--     they can because every ring is concentric on one centre — the target's
+--     health number clears the threat ring by sitting under the outer radius, not
+--     by being pushed further down as it was in v7.
+--   * NOTHING ELSE CHANGED: not one trigger, load gate, condition, colour, spell
+--     id or region type, and no aura was added, removed, renamed or reordered.
+--     Not a single W.uid() call moved, so a v7 import offers Update and every one
+--     of the 44 uids is byte-for-byte stable.
+--
 -- UID ORDER IS SACRED: the two v2 auras are built at the BOTTOM of this file so
 -- every pre-v1 uid() call keeps its position in the seeded stream. v3 is a
 -- load-gate-only change: no aura added, removed, renamed or reordered. v4's
@@ -219,15 +245,17 @@ local top = F.group(TOP, 0, -140, nil)
 -- the percentages underneath. The centre column now holds nothing but the DoT
 -- row and the cooldown row.
 --
--- Player orb  (x = -260): health arc (outer, 96) + mana arc (inner, 64) + face.
--- Target orb  (x = +260): threat arc (outer, 128) + health arc (96) + mana arc
---                         (64) + face, and the whole cluster self-hides when you
---                         have no target.
+-- Player orb  (x = -260): health arc (OUTER, 104) + mana arc (MID, 78) + face.
+-- Target orb  (x = +260): threat arc (OUTER, 104) + health arc (MID, 78) + mana
+--                         arc (INNER, 54) + face, and the whole cluster
+--                         self-hides when you have no target.
+-- v8: both clusters present the SAME outer diameter and the SAME face; the target
+-- just nests one more ring inside. See the canonical constants below.
 -- x = +/-260 is chosen against this pack's own furniture: the Alerts column sits
 -- at x = -150 and the PvP column at x = +150, both 44 px wide, so they end at
--- +/-172; the widest orb (the target's 128 arc plus its 140 flash halo) reaches
--- 190, leaving an 18 px gutter. The readouts of both orbs share one baseline
--- (y = -76 / -94) so the four numbers line up across the screen.
+-- +/-172; the widest ring (the 116 flash halo) has its inner edge at 202,
+-- leaving a 30 px gutter. The readouts of both orbs share one baseline
+-- (y = -60 / -76) so the four numbers line up across the screen.
 --
 -- REGION TYPE. The arcs are `progresstexture` in CLOCKWISE orientation, modelled
 -- field-for-field on poc/unit-orbs/generate.lua (the verified reference build).
@@ -273,23 +301,37 @@ local top = F.group(TOP, 0, -140, nil)
 -- VERY BOTTOM of this file and re-parented, exactly as v2/v4/v5 did.
 -- =====================================================================
 
--- Bundled WeakAuras media. Ring_10px is a true annulus (the number is the stroke
--- weight of the source art); F.TEX_CIRCLE / Circle_Smooth2.tga — what the rest of
--- this repo uses — is a SOLID DISC and would fill as a pie wedge, not a ring.
-local RING = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_10px.tga"
+-- ===== CANONICAL ORB GEOMETRY — IDENTICAL IN ALL SEVEN CLASS PACKS ==========
+-- Do not retune any of these in one pack. The seven packs disagreeing with each
+-- other (and, in v7, the two clusters inside a single pack disagreeing too) is
+-- exactly what read on screen as "the sizes are uneven". They are named
+-- constants so a later edit has to notice it is breaking a shared contract.
+--
+-- Bundled WeakAuras media. Ring_20px is a true annulus (the number is the stroke
+-- weight of the 256x256 source art, so the drawn band is size*20/256 — 8 px at
+-- 104). Ring_10px, which v7 used, drew a ~4 px wire at these diameters.
+-- F.TEX_CIRCLE / Circle_Smooth2.tga — what the rest of this repo uses — is a
+-- SOLID DISC and would fill as a pie wedge, not a ring.
+local RING_TEX  = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_20px.tga"
+local ORB_OUTER = 104  -- outermost ring on BOTH clusters: player health / target threat
+local ORB_MID   = 78   -- player mana / target health
+local ORB_INNER = 54   -- target mana (the target nests one ring more than the player)
+local PORTRAIT  = 46   -- the live 3D face, same size in both clusters
+local CLUSTER_X = 260  -- player cluster at -X, target at +X; clears both 44px side columns
+local CLUSTER_Y = -60  -- both clusters, relative to the Resources group
 
 local ORB = {
-  clusterX   = 260,  -- player at -X, target at +X; clears both 44px side columns
-  threatRing = 128,  -- target only, outermost
-  flashRing  = 140,  -- the 80%-threat halo, just outside the threat arc
-  hpRing     = 96,
-  mpRing     = 64,
-  portrait   = 28,
-  hpTextY    = -76,  -- one shared baseline for both orbs
-  hpTextSize = 16,
-  mpTextY    = -94,
+  -- Derived, not canonical: the >=80% threat halo hugs the outer ring with the
+  -- same 12 px stand-off it had in v7 (128 -> 140 becomes 104 -> 116). It is a
+  -- warning overlay, not one of the four readout rings.
+  flashRing  = ORB_OUTER + 12,
+  -- One shared readout baseline for BOTH clusters — every ring is concentric on
+  -- one centre, so the same offsets clear the outer ring on either side.
+  hpTextY    = -60,  -- just under the 104 outer ring (radius 52)
+  hpTextSize = 14,
+  mpTextY    = -76,
   mpTextSize = 11,
-  thTextY    = 76,   -- threat reads ABOVE the target orb, out of the number row
+  thTextY    = 60,   -- threat reads ABOVE the orb, out of the number row
   thTextSize = 11,
 }
 
@@ -391,7 +433,7 @@ local function ring(id, size, color, trigs)
     -- in the default table.
     compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
     -- textures
-    foregroundTexture = RING, backgroundTexture = RING, sameTexture = true,
+    foregroundTexture = RING_TEX, backgroundTexture = RING_TEX, sameTexture = true,
     desaturateForeground = false, desaturateBackground = false,
     foregroundColor = color, backgroundColor = ORBCOL.track,
     backgroundOffset = 0,
@@ -431,7 +473,7 @@ adopt(top, gRes)
 -- maxhealth <= 0 is the health equivalent of the threat guard: the Health
 -- prototype's total is UnitHealthMax(unit) with no floor, so a unit whose max
 -- health has not streamed yet would otherwise flash a full ring.
-local pHealth = reg(ring("Warlock - Player Health", ORB.hpRing, ORBCOL.health,
+local pHealth = reg(ring("Warlock - Player Health", ORB_OUTER, ORBCOL.health,
   { F.healthTrigger(), F.unitCharTrigger() }))
 pHealth.subRegions[1] = pct("percenthealth", ORB.hpTextSize, ORB.hpTextY, ORBCOL.hpText)
 pHealth.conditions = {
@@ -444,7 +486,7 @@ pHealth.conditions = {
 -- Violet under 30%: the visual pair of the Life Tap prompt. maxpower's guard is
 -- written <= 1, not <= 0, because the Power prototype floors total at
 -- math.max(1, UnitPowerMax(...)) — a powerless unit reports exactly 1.
-local pMana = reg(ring("Warlock - Player Mana", ORB.mpRing, ORBCOL.mana,
+local pMana = reg(ring("Warlock - Player Mana", ORB_MID, ORBCOL.mana,
   { F.powerTrigger(0), F.unitCharTrigger() }))
 pMana.subRegions[1] = pct("percentpower", ORB.mpTextSize, ORB.mpTextY, ORBCOL.mpText)
 pMana.conditions = {
@@ -489,7 +531,7 @@ end
 -- note at the top of this section. threatvalue is a stored conditionType
 -- "number" arg; the prototype's hidden `total` is not, which is why the guard is
 -- written against the value rather than the total.
-local threat = reg(ring("Warlock - Threat", ORB.threatRing, ORBCOL.threat,
+local threat = reg(ring("Warlock - Threat", ORB_OUTER, ORBCOL.threat,
   { orbThreatTrigger(), F.unitCharTrigger() }))
 threat.subRegions[1] = pct("threatpct", ORB.thTextSize, ORB.thTextY, ORBCOL.thText)
 threat.load.use_ingroup = true
@@ -505,13 +547,14 @@ threat.conditions = {
 
 -- --- 80%+ threat halo (was "Warlock - Threat Flash", same uid) ----------
 -- The v6 overlay was a 176x18 red rectangle pulsing across the threat bar. With
--- the bar gone it becomes a pulsing red RING just outside the threat arc (140 vs
--- 128), which is the same signal in the same place as the thing it is warning
--- about. Same trigger, same 80% threshold, same load gates, same alphaPulse —
--- only the geometry and the texture changed. ADD blend so it reads as light over
--- the arc rather than paint on top of it.
+-- the bar gone it becomes a pulsing red RING just outside the threat arc (v8:
+-- 116 vs 104, the same 12 px stand-off v7 had at 140 vs 128), which is the same
+-- signal in the same place as the thing it is warning about. Same trigger, same
+-- 80% threshold, same load gates, same alphaPulse — only the geometry and the
+-- texture changed. ADD blend so it reads as light over the arc rather than paint
+-- on top of it.
 local flash = reg(F.texture("Warlock - Threat Flash", CLASS,
-  ORB.flashRing, ORB.flashRing, 0, 0, nil, RING, { 1, 0.1, 0.1, 0.85 }))
+  ORB.flashRing, ORB.flashRing, 0, 0, nil, RING_TEX, { 1, 0.1, 0.1, 0.85 }))
 flash.blendMode = "ADD"
 flash.triggers = F.triggers({ orbThreatTrigger(80) })
 flash.load.use_ingroup = true
@@ -1042,7 +1085,7 @@ local function portrait(id, unit)
     model_st_tx = 0, model_st_ty = 0, model_st_tz = 0,
     model_st_rx = 270, model_st_ry = 0, model_st_rz = 0, model_st_us = 40,
     sequence = 1, advance = false, rotation = 0,
-    width = ORB.portrait, height = ORB.portrait, alpha = 1,
+    width = PORTRAIT, height = PORTRAIT, alpha = 1,
     selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
     xOffset = 0, yOffset = 0, frameStrata = 1,
     border = false, borderColor = { 1, 1, 1, 0.5 }, backdropColor = { 1, 1, 1, 0.5 },
@@ -1055,18 +1098,18 @@ local function portrait(id, unit)
 end
 
 -- --- player cluster (left of the character) -----------------------------
-local gPlayer = reg(F.group("Warlock - Player Orb", -ORB.clusterX, 0, nil))
+local gPlayer = reg(F.group("Warlock - Player Orb", -CLUSTER_X, CLUSTER_Y, nil))
 local pPortrait = reg(portrait("Warlock - Player Portrait", "player"))
 
 -- --- target cluster (right of the character) ----------------------------
-local gTarget = reg(F.group("Warlock - Target Orb", ORB.clusterX, 0, nil))
+local gTarget = reg(F.group("Warlock - Target Orb", CLUSTER_X, CLUSTER_Y, nil))
 
 -- Target health. No low-health escalation: nothing in v6 signalled a target's
 -- health, and this pack does not invent rotation claims it cannot cite. The
 -- zero-total guard is the same one the player's arc carries, and it matters far
 -- more here — a freshly targeted unit whose max health has not streamed yet is
 -- exactly the case that would otherwise flash a full green circle.
-local tHealth = reg(ring("Warlock - Target Health", ORB.hpRing, ORBCOL.health,
+local tHealth = reg(ring("Warlock - Target Health", ORB_MID, ORBCOL.health,
   { targetHealthTrigger(), F.unitCharTrigger() }))
 tHealth.subRegions[1] = pct("percenthealth", ORB.hpTextSize, ORB.hpTextY, ORBCOL.hpText)
 tHealth.conditions = {
@@ -1080,7 +1123,7 @@ tHealth.conditions = {
 -- an empty ring on a powerless mob. A real caster has maxpower in the thousands;
 -- a powerless unit has exactly 1, because of that floor, which is why the guard
 -- reads <= 1.
-local tMana = reg(ring("Warlock - Target Mana", ORB.mpRing, ORBCOL.mana,
+local tMana = reg(ring("Warlock - Target Mana", ORB_INNER, ORBCOL.mana,
   { targetManaTrigger(), F.unitCharTrigger() }))
 tMana.subRegions[1] = pct("percentpower", ORB.mpTextSize, ORB.mpTextY, ORBCOL.mpText)
 tMana.conditions = {
