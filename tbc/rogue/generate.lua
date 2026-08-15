@@ -1,6 +1,6 @@
--- generate.lua — Rogue TBC All-Specs HUD (v45).
+-- generate.lua — Rogue TBC All-Specs HUD (v46).
 -- Reproducible lineage build: start from the committed v41 snapshot, then replay
--- the reviewed v42, v43, v44 and v45 Lua migrations in order. The snapshot lives
+-- the reviewed v42 through v46 Lua migrations in order. The snapshot lives
 -- inside this script so the class still ships exactly one importable all-specs.txt.
 math.randomseed(20260809)
 
@@ -24,7 +24,9 @@ local savedArg0 = arg[0]
 
 local ok, result = pcall(function()
   write(PACK, BASE_V41)
-  for _, patch in ipairs({ "patch-v42.lua", "patch-v43.lua", "patch-v44.lua", "patch-v45.lua" }) do
+  for _, patch in ipairs({
+    "patch-v42.lua", "patch-v43.lua", "patch-v44.lua", "patch-v45.lua", "patch-v46.lua",
+  }) do
     arg[0] = dir .. "/" .. patch
     dofile(arg[0])
   end
