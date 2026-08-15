@@ -1,4 +1,4 @@
--- generate.lua — Priest TBC All-Specs HUD (v6).
+-- generate.lua — Priest TBC All-Specs HUD (v7).
 -- Run: lua5.1 tbc/priest/generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import -> paste).
 --
@@ -98,6 +98,45 @@
 --     the out-of-combat row contains nothing BUT those three icons.
 --   * No aura added, removed or reordered: only triggers and conditions changed, so
 --     all 39 uids are untouched and this imports as an Update.
+--
+-- v7 (the centre of the screen is given back — health/mana/threat become UNIT ORBS):
+--   * The three 172x14 bars that sat stacked under the character are gone as bars.
+--     The same three auras are now RINGS around two small live unit portraits: the
+--     PLAYER orb out at x = -250 and the TARGET orb at x = +250, flanking the
+--     character, so the middle of the screen carries nothing but the buff row, the
+--     cooldown strip and the prompts. Layout proof: poc/unit-orbs/.
+--   * Each orb is a `model` portrait of the unit (SetUnit + portrait zoom, so the
+--     target side renders any mob or player without knowing its class) inside an
+--     outer HEALTH ring and an inner MANA ring, with the percentages underneath.
+--     The target orb carries a third, outermost THREAT ring — threat is your threat
+--     ON THAT TARGET, so it belongs at the target, not on your own body.
+--   * Nothing is renamed, deleted or reordered. "Priest - Health", "Priest - Mana"
+--     and "Priest - Threat" keep their ids AND their uids and change region type in
+--     place; the four new auras (target health, target mana, and the two portraits)
+--     are built at the very bottom of this script and re-parented, so all 40 v6 uids
+--     keep their positions in the seeded stream. This imports as an Update, and it
+--     leaves NO orphan behind.
+--   * Every danger state survives the move, with one rename that would otherwise be
+--     a silent no-op: on a progresstexture the fill colour property is
+--     `foregroundColor`, NOT the aurabar's `barColor`. Conditions.lua skips a change
+--     whose property is absent from the region's properties table without any error,
+--     so a mechanical port of `barColor` would look right in the editor and do
+--     nothing in game. Health still turns red below 40% (the Desperate Prayer line),
+--     threat still runs green -> orange at 70% -> red on aggro.
+--   * Two guards are NEW and mandatory, because the two region types disagree about
+--     an empty total in opposite directions: aurabar draws EMPTY at total == 0
+--     (AuraBar.lua `local progress = 0`), progresstexture draws FULL
+--     (ProgressTexture.lua `local progress = 1`). Threat total is
+--     threatvalue * 100 / threatpct, which is 0 for the whole moment after a Fade,
+--     so an unguarded threat ring would slam to a FULL circle — "you are at the pull
+--     threshold" — exactly when you have no threat at all. `threatvalue <= 0 ->
+--     alpha 0` and `maxhealth <= 0 -> alpha 0` hide the ring instead.
+--   * NEW breakpoint pips, which the bars never had: a mark at 40% on the player
+--     health ring (where the ring turns red and Desperate Prayer is prompted) and at
+--     50% on the mana ring (where the Shadowfiend prompt fires). Sub-region type
+--     `subtexture` — the aurabar `subtick` used elsewhere in this repo is aurabar-
+--     only and cannot ride a ring.
+--   * Untouched: buffs, alerts, the cooldown row, procs and the whole PvP layer.
 
 math.randomseed(20260815)  -- FIXED pack seed; the uid() call order below is append-only forever
 
@@ -175,51 +214,260 @@ local function fadeOutOfCombat(a)
   a.conditions[#a.conditions + 1] = F.condition(n, "inCombat", "==", 0, "alpha", 0.5)
 end
 
+-- =====================================================================
+-- v7 orb toolkit. wa_factory.lua has no progresstexture or model builder, so
+-- the two region tables below are written out in full; every other piece
+-- (triggers, subtext, conditions, load gates, assembly) still goes through the
+-- factory. Field names verified against the CURRENT WeakAuras source, which is
+-- what actually runs: internalVersion 45 only drives migration, and no
+-- Modernize block at IV >= 45 renames any progresstexture fill field.
+-- =====================================================================
+
+-- Bundled WeakAuras media. Ring_10px is a true annulus (10px is the stroke weight
+-- of the source art); Circle_Smooth2.tga — what the rest of this repo uses — is a
+-- SOLID DISC and would fill as a pie wedge instead of a ring.
+local RING = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_10px.tga"
+
+-- One place to retune the whole orb layer. x/y are relative to the Resources
+-- group at (0, 56), which hangs off the top group at (0, -140): the orb centres
+-- therefore land at (-250, -100) and (250, -100) on screen.
+--   orbX = 250 is not arbitrary. The Alerts column reaches x = -172 and the Procs
+--   row reaches x = 178, so 250 +/- the outermost ring radius (64) clears both
+--   without moving a single element outside this group.
+local G = {
+  orbX = 250, orbY = -16,
+  threatRing = 128,   -- OUTERMOST, target orb only
+  hpRing     = 96,    -- outer, both orbs. Bigger arc = the more-read number.
+  mpRing     = 64,    -- inner, both orbs
+  portrait   = 28,    -- the live face in the middle
+  hpTextY = -60, hpTextSize = 16,   -- player: clear of the health ring (radius 48)
+  mpTextY = -78, mpTextSize = 11,
+  tHpTextY = -84, tMpTextY = -102,  -- target: clear of the THREAT ring (radius 64)
+  threatTextY = 84, threatTextSize = 13,
+}
+
+local COL = {
+  health = { 0.15, 0.78, 0.25, 1 },   -- the v2-v6 health bar green, unchanged
+  mana   = { 0.25, 0.5, 0.92, 1 },    -- the v2-v6 mana bar blue, unchanged
+  threat = { 0.25, 0.8, 0.3, 1 },
+  warn   = { 1, 0.6, 0.1, 1 },        -- threat >= 70%
+  danger = { 0.9, 0.12, 0.12, 1 },    -- health < 40%, and aggro
+  track  = { 0, 0, 0, 0.55 },         -- the unfilled arc behind every ring
+  hpText = { 1, 1, 1, 1 },
+  mpText = { 0.55, 0.75, 1, 1 },      -- echoes the mana ring, so the two numbers
+  thText = { 0.75, 0.95, 0.8, 1 },    -- never need labels to tell them apart
+  pip    = { 1, 1, 1, 0.8 },
+}
+
+-- wa_factory's stub() is local to the factory, so the hand-written region tables
+-- below get the identical scaffolding here.
+local function orbStub(t)
+  t.internalVersion, t.tocversion = 45, 20501
+  t.actions = { init = {}, start = {}, finish = {} }
+  t.animation = {
+    start  = { type = "none", duration_type = "seconds", easeType = "none", easeStrength = 3 },
+    main   = { type = "none", duration_type = "seconds", easeType = "none", easeStrength = 3 },
+    finish = { type = "none", duration_type = "seconds", easeType = "none", easeStrength = 3 },
+  }
+  t.conditions = t.conditions or {}
+  t.config, t.authorOptions, t.information = {}, {}, {}
+  t.load = F.load(CLASS)
+  return t
+end
+
+-- Radial progress ring. The fields that are traps:
+--   orientation CLOCKWISE  -> the only two radial values are CLOCKWISE and
+--     ANTICLOCKWISE; every other entry in orientation_with_circle_types is linear.
+--   startAngle 0 / endAngle 360 -> full circle (WA normalises and corrects it).
+--   crop_x / crop_y = 0.41 -> the IDENTITY value, not "no crop": the circular path
+--     expands the texture by sqrt(2) so rotated quadrants never run off it, and
+--     0.41 exactly cancels that. 0 blows the ring up 1.41x and clips it.
+--   auraRotation = 0 -> absent from the 3.5.0 defaults but read unconditionally by
+--     current code as data.auraRotation / 180 * math.pi, so it must be emitted.
+--   backgroundOffset = 0 -> the default 2 fattens the track into a halo.
+--   adjustedMin/Max are STRINGS, because SetAdjustedMin does adjustedMin:find(...).
+--   progressSource is rewritten to {-1, ""} (Automatic) by Modernize < 71 whatever
+--     is emitted, which is WHY there is exactly one progress trigger per ring and it
+--     has to be trigger 1: Automatic reads the first active trigger's value/total.
+--     That is also why health and mana cannot share one region — and that constraint
+--     is what makes the concentric look possible in the first place.
+local function ring(id, size, color, x, y, trigger)
+  return orbStub{
+    regionType = "progresstexture", id = id, uid = W.uid(), parent = nil,
+    width = size, height = size,
+    selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
+    xOffset = x, yOffset = y, frameStrata = 1, alpha = 1,
+    orientation = "CLOCKWISE", startAngle = 0, endAngle = 360,
+    inverse = false, mirror = false,
+    compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
+    foregroundTexture = RING, backgroundTexture = RING, sameTexture = true,
+    desaturateForeground = false, desaturateBackground = false,
+    foregroundColor = color, backgroundColor = COL.track,
+    backgroundOffset = 0,
+    blendMode = "BLEND", textureWrapMode = "CLAMPTOBLACKADDITIVE",
+    crop_x = 0.41, crop_y = 0.41, rotation = 0, auraRotation = 0,
+    user_x = 0, user_y = 0,
+    progressSource = { -1, "" },
+    useAdjustededMin = false, useAdjustededMax = false,
+    adjustedMin = "", adjustedMax = "",
+    smoothProgress = true, overlayclip = false, overlays = {},
+    subRegions = {},
+    triggers = trigger and F.triggers({ trigger }) or nil,
+  }
+end
+
+-- Live unit portrait: a real 3D head of whoever is targeted, not a class icon, so
+-- the target side works for mobs, NPCs and players alike and needs no class check.
+--   modelIsUnit = true + model_fileId = "<unit>" -> PlayerModel:SetUnit(unit)
+--   portraitZoom = true                          -> SetPortraitZoom(1)
+-- CRITICAL: current code reads the unit from `model_fileId`. WA 3.5.0 read
+-- `model_path`, and the migration bridging the two (Modernize < 72) is guarded by
+-- WeakAuras.IsClassicEra(), which is NOT IsTBC() — on a 2.5.x client it never runs,
+-- so emitting only model_path would be a silent no-op. Both are emitted.
+-- The target portrait re-renders on PLAYER_TARGET_CHANGED (Model.lua registers it
+-- for unit == "target"), and carries the same Health trigger as its ring, so it
+-- appears and disappears with the rest of the target orb.
+local function portrait(id, unit, x, y)
+  return orbStub{
+    regionType = "model", id = id, uid = W.uid(), parent = nil,
+    model_fileId = unit, model_path = unit, modelIsUnit = true, modelDisplayInfo = false,
+    portraitZoom = true, api = false,
+    model_x = 0, model_y = 0, model_z = 0,
+    model_st_tx = 0, model_st_ty = 0, model_st_tz = 0,
+    model_st_rx = 270, model_st_ry = 0, model_st_rz = 0, model_st_us = 40,
+    sequence = 1, advance = false, rotation = 0,
+    width = G.portrait, height = G.portrait, alpha = 1,
+    selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
+    xOffset = x, yOffset = y, frameStrata = 1,
+    border = false, borderColor = { 1, 1, 1, 0.5 }, backdropColor = { 1, 1, 1, 0.5 },
+    borderEdge = "None", borderOffset = 5, borderInset = 11,
+    borderSize = 16, borderBackdrop = "Blizzard Tooltip",
+    subRegions = {},
+    triggers = nil,
+  }
+end
+
+-- The percentages sit OUTSIDE the rings: the middle is the portrait, and a `model`
+-- region cannot carry a text sub-region at all (SubText's supports() lists texture /
+-- progresstexture / icon / aurabar / text / empty — not model). So each number rides
+-- on its own ring and therefore appears and disappears with it: no target, no
+-- numbers; no mana pool, no mana number.
+--
+-- THE OFFSET KEY IS A TRAP, and it is the exact silent-no-op shape this repo keeps
+-- getting caught by. SubText's modify() reads `data.text_anchorXOffset` /
+-- `data.text_anchorYOffset` — in WeakAuras 3.5.0 (SubText.lua:408) and in current
+-- code (SubText.lua:486) alike — but the `default()` table it ships alongside them
+-- writes `anchorXOffset` / `anchorYOffset`, and NO Modernize block in any version
+-- copies one to the other (grep both: zero hits for text_anchorYOffset). So the
+-- factory's anchorYOffset is a DEAD key: setting it moves nothing, and every number
+-- would render dead centre, stacked on top of the portrait, with no error anywhere.
+-- Both spellings are emitted, and text_* is the one that does the work.
+-- (text_anchorPoint is the opposite case and is fine: Modernize < 80 renames it to
+-- anchor_point, which is what current code reads, so the factory value survives.)
+local function pct(sym, size, yOffset, color)
+  local st = F.subtext("%" .. sym .. "%%", size, "CENTER", sym)
+  st.anchorYOffset = yOffset
+  st.text_anchorXOffset = 0
+  st.text_anchorYOffset = yOffset
+  st.text_color = color
+  return st
+end
+
+-- Breakpoint pip: a fixed mark on the ring stroke at N% of the sweep — the ring
+-- equivalent of the tick marks other packs put on their bars. `subtick` cannot come
+-- along (SubRegionTypes/Tick.lua's supports() returns regionType == "aurabar", full
+-- stop); `subtexture` is one of the sub-region types whose supports() does list
+-- progresstexture, so the mark is placed by trigonometry instead.
+--   Angle convention proven from BaseRegions/TextureCoords.lua's exactAngles:
+--   index 1 (0 deg) = {0.5, 0} = TOP CENTRE, and the angle grows CLOCKWISE — which
+--   is exactly this ring's orientation/startAngle. Hence x = r*sin(t), y = r*cos(t).
+--   xOffset/yOffset are NOT in the subtexture default table but ARE read by
+--   modify -> AnchorSubRegion, and only in anchor_mode = "point"; omit either and
+--   every pip stacks in the dead centre of the ring.
+--   textureRotate is the GATE that makes textureRotation do anything (it is passed
+--   through as canRotate). The art here is a solid square, which is rotation-
+--   invariant, so neither is needed and both stay off — no silent no-op to miss.
+local function pip(percent, ringSize)
+  local theta = math.rad(percent / 100 * 360)
+  local r = ringSize / 2 - 5   -- the stroke band of a Ring_10px annulus, not the quad edge
+  local function round(v) return math.floor(v * 1000 + 0.5) / 1000 end
+  return {
+    type = "subtexture",
+    textureVisible = true, textureTexture = F.TEX_SQUARE,
+    textureColor = COL.pip, textureBlendMode = "BLEND",
+    textureDesaturate = false, textureMirror = false,
+    textureRotate = false, textureRotation = 0,
+    anchor_mode = "point", anchor_point = "CENTER", self_point = "CENTER",
+    anchor_area = "ALL",
+    width = 8, height = 8, scale = 1, mirror = false, rotate = false,
+    xOffset = round(r * math.sin(theta)), yOffset = round(r * math.cos(theta)),
+  }
+end
+
 -- ===== top-level group, anchored below the character =====
 local top = F.group(TOP, 0, -140, nil)
 top.uid = W.uid()
 
 -- =====================================================================
--- Resources (0,56): health / mana / threat, 172x14 bars stacked flush
+-- Resources (0,56): since v7 this group holds the two UNIT ORBS, not a bar
+-- stack. The player orb is built here (its three auras are the v6 health,
+-- mana and threat auras, converted in place so they keep their uids); the
+-- target orb's two extra rings and both portraits are created at the bottom
+-- of this script, after every pre-existing W.uid() call, and re-parented here.
+--
+-- The threat aura moves to the TARGET orb: threat is your threat ON THAT
+-- TARGET, so it reads as the outermost ring of the thing you are fighting
+-- rather than as a third bar about yourself.
 -- =====================================================================
 local gRes = reg(F.group("Priest - Resources", 0, 56, nil))
 adopt(top, gRes)
 
--- health: always on; trigger 2 (Unit Characteristics) feeds the inCombat fade
-local health = reg(F.aurabar("Priest - Health", CLASS, 172, 14, 0, -13, nil,
-  { 0.15, 0.78, 0.25, 1 }))
+-- PLAYER health ring (outer). Trigger 1 is the progress source; trigger 2 (Unit
+-- Characteristics) feeds the inCombat fade, exactly as the v6 bar did.
+-- Conditions apply in order and a later match wins, so the alpha guard is LAST.
+local health = reg(ring("Priest - Health", G.hpRing, COL.health, -G.orbX, G.orbY))
 health.triggers = F.triggers({ F.healthTrigger(nil), F.unitCharTrigger() })
-health.subRegions[2] = F.subtext("%percenthealth%%", 12, "INNER_RIGHT", "percenthealth")
-health.subRegions[3] = F.subborder("bar")
--- red below 40%: the same number the Desperate Prayer prompt fires at, so the bar
--- and the prompt read as one danger state
+health.subRegions[1] = pct("percenthealth", G.hpTextSize, G.hpTextY, COL.hpText)
+health.subRegions[2] = pip(40, G.hpRing)   -- the Desperate Prayer line, marked on the ring
 health.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
-  F.condition(1, "percenthealth", "<", "40", "barColor", { 0.9, 0.12, 0.12, 1 }),
+  -- red below 40%: the same number the Desperate Prayer prompt fires at, so ring
+  -- and prompt read as one danger state. On a ring the property is
+  -- foregroundColor; `barColor` exists only on aurabar and would be dropped
+  -- silently by Conditions.lua (unknown property = the change is skipped).
+  F.condition(1, "percenthealth", "<", "40", "foregroundColor", COL.danger),
+  -- zero-total guard. Health's total is UnitHealthMax(unit) with no floor, and a
+  -- progresstexture draws a FULL circle at total == 0 (an aurabar drew an empty
+  -- one), so an unstreamed max health would flash a full green ring.
+  F.condition(1, "maxhealth", "<=", "0", "alpha", 0),
 }
 adopt(gRes, health)
 
--- mana: the resource all three specs plan around
-local mana = reg(F.aurabar("Priest - Mana", CLASS, 172, 14, 0, -27, nil,
-  { 0.25, 0.5, 0.92, 1 }))
+-- PLAYER mana ring (inner): the resource all three specs plan around.
+local mana = reg(ring("Priest - Mana", G.mpRing, COL.mana, -G.orbX, G.orbY))
 mana.triggers = F.triggers({ F.powerTrigger(0), F.unitCharTrigger() })
-mana.subRegions[2] = F.subtext("%percentpower%%", 12, "INNER_RIGHT", "percentpower")
-mana.subRegions[3] = F.subborder("bar")
+mana.subRegions[1] = pct("percentpower", G.mpTextSize, G.mpTextY, COL.mpText)
+mana.subRegions[2] = pip(50, G.mpRing)     -- the Shadowfiend window, marked on the ring
 mana.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
 adopt(gRes, mana)
 
--- threat: your threat on the unit you have targeted. The trigger only produces a
--- state for a hostile unit you are on the threat table of, so the bar self-hides
+-- THREAT ring — outermost ring of the TARGET orb. The trigger only produces a
+-- state for a hostile unit you are on the threat table of, so the ring self-hides
 -- out of combat and while you have a friendly targeted (no fade condition needed).
 -- Green -> orange at 70% -> red on aggro; conditions run in order, most severe last.
-local threat = reg(F.aurabar("Priest - Threat", CLASS, 172, 14, 0, -41, nil,
-  { 0.25, 0.8, 0.3, 1 }))
+local threat = reg(ring("Priest - Threat", G.threatRing, COL.threat, G.orbX, G.orbY))
 threat.triggers = F.triggers({ threatTrigger("target", nil) })
-threat.subRegions[2] = F.subtext("%threatpct%%", 12, "INNER_RIGHT", "threatpct")
-threat.subRegions[3] = F.subborder("bar")
+threat.subRegions[1] = pct("threatpct", G.threatTextSize, G.threatTextY, COL.thText)
 threat.conditions = {
-  F.condition(1, "threatpct", ">=", "70", "barColor", { 1, 0.6, 0.1, 1 }),
-  F.condition(1, "aggro", "==", 1, "barColor", { 0.9, 0.12, 0.12, 1 }),
+  F.condition(1, "threatpct", ">=", "70", "foregroundColor", COL.warn),
+  F.condition(1, "aggro", "==", 1, "foregroundColor", COL.danger),
+  -- MANDATORY on a ring, and the one genuine regression risk in this migration.
+  -- threattotal = threatvalue * 100 / threatpct, so total is 0 whenever your
+  -- threat is 0 — the instant after a Fade, and before your first cast lands.
+  -- An aurabar drew that as empty; a progresstexture draws it as a FULL circle,
+  -- i.e. "at the pull threshold", while the colour conditions stay green. Hide
+  -- the ring instead. Last, so it wins over both colour rules.
+  F.condition(1, "threatvalue", "<=", "0", "alpha", 0),
 }
 hideInArena(threat)  -- v5: no threat table exists in an arena; everywhere else unchanged
 adopt(gRes, threat)
@@ -819,6 +1067,69 @@ emana.conditions = {
 }
 emana.load = pvpLoad(true)
 adopt(gPvP, emana)
+
+-- =====================================================================
+-- v7 additions — the rest of the two orbs. Created after every earlier
+-- W.uid() call, so all 40 v6 uids keep their positions in the seeded stream,
+-- then re-parented into the Resources group. Adoption order is also draw
+-- order: FixGroupChildrenOrder adds +4 frame levels per child as it walks
+-- controlledChildren, so EARLIER = further behind. The two portraits are
+-- adopted last, and nothing ever draws over a face.
+-- =====================================================================
+
+-- TARGET health ring. This is the whole self-hide mechanism for the target orb:
+-- the Health prototype ends in a hidden always-on test,
+--   WeakAuras.UnitExistsFixed(unit, smart) and specificUnitCheck
+-- ANDed into the trigger function, so unit = "target" with no target produces NO
+-- STATE and every region carrying it disappears. No condition, no load gate, no
+-- custom code. The factory's healthTrigger is hardwired to the player, so the
+-- unit is overridden here — the same one-line pattern the v5 Enemy Mana bars use.
+local tHealthTrigger = F.healthTrigger(nil)
+tHealthTrigger.unit = "target"
+local tHealth = reg(ring("Priest - Target Health", G.hpRing, COL.health,
+  G.orbX, G.orbY, tHealthTrigger))
+tHealth.subRegions[1] = pct("percenthealth", G.hpTextSize, G.tHpTextY, COL.hpText)
+-- same zero-total guard as the player ring, and it matters more here: a target
+-- whose max health has not streamed yet would otherwise flash a full green ring
+tHealth.conditions = { F.condition(1, "maxhealth", "<=", "0", "alpha", 0) }
+adopt(gRes, tHealth)
+
+-- TARGET mana ring. Three flags are load-bearing, and it is the same shape the
+-- v5 Enemy Mana bars already ship:
+--   use_powertype + powertype = 0 -> read MANA specifically. Drop either and the
+--     trigger silently falls back to the unit's CURRENT bar, i.e. a rogue's
+--     energy rendered in a ring coloured for mana.
+--   use_requirePowerType -> the ring only exists while mana is that unit's
+--     PRIMARY bar, so a warrior or rogue target produces no state instead of a
+--     permanently empty blue circle. It is enabled by use_powertype, so both are
+--     needed. This is the Mana Burn / drink-check read-out on a caster target.
+local tManaTrigger = F.powerTrigger(0)
+tManaTrigger.unit = "target"
+tManaTrigger.use_requirePowerType = true
+local tMana = reg(ring("Priest - Target Mana", G.mpRing, COL.mana,
+  G.orbX, G.orbY, tManaTrigger))
+tMana.subRegions[1] = pct("percentpower", G.mpTextSize, G.tMpTextY, COL.mpText)
+-- Power is the one prototype whose total has a floor: math.max(1, UnitPowerMax()).
+-- That floor turns a powerless mob into a valid 0% state rather than no state, so
+-- the guard is written <= 1, not <= 0. A real caster has maxpower in the thousands.
+tMana.conditions = { F.condition(1, "maxpower", "<=", "1", "alpha", 0) }
+adopt(gRes, tMana)
+
+-- The two faces. The player portrait takes the same two triggers as the player
+-- health ring so it fades out of combat with the rest of the always-on layer
+-- (alpha is a region-prototype property, present on a model region because its
+-- default table goes through AddAlphaToDefault). The target portrait takes the
+-- target Health trigger and therefore vanishes with the rest of the target orb.
+local pPortrait = reg(portrait("Priest - Player Portrait", "player", -G.orbX, G.orbY))
+pPortrait.triggers = F.triggers({ F.healthTrigger(nil), F.unitCharTrigger() })
+pPortrait.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
+adopt(gRes, pPortrait)
+
+local tPortraitTrigger = F.healthTrigger(nil)
+tPortraitTrigger.unit = "target"
+local tPortrait = reg(portrait("Priest - Target Portrait", "target", G.orbX, G.orbY))
+tPortrait.triggers = F.triggers({ tPortraitTrigger })
+adopt(gRes, tPortrait)
 
 -- ===== icon polish: crop + 1px outline on every icon =====
 for _, icon in ipairs(icons) do

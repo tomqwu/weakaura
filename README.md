@@ -23,19 +23,21 @@ use GitHub's copy button on the block to grab the whole string in one click.
 
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
-| Rogue — All Specs | Combat · Assassination · Subtlety | v46 | 61 | [string](tbc/rogue/README.md#import-string-v46) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v8 | 43 | [string](tbc/paladin/README.md#import-string-v8) · [raw](tbc/paladin/all-specs.txt) |
-| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v7 | 46 | [string](tbc/druid/README.md#import-string-v7) · [raw](tbc/druid/all-specs.txt) |
-| Warlock — All Specs | Affliction · Demonology · Destruction | v6 | 38 | [string](tbc/warlock/README.md#import-string-v6) · [raw](tbc/warlock/all-specs.txt) |
-| Hunter — BM & Survival | Beast Mastery · Survival | v7 | 46 | [string](tbc/hunter/README.md#import-string-v7) · [raw](tbc/hunter/all-specs.txt) |
-| Priest — All Specs | Shadow · Holy · Discipline | v6 | 40 | [string](tbc/priest/README.md#import-string-v6) · [raw](tbc/priest/all-specs.txt) |
-| Mage — Arcane & Frost | Arcane · Frost | v6 | 42 | [string](tbc/mage/README.md#import-string-v6) · [raw](tbc/mage/all-specs.txt) |
+| Rogue — All Specs | Combat · Assassination · Subtlety | v47 | 62 | [string](tbc/rogue/README.md#import-string-v47) · [raw](tbc/rogue/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v9 | 48 | [string](tbc/paladin/README.md#import-string-v9) · [raw](tbc/paladin/all-specs.txt) |
+| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v8 | 48 | [string](tbc/druid/README.md#import-string-v8) · [raw](tbc/druid/all-specs.txt) |
+| Warlock — All Specs | Affliction · Demonology · Destruction | v7 | 44 | [string](tbc/warlock/README.md#import-string-v7) · [raw](tbc/warlock/all-specs.txt) |
+| Hunter — BM & Survival | Beast Mastery · Survival | v8 | 52 | [string](tbc/hunter/README.md#import-string-v8) · [raw](tbc/hunter/all-specs.txt) |
+| Priest — All Specs | Shadow · Holy · Discipline | v7 | 44 | [string](tbc/priest/README.md#import-string-v7) · [raw](tbc/priest/all-specs.txt) |
+| Mage — Arcane & Frost | Arcane · Frost | v7 | 48 | [string](tbc/mage/README.md#import-string-v7) · [raw](tbc/mage/all-specs.txt) |
 
 Every pack is class-gated and auto-adapts across the **supported builds listed in the table**
 through Spell Known gates. The current product scope is primarily level-70 single-target
 raid/dungeon play plus the explicitly documented PvP layer; AoE, levelling and omitted specs
 are named in each pack README rather than implied by the `all-specs.txt` filename. Druid v7
-also adds an active-form state gate so Cat never receives the Bear rotation.
+also adds an active-form state gate so Cat never receives the Bear rotation, and **Druid v8
+replaces the centre bar stack with unit orbs** — player and target portraits at `x = ±250`,
+ringed by health, power and threat — freeing the middle of the screen.
 
 Every pack also carries a **PvP layer**: elements that exist only inside an
 arena or battleground (CC-on-you with the break decision, trinket availability, enemy trinket
@@ -49,8 +51,11 @@ acceptance note instead of presenting static serialization as an in-game test.
 
 ## Packs
 
-- **tbc/rogue/all-specs.txt** — full HUD, v46 of a 46-iteration build: health/energy/threat
-  bars with 35/40 energy threshold lines, combo pips (always-visible sockets, green→orange
+- **tbc/rogue/all-specs.txt** — full HUD, v47 of a 47-iteration build: v47 **unit orbs**
+  (player left, target right: live portraits ringed by health and energy — the 35/40
+  threshold marks moved onto the energy ring — and, on the target, its own power bar plus
+  your threat, replacing the centre bar stack so the middle of the screen is empty),
+  combo pips (always-visible sockets, green→orange
   gradient, and a brief scale/brightness pop whenever a point is gained),
   spec-adaptive cooldown row
   (16 spells, talent-gated, tooltips + keybind labels), animated alert flow (SnD missing,
@@ -61,13 +66,20 @@ acceptance note instead of presenting static serialization as an in-game test.
   Locale-independent (pure spell-ID matching, built on a
   zhCN client). Combat / Mutilate / Subtlety auto-adapt via spell-known gates.
 - **tbc/paladin/all-specs.txt** — seal uptime + missing alarm, own Judgement debuff, Holy
-  Shield uptime, mana/health/threat bars, and a 14-icon cooldown row that shows only what is
+  Shield uptime, v9 **unit orbs** (player left, target right: live portraits ringed by health,
+  mana and — on the target — your threat, replacing the centre bar stack so the middle of the
+  screen is empty), the seal-twisting swing runway, and a 14-icon cooldown row that shows only
+  what is
   unavailable (rotational buttons stay visible and glow when ready); Holy / Protection /
   Retribution adapt via Holy Shock, Holy Shield and Crusader Strike gates, and the row is
   spec-selective — a healing Holy paladin is not shown Consecration or Avenging Wrath. PvP
   layer: CC-on-me, HAMMER NOW, target immunity, trinket and Forbearance clocks, Cleanse.
-- **tbc/druid/all-specs.txt** — rage/mana/health/threat bars with bear rage thresholds,
-  Lacerate stacks and Mangle debuff, Demoralizing Roar, Lifebloom/Rejuvenation/Regrowth
+- **tbc/druid/all-specs.txt** — **unit orbs** at `x = ±250` instead of a centre bar stack: live
+  player and target portraits ringed by health, primary power and (target side) threat, with the
+  player's power ring form-adaptive — one ring reads mana, rage or energy as you shapeshift and
+  recolours itself to match — plus the bear's 20/70 rage breakpoints as pips on that ring; the
+  target cluster hides completely with no target. Lacerate stacks and Mangle debuff,
+  Demoralizing Roar, Lifebloom/Rejuvenation/Regrowth
   timers, Moonfire and Insect Swarm, Omen of Clarity proc, and an 8-icon cooldown row showing
   only what is down (Mangle keeps its ready glow); Bear / Restoration / Balance gate on
   Mangle, Swiftmend and Moonkin Form, with every Bear element additionally requiring active
@@ -75,25 +87,32 @@ acceptance note instead of presenting static serialization as an in-game test.
   target immunity, trinket clocks, own Cyclone/Roots per opponent.
 - **tbc/warlock/all-specs.txt** — the five own-DoT timers (Corruption, Curse of Agony,
   Immolate, Unstable Affliction, Siphon Life), Demonic Sacrifice and Fel Armor upkeep,
-  Nightfall and Backlash proc alerts, Life Tap and Soulshatter prompts, health/mana/threat
-  bars, and a 7-icon cooldown row showing only what is down (Conflagrate and Shadowburn keep
-  their ready glow). PvP layer: CC-on-me, target immunity, trinket clocks, per-opponent enemy
-  mana for the drain decision.
+  Nightfall and Backlash proc alerts, Life Tap and Soulshatter prompts, player and target
+  unit orbs (health and mana rings around a live portrait, plus a threat ring on the target),
+  and a 7-icon cooldown row showing only what is down. PvP layer: CC-on-me, target immunity,
+  trinket clocks, per-opponent enemy mana for the drain decision.
 - **tbc/hunter/all-specs.txt** — Serpent Sting and Hunter's Mark timers, Bestial Wrath and
   Rapid Fire windows, aspect-missing and back-to-Hawk alarms, Kill Command reactive prompt,
-  pet health prompts, Misdirection/Feign Death threat pairing, proc tracker, and an 11-icon
+  pet health prompts, Misdirection/Feign Death threat pairing, proc tracker, player and
+  target unit orbs (health and mana rings around a live portrait, the mana ring ticked at
+  the two aspect-swap thresholds, plus a threat ring on the target), and an 11-icon
   cooldown row showing only what is down (Multi-Shot and Arcane Shot keep their ready glow);
   BM and Survival only. PvP layer: CC-on-me, SILENCE NOW, trinket clocks, enemy mana.
 - **tbc/priest/all-specs.txt** — Shadow Word: Pain and Vampiric Touch timers, Vampiric Embrace
   and Inner Fire uptime, Shadowform-missing alarm, Weakened Soul shield-timing on the heal target,
-  Fade and Shadowfiend prompts, mana/health bars,
+  Fade and Shadowfiend prompts, player and target
+  unit orbs (health and mana rings around a live portrait, plus a threat ring on the target),
   plus the arena/BG-only PvP layer (CC-on-me colour-coded by CC category, Fear Ward and Mass
   Dispel prompts, trinket clocks, UA-on-ally warning, and a per-opponent enemy mana bar for
-  the Mana Burn decision). The threat bar and Fade prompt do not load in an arena.
+  the Mana Burn decision). The threat ring and Fade prompt do not load in an arena.
 - **tbc/mage/all-specs.txt** — Arcane Blast stacks (the Arcane rotation driver), Arcane Power
   and Icy Veins burn-window timers, Ice Barrier uptime and missing alarm, Clearcasting proc,
   mana thresholds with Evocation/mana-gem prompts, Ice Lance shatter window, and a 10-icon
-  cooldown row showing only what is down; Arcane and Frost only. PvP layer: CC-on-me
+  cooldown row showing only what is down; Arcane and Frost only. **v7 replaces the centre
+  health/mana/threat bar stack with two unit orbs** — a live portrait of you and of your
+  target, each ringed by health and mana arcs, with threat as the outermost ring of the target
+  orb and the target orb hiding itself entirely when you have no target, so the middle of the
+  screen is free. PvP layer: CC-on-me
   colour-coded by category, COUNTERSPELL NOW plus its lockout bar, target immunity, trinket
   clocks, own Polymorph per opponent, enemy mana.
 

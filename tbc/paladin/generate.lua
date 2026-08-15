@@ -1,6 +1,63 @@
--- generate.lua — "Paladin TBC - All Specs" (v8)
+-- generate.lua — "Paladin TBC - All Specs" (v9)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
--- Spell Known gates. Built entirely with the wa_factory builders (zero custom code).
+-- Spell Known gates. Built entirely with the wa_factory builders (zero custom code)
+-- except the two unit-orb region tables, which wa_factory has no builder for.
+--
+-- v9 — THE CENTRE OF THE SCREEN IS EMPTY. The 172px health / mana / threat bar stack
+-- that sat under the character since v1 is gone, replaced by two UNIT ORBS flanking it:
+-- the player's own state on the LEFT, the target's on the RIGHT, each a live 3D portrait
+-- ringed by concentric progress arcs with the percentages underneath. Unit state belongs
+-- AT the unit; the middle of the HUD is the most expensive real estate there is and a
+-- paladin was spending it on three bars that never move relative to each other.
+--
+-- NOTHING IS ORPHANED AND NOTHING IS DELETED. The three bars were TRANSFORMED, not
+-- replaced: "Paladin - Health", "Paladin - Mana" and "Paladin - Threat" keep their aura
+-- ids AND their uids and simply become `progresstexture` rings, so the re-import is an
+-- in-place Update with zero leftovers. Five genuinely new auras (the two cluster groups,
+-- the target health ring and the two portraits) consume five NEW W.uid() calls appended
+-- after every existing one, at the bottom of this script. 43 auras -> 48.
+--
+-- WHAT MOVED, AND THE ONE FIELD RENAME THAT WOULD HAVE BEEN SILENT
+--   * Ring fill colour is `foregroundColor`, NOT `barColor`. `barColor` does not exist on
+--     progresstexture, and Conditions.lua skips a condition whose property is absent from
+--     the region's property table — no error, no editor warning, just a dead escalation.
+--     Every colour condition that moved onto a ring was renamed. The Swing Timer below is
+--     still an aurabar, so it correctly keeps `barColor`.
+--   * THREAT IS NOW THE OUTERMOST RING OF THE TARGET ORB. Threat is your threat on that
+--     target, so it belongs at the target, and the Threat Situation prototype is
+--     progressType "static" with hidden value/total args — value/total is exactly
+--     threatpct/100, so the ring fills 0..100% of the pull threshold with no extra wiring.
+--     Both threat elements keep their in-group and not-in-an-arena load gates unchanged.
+--   * ZERO-TOTAL INVERSION — the one true regression risk of this migration, and it is
+--     guarded. aurabar draws EMPTY at total == 0 (AuraBar.lua: `local progress = 0`);
+--     progresstexture draws FULL (`local progress = 1`). Threat hits total == 0 whenever
+--     threatvalue is 0 — post-Divine-Shield, before your first hit lands — so an unguarded
+--     threat ring would slam to a full circle, meaning "at the pull threshold", while the
+--     colour conditions stayed green. Every ring therefore carries an explicit
+--     hide-at-no-data condition on its own trigger: `threatvalue <= 0 -> alpha 0`,
+--     `maxhealth <= 0 -> alpha 0` (UnitHealthMax has no floor, so a target whose max
+--     health has not streamed yet would flash full), `maxpower <= 1 -> alpha 0` (the Power
+--     prototype's total IS floored at 1, which is why this one reads <= 1 and not <= 0).
+--   * ONE PROGRESS-SUPPLYING TRIGGER PER RING, and it must be trigger 1. Modernize's
+--     internalVersion < 71 block rewrites `progressSource` to {-1, ""} (Automatic) on every
+--     progresstexture no matter what is emitted, and Automatic reads the FIRST ACTIVE
+--     trigger's value/total (`activeTriggerMode = -10`). Health and mana can never share a
+--     ring — which is precisely what makes the concentric layout necessary. The second
+--     trigger on the player rings is the existing Unit Characteristics state feeder and is
+--     used for conditions only (the 50% out-of-combat fade), exactly as the bars used it.
+--   * The Swing Timer runway is NOT a unit resource and did not become a ring; see the v3
+--     block below for where it went and why.
+--   * `F.threatTrigger` emits `use_threatUnit` / `threatUnit`, but the prototype's argument
+--     is plain `unit`. It is dead data that works only by accident (the prototype's `init`
+--     does `trigger.unit = trigger.unit or "target"` before events() reads it). This pack
+--     now emits the real field name too. The factory and gotchas.md still teach the wrong
+--     name — a toolkit fix, not a pack fix, so it is deliberately not made here.
+--
+-- NO RESOURCE BREAKPOINT MARKS WERE LOST, because this pack never had any: the aurabar
+-- `subtick` sub-region (which is aurabar-only and could not have come along) is used by
+-- rogue, druid and mage, not by paladin. The paladin's one resource threshold is
+-- "mana under 20%", which was a colour change on the bar and is a colour change on the
+-- ring — carried across verbatim.
 --
 -- v8 — the Hammer of Wrath execute prompt now really is hostile-only. v4 set
 -- use_hostility on its Health trigger, but hostility is not an argument of the Health
@@ -225,6 +282,166 @@ local function polish(icon)          -- crop + 1px outline on every icon
   return icon
 end
 
+-- v9: F.threatTrigger emits `use_threatUnit` / `threatUnit`, which are NOT arguments of
+-- the Threat Situation prototype — its unit argument is plain `unit` (default "target").
+-- The shipped strings work only because the prototype's init runs
+--   trigger.unit = trigger.unit or "target"
+-- and GenericTrigger calls ConstructFunction (which runs init and mutates the trigger
+-- table) BEFORE events() and internal_events() read trigger.unit. Aiming threat anywhere
+-- other than "target" via `threatUnit` would silently stay on target. Emit the real name.
+local function threatTrigger(minPct)
+  local tr = F.threatTrigger(minPct)
+  tr.unit = "target"
+  return tr
+end
+
+-- ===== v9 unit-orb geometry and palette =====================================
+-- One place to retune after an in-game look. All offsets are relative to the group
+-- that owns the region; the top-level group sits at (0, -140).
+local G = {
+  bandY      = 62,    -- Resources group inside the top group -> absolute (0, -78)
+  clusterX   = 252,   -- player at -X, target at +X. Clears the Alerts column (x = -150,
+                      -- 40px icons) and the PvP column (x = 150) by ~20px on both sides,
+                      -- and sits ENTIRELY above the cooldown row (top edge y = -190).
+  thRing     = 118,   -- OUTERMOST, target orb only: threat toward the pull threshold
+  flashRing  = 132,   -- the >=80% threat halo, just outside the threat ring
+  hpRing     = 88,    -- health, on both orbs
+  mpRing     = 60,    -- mana, player orb only (see the target-orb note below)
+  portrait   = 28,    -- the live 3D face in the middle
+  hpTextY    = -56, hpTextSize = 15,   -- below the health ring (radius 44)
+  mpTextY    = -73, mpTextSize = 10,
+  thTextY    = 68,  thTextSize = 11,   -- ABOVE the threat ring (radius 59): three numbers
+                                       -- stacked under one orb is a queue, not a readout
+  swingY     = -92, swingW = 140, swingH = 9,
+}
+
+-- The bar colours are carried across byte-for-byte so the HUD still speaks the same
+-- language; only the shape changed.
+local COL = {
+  health  = { 0.15, 0.78, 0.25, 1 },   -- the v8 health bar green
+  mana    = { 0.10, 0.45, 0.95, 1 },   -- the v8 mana bar blue
+  threat  = { 0.25, 0.80, 0.30, 1 },   -- the v8 threat bar green
+  flash   = { 1, 0.10, 0.10, 0.85 },   -- the v8 threat flash red
+  track   = { 0, 0, 0, 0.55 },         -- the unfilled arc behind every ring
+  lowHp   = { 0.90, 0.12, 0.12, 1 },
+  lowMana = { 0.85, 0.15, 0.15, 1 },   -- the v8 "mana under 20%" red, unchanged
+  thHigh  = { 1, 0.60, 0.10, 1 },      -- the v8 ">= 70% threat" orange, unchanged
+  thAggro = { 0.90, 0.12, 0.12, 1 },   -- the v8 "you hold aggro" red, unchanged
+  hpText  = { 1, 1, 1, 1 },
+  mpText  = { 0.55, 0.75, 1, 1 },      -- echoes its own ring, so the two numbers under an
+  thText  = { 0.72, 0.95, 0.74, 1 },   -- orb never need labels to tell them apart
+}
+
+-- Bundled WeakAuras media. Ring_10px.tga is a true annulus (10 = the stroke weight of the
+-- source art); Circle_Smooth2.tga — F.TEX_CIRCLE, what the rest of this repo uses — is a
+-- SOLID DISC and would fill as a pie wedge, not a ring. Ships inside WeakAuras itself.
+local RING = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_10px.tga"
+local IV, TOC = 45, 20501
+
+-- wa_factory's stub() is local to the factory, so the two hand-written region types below
+-- get the identical scaffolding here.
+local function orbStub(t)
+  t.internalVersion, t.tocversion = IV, TOC
+  t.actions = { init = {}, start = {}, finish = {} }
+  t.animation = {
+    start  = { type = "none", duration_type = "seconds", easeType = "none", easeStrength = 3 },
+    main   = { type = "none", duration_type = "seconds", easeType = "none", easeStrength = 3 },
+    finish = { type = "none", duration_type = "seconds", easeType = "none", easeStrength = 3 },
+  }
+  t.conditions = t.conditions or {}
+  t.config, t.authorOptions, t.information = {}, {}, {}
+  return t
+end
+
+-- Radial progress ring. Field notes on the ones that are traps:
+--   orientation CLOCKWISE  -> the only radial values are CLOCKWISE / ANTICLOCKWISE; every
+--     other entry in orientation_with_circle_types is linear and would silently draw a bar.
+--   startAngle 0 / endAngle 360 -> a full circle. WA normalises 0/360 -> 0/0 and then
+--     corrects endAngle back up by 360, so this is handled, not a degenerate case.
+--   crop_x / crop_y = 0.41 -> the IDENTITY value, NOT "no crop". The circular path expands
+--     the texture by sqrt(2) so rotated quadrants never run off it, and 1 + 0.41 exactly
+--     cancels that. Setting 0 blows the ring up 1.41x and clips it.
+--   auraRotation = 0 -> absent from the 3.5.0 default table but read unconditionally by
+--     current code as data.auraRotation / 180 * math.pi, so it must be emitted.
+--   backgroundOffset = 0 -> the default 2 fattens the track relative to the fill, which
+--     reads as a halo instead of a concentric track.
+--   adjustedMin/Max are STRINGS (""), because SetAdjustedMin does adjustedMin:find(...).
+--   progressSource is rewritten to {-1, ""} by Modernize < 71 whatever is emitted; it is
+--     here for readability. {-1,""} = Automatic, which routes the first active trigger's
+--     value/total into the fill with no further wiring.
+--   compress / slanted / slant / slantFirst / slantMode are LINEAR-only and inert on a
+--     circular ring; they are emitted because they are in the region's default table.
+local function ring(id, size, color, trigs)
+  return orbStub{
+    regionType = "progresstexture", id = id, uid = W.uid(), parent = nil,
+    width = size, height = size,
+    selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
+    xOffset = 0, yOffset = 0, frameStrata = 1, alpha = 1,
+    orientation = "CLOCKWISE", startAngle = 0, endAngle = 360,
+    inverse = false, mirror = false,
+    compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
+    foregroundTexture = RING, backgroundTexture = RING, sameTexture = true,
+    desaturateForeground = false, desaturateBackground = false,
+    foregroundColor = color, backgroundColor = COL.track,
+    backgroundOffset = 0,
+    blendMode = "BLEND", textureWrapMode = "CLAMPTOBLACKADDITIVE",
+    crop_x = 0.41, crop_y = 0.41, rotation = 0, auraRotation = 0,
+    user_x = 0, user_y = 0,
+    progressSource = { -1, "" },
+    useAdjustededMin = false, useAdjustededMax = false,
+    adjustedMin = "", adjustedMax = "",
+    smoothProgress = true, overlayclip = false, overlays = {},
+    subRegions = {},
+    triggers = F.triggers(trigs),
+    load = F.load(CLASS),
+  }
+end
+
+-- Live unit portrait — a real 3D portrait of whoever is targeted, not a static image and
+-- not a class icon, which is what lets the target orb work without ever knowing the
+-- target's class: it renders NPCs and mobs too.
+--   modelIsUnit = true + model_fileId = "<unit>" -> PlayerModel:SetUnit(unit)
+--   portraitZoom = true                          -> SetPortraitZoom(1), Blizzard framing
+-- CRITICAL: current code reads the unit from `model_fileId`. WA 3.5.0 read `model_path`,
+-- and the migration bridging the two (Modernize < 72) is guarded by IsClassicEra(), which
+-- is a DISTINCT predicate from IsTBC() — so on a 2.5.x client that migration DOES NOT RUN
+-- and emitting only model_path is a silent no-op. Both are emitted; model_fileId works.
+-- The portrait carries the same Health trigger as its own orb, so it self-hides with it.
+local function portrait(id, unit, size)
+  local tr = F.healthTrigger()
+  tr.unit = unit
+  return orbStub{
+    regionType = "model", id = id, uid = W.uid(), parent = nil,
+    model_fileId = unit, model_path = unit, modelIsUnit = true, modelDisplayInfo = false,
+    portraitZoom = true, api = false,
+    model_x = 0, model_y = 0, model_z = 0,
+    model_st_tx = 0, model_st_ty = 0, model_st_tz = 0,
+    model_st_rx = 270, model_st_ry = 0, model_st_rz = 0, model_st_us = 40,
+    sequence = 1, advance = false, rotation = 0,
+    width = size, height = size, alpha = 1,
+    selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
+    xOffset = 0, yOffset = 0, frameStrata = 1,
+    border = false, borderColor = { 1, 1, 1, 0.5 }, backdropColor = { 1, 1, 1, 0.5 },
+    borderEdge = "None", borderOffset = 5, borderInset = 11,
+    borderSize = 16, borderBackdrop = "Blizzard Tooltip",
+    subRegions = {},
+    triggers = F.triggers({ tr }),
+    load = F.load(CLASS),
+  }
+end
+
+-- The percentages sit OUTSIDE the rings: the middle is occupied by the portrait, and a
+-- `model` region cannot carry a text sub-region at all (SubText's supports() gate lists
+-- texture / progresstexture / icon / aurabar / empty — not model). So each number rides on
+-- its own ring, which also means it appears and disappears with that ring: no target, no
+-- numbers; no threat table, no threat number.
+local function pct(sym, size, yOffset, color)
+  local st = F.subtext("%" .. sym .. "%%", size, "CENTER", sym)
+  st.anchorYOffset = yOffset
+  st.text_color = color
+  return st
+end
+
 -- uid order is sacred: one W.uid() per region, consumed by the constructor below,
 -- in exactly this creation order. Append new regions at the END in future versions.
 
@@ -232,53 +449,83 @@ end
 local top = F.group(TOP, 0, -140, nil)
 top.frameStrata = 1
 
--- ===== 2) Resources: health / mana / threat stacked flush =====
-local gRes = reg(F.group("Paladin - Resources", 0, 56, TOP))
+-- ===== 2) Resources: the two unit orbs (v9; was a 172px bar stack through v8) =====
+-- This group now only holds the two cluster groups, which are created at the very BOTTOM
+-- of this script so their uids append after every existing one. Its own uid is unchanged,
+-- so a dragged Resources position survives the update.
+local gRes = reg(F.group("Paladin - Resources", 0, G.bandY, TOP))
 adopt(top, gRes)
 
--- 3) health
-local hp = reg(F.aurabar("Paladin - Health", CLASS, 172, 14, 0, -13, gRes.id, { 0.15, 0.78, 0.25, 1 }))
-hp.triggers = F.triggers({ F.healthTrigger(), F.unitCharTrigger() })
-hp.subRegions[2] = F.subtext("%percenthealth%%", 12, "INNER_RIGHT", "percenthealth")
-hp.subRegions[3] = F.subborder("bar")
-hp.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
-adopt(gRes, hp)
-
--- 4) mana — the paladin resource in every spec; red below 20%
-local mp = reg(F.aurabar("Paladin - Mana", CLASS, 172, 14, 0, -27, gRes.id, { 0.10, 0.45, 0.95, 1 }))
-mp.triggers = F.triggers({ F.powerTrigger(0), F.unitCharTrigger() })
-mp.subRegions[2] = F.subtext("%percentpower%%", 12, "INNER_RIGHT", "percentpower")
-mp.subRegions[3] = F.subborder("bar")
-mp.conditions = {
-  F.condition(1, "percentpower", "<", "20", "barColor", { 0.85, 0.15, 0.15, 1 }),
+-- 3) PLAYER HEALTH — the outer ring of the player orb. Was the 172x14 health aurabar
+-- through v8; same aura id, SAME UID, so this updates in place rather than orphaning.
+-- Trigger 2 is the existing Unit Characteristics state feeder and drives the out-of-combat
+-- fade ONLY; progress comes from trigger 1 (Automatic progress = first active trigger).
+-- v9 adds the low-health tier the bar never had: at ring scale colour does far more work
+-- than length, and "I am about to die" is the one state a 44px radius must shout.
+local hp = reg(ring("Paladin - Health", G.hpRing, COL.health,
+  { F.healthTrigger(), F.unitCharTrigger() }))
+hp.subRegions[1] = pct("percenthealth", G.hpTextSize, G.hpTextY, COL.hpText)
+hp.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
+  F.condition(1, "percenthealth", "<", "30", "foregroundColor", COL.lowHp),
+  -- LAST: UnitHealthMax has no floor in the prototype, so a unit whose max health has not
+  -- streamed yet gives total == 0 — and progresstexture draws total == 0 as FULL, the exact
+  -- inverse of what the aurabar did. Hide instead of lying. Must come after the fade,
+  -- because a later condition overwrites the same property.
+  F.condition(1, "maxhealth", "<=", "0", "alpha", 0),
 }
-adopt(gRes, mp)
+-- adopted into the player cluster at the bottom of this script
 
--- 5) threat vs the current target (party/raid, and never in an arena). For prot, red =
--- "I have aggro" = correct.
-local th = reg(F.aurabar("Paladin - Threat", CLASS, 172, 14, 0, -41, gRes.id, { 0.25, 0.80, 0.30, 1 }))
-th.triggers = F.triggers({ F.threatTrigger() })
-th.subRegions[2] = F.subtext("%threatpct%%", 12, "INNER_RIGHT", "threatpct")
-th.subRegions[3] = F.subborder("bar")
+-- 4) PLAYER MANA — the inner ring. The paladin resource in every spec; red below 20%,
+-- carried across from the v8 bar with `barColor` renamed to `foregroundColor` (the ONLY
+-- name progresstexture exposes — a carried-over `barColor` is silently dropped).
+local mp = reg(ring("Paladin - Mana", G.mpRing, COL.mana,
+  { F.powerTrigger(0), F.unitCharTrigger() }))
+mp.subRegions[1] = pct("percentpower", G.mpTextSize, G.mpTextY, COL.mpText)
+mp.conditions = {
+  F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
+  F.condition(1, "percentpower", "<", "20", "foregroundColor", COL.lowMana),
+  -- The Power prototype floors total at math.max(1, UnitPowerMax(...)), which is why this
+  -- guard reads <= 1 and not <= 0. Dead weight on a paladin, kept for ring discipline.
+  F.condition(1, "maxpower", "<=", "1", "alpha", 0),
+}
+-- adopted into the player cluster at the bottom of this script
+
+-- 5) THREAT — now the OUTERMOST ring of the TARGET orb, because your threat is threat on
+-- that target. Party/raid only, and never in an arena. For prot, red = "I have aggro" =
+-- the goal state, not an alarm. The Threat Situation prototype is progressType "static"
+-- with hidden value/total args and threattotal = threatvalue * 100 / threatpct, so
+-- value/total is exactly threatpct/100 and the ring fills 0..100% of the pull threshold.
+local th = reg(ring("Paladin - Threat", G.thRing, COL.threat, { threatTrigger() }))
+th.subRegions[1] = pct("threatpct", G.thTextSize, G.thTextY, COL.thText)
 th.conditions = {  -- severe last: a later match overwrites the same property
-  F.condition(1, "threatpct", ">=", "70", "barColor", { 1, 0.6, 0.1, 1 }),
-  F.condition(1, "aggro", "==", 1, "barColor", { 0.9, 0.12, 0.12, 1 }),
+  F.condition(1, "threatpct", ">=", "70", "foregroundColor", COL.thHigh),
+  F.condition(1, "aggro", "==", 1, "foregroundColor", COL.thAggro),
+  -- THE MIGRATION'S WORST TRAP, guarded. threattotal is threatvalue-derived, so it is 0
+  -- whenever threatvalue is 0 — the instant before your first hit lands, and right after a
+  -- Divine Shield drop. The v8 aurabar drew that as EMPTY; a progresstexture draws it as
+  -- FULL, i.e. "you are at the pull threshold", while these colour conditions stay green
+  -- because threatpct is 0. Shape and colour would contradict each other at the worst
+  -- possible moment. `threatvalue` is a stored number arg; the hidden `total` is not.
+  F.condition(1, "threatvalue", "<=", "0", "alpha", 0),
 }
 inGroup(th)
 noArena(th)   -- v6: an arena party is still a party, but has no threat table
-adopt(gRes, th)
+-- adopted into the target cluster at the bottom of this script
 
--- 6) >=80% threat flash over the bar — Ret only (a tank AT aggro must not be alarmed)
-local flash = reg(F.texture("Paladin - Threat Flash", CLASS, 176, 18, 0, -41, gRes.id,
-  F.TEX_SQUARE, { 1, 0.1, 0.1, 0.85 }))
+-- 6) >=80% threat HALO — Ret only (a tank AT aggro must not be alarmed). Was a 176x18
+-- rectangle pulsing over the bar; it is now the same Ring_10px art at 132px, pulsing just
+-- outside the threat ring, so the alarm still lands exactly on top of the thing it is
+-- about. Same trigger, same threshold, same gates, same uid.
+local flash = reg(F.texture("Paladin - Threat Flash", CLASS, G.flashRing, G.flashRing, 0, 0,
+  nil, RING, COL.flash))
 flash.blendMode = "ADD"
-flash.triggers = F.triggers({ F.threatTrigger(80) })
+flash.triggers = F.triggers({ threatTrigger(80) })
 flash.animation.main = F.animPreset("alphaPulse", "1")
 inGroup(flash)
 noArena(flash)   -- v6: a pulsing red alarm that can never fire is the worst kind of clutter
 gate(flash, GATE_RET)
-adopt(gRes, flash)
+-- adopted into the target cluster at the bottom of this script
 
 -- ===== 7) Buffs: static row of timers =====
 local gBuffs = reg(F.group("Paladin - Buffs", 0, -16, TOP))
@@ -519,16 +766,38 @@ local function swingTrigger()
   return tr
 end
 
--- 31) the runway: main-hand swing draining toward impact, gold inside the twist window
-local swing = reg(F.aurabar("Paladin - Swing Timer", CLASS, 172, 10, 0, -55, gRes.id,
-  { 0.55, 0.55, 0.62, 1 }))
+-- 31) the runway: main-hand swing draining toward impact, gold inside the twist window.
+--
+-- v9 — WHY THIS IS STILL A BAR, AND WHERE IT WENT. The swing timer is the one thing in the
+-- old Resources stack that is NOT a unit resource: it is an ability-timing runway for a
+-- ~0.4s press window, and it does not belong on a unit orb for two independent reasons.
+--   1. It is not a property of the player or the target — it is a property of your weapon
+--      swing, so there is no unit whose orb it would ring.
+--   2. A sub-second window is read as DISTANCE TO AN EDGE. On a 140px linear bar the 0.4s
+--      window is ~15px of travel to a fixed right-hand edge; wrapped onto a 60px-radius
+--      arc it becomes a rotating tick with no edge to aim at, which is measurably harder
+--      to time and is exactly the judgement the twist depends on.
+-- So it stays an aurabar (and therefore correctly keeps `barColor`, which does not exist
+-- on progresstexture), and it is positioned UNDER THE PLAYER ORB rather than in the vacated
+-- centre: it is player state, it is read together with the player's own mana, and putting it
+-- back in the middle would give up the whole point of v9. It is 140x9 instead of 172x10 so it
+-- stays clear of the Alerts column at x = -150 and of the cooldown row below it.
+--
+-- It is a SIBLING of the two orb clusters inside Resources, not a child of the player orb,
+-- even though it sits under it. Two reasons: a twister who hides the player orb (Blizzard
+-- unit frames, a different health addon) must keep the runway, and a 0.4s window is the one
+-- element people genuinely want to drag somewhere personal — right under the crosshair, say —
+-- without dragging their health and mana ring along with it. Its x offset therefore repeats
+-- the cluster's, rather than inheriting it.
+local swing = reg(F.aurabar("Paladin - Swing Timer", CLASS, G.swingW, G.swingH,
+  -G.clusterX, G.swingY, nil, { 0.55, 0.55, 0.62, 1 }))
 swing.triggers = F.triggers({ swingTrigger() })
 swing.subRegions[2] = F.subborder("bar")
 swing.conditions = {
   F.condition(1, "expirationTime", "<=", TWIST_WINDOW, "barColor", { 1, 0.82, 0.1, 1 }),
 }
 gate(swing, SWING_GATE)
-adopt(gRes, swing)
+-- adopted into the player cluster at the bottom of this script
 
 -- 32) twist armed + NOW: shows while Seal of Command is up and you are swinging
 -- (both triggers required), and glows in the last 0.4s — the press-SoB moment.
@@ -841,6 +1110,66 @@ pvpCd("Blessing of Protection", "Blessing of Protection", 1022, 1022)
 -- peel. This copy is the exact inverse gate — Holy Shock known — plus the PvP gate,
 -- so it can never double up with the icon above it.
 pvpCd("Hammer of Justice (PvP)", "Hammer of Justice", 853, GATE_HOLY)
+
+-- ===== 44-48) v9: the unit orbs =====
+-- EVERYTHING BELOW IS NEW UID TERRITORY. These five constructors sit at the very bottom of
+-- the script on purpose: W.uid() draws from a seeded stream, so a new uid() call inserted
+-- anywhere above would shift every later aura's uid and turn the whole re-import from an
+-- Update into 48 duplicates. Regions built earlier are re-parented down here instead —
+-- creation order is what the uid stream sees, parenting order is not.
+--
+-- Sibling stacking inside a group is exact, not "roughly creation order":
+-- FixGroupChildrenOrder walks controlledChildren and adds +4 frame levels per child, so
+-- EARLIER = FURTHER BEHIND. Outer ring first, inner rings next, portrait LAST so nothing
+-- ever draws over the face.
+
+-- 44/45) the two clusters. Separate groups so each orb can be dragged on its own, and so a
+-- player who wants only one of them can disable a single group.
+local gPlayerOrb = reg(F.group("Paladin - Player Orb", -G.clusterX, 0, gRes.id))
+adopt(gRes, gPlayerOrb)
+local gTargetOrb = reg(F.group("Paladin - Target Orb", G.clusterX, 0, gRes.id))
+adopt(gRes, gTargetOrb)
+
+-- 46) TARGET HEALTH — the target orb's own ring, and the only fill it has besides threat.
+-- Red under 20% is a single unambiguous statement ("this unit is nearly dead") that reads
+-- correctly in both directions: on a hostile target it is the Hammer of Wrath execute
+-- window that the alert column is already prompting for, and on a friendly target it is
+-- the Lay on Hands / Flash of Light emergency. The self-hide needs no condition and no
+-- load gate: the Health prototype ANDs in `WeakAuras.UnitExistsFixed(unit, smart)`, so
+-- unit = "target" with no target produces NO STATE and this entire cluster vanishes.
+local tHealthTrigger = F.healthTrigger()
+tHealthTrigger.unit = "target"
+local tHp = reg(ring("Paladin - Target Health", G.hpRing, COL.health, { tHealthTrigger }))
+tHp.subRegions[1] = pct("percenthealth", G.hpTextSize, G.hpTextY, COL.hpText)
+tHp.conditions = {
+  F.condition(1, "percenthealth", "<", "20", "foregroundColor", COL.lowHp),
+  F.condition(1, "maxhealth", "<=", "0", "alpha", 0),   -- see the player ring's note
+}
+-- adopted below, in back-to-front order with the rest of the target cluster
+
+-- NO TARGET MANA RING, deliberately. Most TBC bosses report mana as their primary bar and
+-- sit near full all fight, so the ring would be a permanent blue circle carrying no
+-- decision — and v6 already settled the PvP half of this question for this pack: a paladin
+-- has no mana drain, burn or punish (Judgement of Wisdom GIVES the attacker mana), so an
+-- opponent's mana would not change one paladin button press. The packs that can act on it
+-- (warlock / priest / hunter / mage) are where that readout belongs.
+
+-- 47/48) the faces. Created last of all so nothing draws over them.
+local pPortrait = reg(portrait("Paladin - Player Portrait", "player", G.portrait))
+local tPortrait = reg(portrait("Paladin - Target Portrait", "target", G.portrait))
+
+-- Re-parent the surviving v8 regions into their clusters, back to front. None of these
+-- consume a uid — they were constructed in their original positions above.
+adopt(gPlayerOrb, hp)          -- outer ring
+adopt(gPlayerOrb, mp)          -- inner ring
+adopt(gPlayerOrb, pPortrait)   -- face on top
+
+adopt(gTargetOrb, th)          -- outermost ring: threat
+adopt(gTargetOrb, flash)       -- the >=80% halo, just outside it
+adopt(gTargetOrb, tHp)         -- health ring
+adopt(gTargetOrb, tPortrait)   -- face on top
+
+adopt(gRes, swing)             -- sibling of both clusters; see its own note above
 
 -- ===== assemble (v2000 nested), encode, verify, write =====
 local transmit = F.assemble(top, byId)

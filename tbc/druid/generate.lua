@@ -1,4 +1,4 @@
--- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v7).
+-- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v8).
 -- Run: lua5.1 generate.lua   (toolkit libs live in ../../tools/tbc-weakaura-creator/scripts/,
 -- fetch them once with that directory's setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (copy whole -> /wa -> Import).
@@ -52,6 +52,46 @@
 -- ANDs its existing state with the verified Stance/Form/Aura trigger for form 1. No aura or
 -- uid was added, removed or reordered; Cat keeps the shared/PvP layer and Bear behavior is
 -- unchanged while actually in Bear/Dire Bear Form.
+--
+-- v8 (unit orbs) — see README "## v8 — the centre of the screen is now empty". The centre
+-- bar stack is gone. Health, primary power and threat are drawn as concentric RINGS around a
+-- live unit portrait, in two clusters flanking the character: player at x=-250, target at
+-- x=+250. The target cluster self-hides completely when there is no target, because the
+-- Health/Power prototypes' hidden UnitExistsFixed test produces no state for an absent unit.
+--
+-- UID DISCIPLINE FOR v8, and it is the reason this version is shaped the way it is.
+-- W.assertUidContinuity fails the build if ANY previously shipped uid disappears (a deleted
+-- aura's uid is gone forever and the in-game Update flow cannot reconcile it). So the eleven
+-- v7 Resources tables are REPURPOSED IN PLACE rather than deleted and re-created: each
+-- constructor below still draws the same uid at the same position in the seeded stream, and
+-- only the region type, id, geometry and triggers change. WeakAuras matches auras across
+-- imports by uid, so in game each old bar becomes its replacement ring on Update and nothing
+-- is orphaned. Only the two portraits are genuinely new, and they draw their uids in the v8
+-- block at the very BOTTOM of this file, after every pre-existing uid() call.
+--   uid slot (v7 element)        -> v8 element
+--   2   Druid - Resources        -> Druid - Unit Orbs           (group, retyped position)
+--   6   Druid - Health           -> Druid - Player Health       (ring)
+--   7   Druid - Rage             -> Druid - Player Power        (ring, form-adaptive)
+--   8   Druid - Mana (Resto)     -> Druid - Target Health       (ring)
+--   9   Druid - Mana (Balance)   -> Druid - Target Mana         (ring)
+--   10  Druid - Threat (Bear)    -> Druid - Threat (Bear)       (ring, id unchanged)
+--   11  Druid - Threat (Caster)  -> Druid - Threat (Caster)     (ring, id unchanged)
+--   33-36 Rage Line x4           -> Rage Tick x4                (pips on the power ring)
+--   new x2                       -> Druid - Player/Target Portrait
+--
+-- THREE FIELD-NAME TRAPS THIS VERSION HAD TO CLEAR, all of them silent no-ops if missed:
+--   * `barColor` is an AURABAR property and does not exist on progresstexture. Conditions.lua
+--     skips a change whose property is absent from the region's properties table, with no
+--     error and no editor warning, so a mechanical port of the threat escalation would have
+--     produced a dead condition. The progresstexture spelling is `foregroundColor`.
+--   * a progresstexture with `total == 0` draws FULL (ProgressTexture.lua `local progress = 1`
+--     before the `if self.total > 0` guard), where an aurabar with total 0 draws EMPTY. Threat
+--     reaches total 0 whenever threatvalue is 0 — post-Vanish, pre-first-hit — so every threat
+--     ring carries `threatvalue <= 0 -> alpha 0`, and every health ring `maxhealth <= 0 ->
+--     alpha 0`. Power is the one safe case: its total is math.max(1, UnitPowerMax(...)).
+--   * current code reads a model region's unit from `model_fileId`; WA 3.5.0 read
+--     `model_path`, and the Modernize block that bridges them is gated on IsClassicEra(),
+--     which is NOT IsTBC(), so on 2.5.x it does not run. Both are emitted.
 
 math.randomseed(20260812)  -- FIXED pack seed; append-only uid order across versions
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -127,7 +167,10 @@ local CD_INNERVATE = 29166
 
 -- ===== groups (uid order is sacred: top, 4 sub-groups, then R / B / A / C) =====
 local top     = F.group(TOP, 0, -140, nil)
-local gRes    = reg(F.group("Druid - Resources", 0, 56, nil))
+-- uid slot 2. v7 called this "Druid - Resources" at (0,56) and parked a 172x14 bar stack in
+-- the middle of the screen. Same table, same uid: it is now the orb layer, and it sits lower
+-- (screen y = -140+30 = -110) so the two clusters occupy the band the bars used to.
+local gRes    = reg(F.group("Druid - Unit Orbs", 0, 30, nil))
 local gBuffs  = reg(F.group("Druid - Buffs", 0, -16, nil))
 local gAlerts = reg(F.dynGroup("Druid - Alerts", -150, 96, nil, "UP", "BOTTOM", 6))
 local gCDs    = reg(F.dynGroup("Druid - Cooldowns", 0, -66, nil, "HORIZONTAL", "CENTER", 4))
@@ -136,43 +179,197 @@ adopt(top, gBuffs)
 adopt(top, gAlerts)
 adopt(top, gCDs)
 
--- ================= Resources (0,56): 172x14 bars stacked flush =================
-local function resBar(id, y, color, gate)
-  local b = reg(F.aurabar(id, CLASS, 172, 14, 0, y, nil, color))
-  b.load = F.load(CLASS, gate)
-  adopt(gRes, b)
-  return b
+-- ================= v8 Unit orbs — state drawn AT the unit, centre freed =================
+-- Two clusters flanking the character: player at x=-250, target at x=+250, inside the group
+-- that used to hold the centre bar stack. Each cluster is a live 3D portrait with concentric
+-- progresstexture rings around it; the target cluster also carries the threat ring, because
+-- threat is YOUR threat ON THAT TARGET and that is where it belongs.
+--
+-- x=+-250 is chosen against this pack's own furniture, not by eye: the Alerts column sits at
+-- x=-150 and the PvP column at x=+150 (icons up to 40 wide, so |x| <= 170), and the widest
+-- orb is the 120px target cluster (|x| >= 190). Nothing overlaps, and the entire middle of
+-- the screen — where v7 parked a 172px bar stack — is now empty.
+local G = {
+  orbX     = 250,  -- player at -X, target at +X
+  hpRing   = 96,   -- outer ring: health
+  pwRing   = 64,   -- inner ring: primary power
+  thRing   = 120,  -- outermost ring, target cluster only: threat
+  portrait = 28,   -- the live unit model in the middle
+  tickR    = 30,   -- radius the bear rage pips sit at, i.e. on the power-ring stroke
+}
+
+local COL = {
+  health = { 0.15, 0.78, 0.25, 1 },  -- v7's health-bar green
+  mana   = { 0.25, 0.50, 0.90, 1 },  -- v7's mana-bar blue
+  rage   = { 0.85, 0.15, 0.15, 1 },  -- v7's rage-bar red
+  energy = { 1.00, 0.85, 0.20, 1 },  -- cat, which v7 never drew at all
+  threat = { 0.25, 0.80, 0.30, 1 },  -- v7's threat-bar green
+  warn   = { 1.00, 0.60, 0.10, 1 },  -- threat >= 70%
+  hurt   = { 1.00, 0.65, 0.10, 1 },  -- health < 50%
+  danger = { 0.90, 0.12, 0.12, 1 },  -- aggro lost / gained, health < 25%
+  track  = { 0, 0, 0, 0.55 },        -- the unfilled arc behind every ring
+  text   = { 1, 1, 1, 1 },
+  ptext  = { 0.72, 0.82, 1, 1 },     -- power numbers, tinted so they never need a label
+}
+
+-- Ring_10px.tga is a true annulus and ships inside WeakAuras (Private.texture_types,
+-- "Shapes"). Circle_Smooth2.tga — the texture the rest of this pack uses — is a SOLID DISC
+-- and would fill as a pie wedge, not a ring.
+local RING = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_10px.tga"
+local IV, TOC = 45, 20501
+
+-- wa_factory has no progresstexture or model builder, so those two region tables are written
+-- out in full below and need the same scaffolding stub() applies inside the factory.
+local function stub(t)
+  t.internalVersion, t.tocversion = IV, TOC
+  t.actions = { init = {}, start = {}, finish = {} }
+  t.animation = {
+    start  = { type = "none", duration_type = "seconds", easeType = "none", easeStrength = 3 },
+    main   = { type = "none", duration_type = "seconds", easeType = "none", easeStrength = 3 },
+    finish = { type = "none", duration_type = "seconds", easeType = "none", easeStrength = 3 },
+  }
+  t.conditions = t.conditions or {}
+  t.config, t.authorOptions, t.information = {}, {}, {}
+  return t
 end
 
--- R1 Health — all specs, always on, fades out of combat
-local hp = resBar("Druid - Health", -13, { 0.15, 0.78, 0.25, 1 }, nil)
-hp.triggers = F.triggers({ F.healthTrigger(), F.unitCharTrigger() })
-hp.subRegions[2] = F.subtext("%percenthealth%%", 12, "INNER_RIGHT", "percenthealth")
-hp.subRegions[3] = F.subborder("bar")
-hp.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
+local function orbTrigger(t)
+  t.names, t.spellIds = {}, {}
+  t.subeventPrefix, t.subeventSuffix = "SPELL", "_CAST_START"
+  t.debuffType = "HELPFUL"
+  return t
+end
 
--- R2 Rage (bear) — shares the primary power slot with the two mana bars
-local rage = resBar("Druid - Rage", -27, { 0.85, 0.15, 0.15, 1 }, GATE_F)
-rage.triggers = F.triggers({ F.powerTrigger(1), F.unitCharTrigger() })
-rage.subRegions[2] = F.subtext("%p", 12, "INNER_RIGHT")
-rage.subRegions[3] = F.subborder("bar")
-rage.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
+-- Health on an arbitrary unit. F.healthTrigger is hardwired to "player"; the target cluster
+-- needs "target". The prototype ends in a hidden always-on test,
+--   WeakAuras.UnitExistsFixed(unit, smart) and specificUnitCheck
+-- so unit = "target" with no target produces NO STATE and every region carrying this trigger
+-- hides. That is the whole self-hide mechanism for the target cluster: no condition, no load
+-- gate, no custom code.
+local function orbHealth(unit)
+  return orbTrigger{ type = "unit", event = "Health", unit = unit, use_unit = true }
+end
 
--- R3 Mana (Resto)
-local manaR = resBar("Druid - Mana (Resto)", -27, { 0.25, 0.5, 0.9, 1 }, GATE_R)
-manaR.triggers = F.triggers({ F.powerTrigger(0), F.unitCharTrigger() })
-manaR.subRegions[2] = F.subtext("%percentpower%%", 12, "INNER_RIGHT", "percentpower")
-manaR.subRegions[3] = F.subborder("bar")
-manaR.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
+-- FORM-ADAPTIVE power, and this is the single biggest behavioural win of v8. Omitting
+-- use_powertype makes the prototype emit `local powerType = nil`, so powerTypeToCheck falls
+-- back to UnitPowerType(unit) and UnitPower(unit, nil) reads whatever bar the unit is
+-- currently showing. The trigger re-fires on shapeshift because events() registers
+-- UNIT_DISPLAYPOWER unconditionally. One ring therefore follows a druid caster -> bear ->
+-- cat with no gate and no second aura, where v7 needed three mutually exclusive bars and
+-- still showed a feral nothing at all outside Bear form.
+local function orbPower(unit)
+  return orbTrigger{ type = "unit", event = "Power", unit = unit, use_unit = true }
+end
 
--- R4 Mana (Balance) — identical to R3 but Balance-gated. Swiftmend (31 pts Resto) and Moonkin
--- Form (31 pts Balance) cannot both be taken at TBC's 61-point cap, so the two mana bars are
--- mutually exclusive, not merely overlapping.
-local manaB = resBar("Druid - Mana (Balance)", -27, { 0.25, 0.5, 0.9, 1 }, GATE_B)
-manaB.triggers = F.triggers({ F.powerTrigger(0), F.unitCharTrigger() })
-manaB.subRegions[2] = F.subtext("%percentpower%%", 12, "INNER_RIGHT", "percentpower")
-manaB.subRegions[3] = F.subborder("bar")
-manaB.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
+-- PINNED mana, for the target ring only. Both flags are load-bearing:
+--   use_powertype + powertype = 0 -> read MANA specifically, never "whatever bar this unit
+--     happens to show", so a warrior target cannot render rage in a blue mana ring.
+--   use_requirePowerType          -> the ring only exists while mana is that unit's PRIMARY
+--     bar, so a rogue or warrior target produces no state at all instead of a permanently
+--     empty blue circle. It is gated on use_powertype (enable = trigger.use_powertype), so
+--     it is inert without it — which is also why the adaptive player ring above cannot use it.
+local function orbMana(unit)
+  return orbTrigger{
+    type = "unit", event = "Power", unit = unit, use_unit = true,
+    use_powertype = true, powertype = 0,
+    use_requirePowerType = true,
+  }
+end
+
+-- The Threat Situation prototype's unit argument is named `unit` (Prototypes.lua, required,
+-- init = "arg", default "target"). F.threatTrigger emits `threatUnit`, which is DEAD DATA —
+-- no such arg exists — and the shipped packs only aim at the target by accident, because the
+-- prototype's init does `trigger.unit = trigger.unit or "target"` and ConstructFunction runs
+-- before events()/loadFunc read it. Setting the real field here makes the intent explicit and
+-- lets loadFunc's AddWatchedUnits("target") fire regardless of call order. The factory itself
+-- is not touched: changing it would rewrite five other packs' strings in one commit.
+local function orbThreat()
+  local tr = F.threatTrigger()
+  tr.unit = "target"
+  return tr
+end
+
+-- Radial progress ring. The fields that are traps, in the order they bite:
+--   orientation CLOCKWISE  -> the only radial values are CLOCKWISE / ANTICLOCKWISE; every
+--     other key in orientation_with_circle_types is linear.
+--   startAngle 0 / endAngle 360 -> a full circle; WA normalises 0/360 and corrects endAngle
+--     back up by 360, so this is handled rather than degenerate.
+--   crop_x / crop_y = 0.41 -> the IDENTITY value, NOT "no crop". The circular path expands
+--     the texture by sqrt(2) so rotated quadrants never run off it; 1 + 0.41 cancels that
+--     exactly. Setting 0 blows the ring up 1.41x and clips it.
+--   auraRotation = 0 -> absent from the 3.5.0 default table but read unconditionally by
+--     current code as data.auraRotation / 180 * math.pi, so it must be emitted.
+--   backgroundOffset = 0 -> the default 2 fattens the track into a halo instead of a track.
+--   adjustedMin/Max are STRINGS, because SetAdjustedMin does adjustedMin:find(...).
+--   progressSource is rewritten to {-1, ""} (Automatic) by Modernize < 71 whatever is
+--     emitted, which is why each ring has exactly ONE progress-supplying trigger and it is
+--     trigger 1: activeTriggerMode -10 is first_active, and Automatic reads that trigger's
+--     value/total. A second trigger can only feed conditions, never the fill.
+local function ring(id, size, x, color, triggerList, gate)
+  return reg(stub{
+    regionType = "progresstexture", id = id, uid = W.uid(), parent = nil,
+    width = size, height = size,
+    selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
+    xOffset = x, yOffset = 0, frameStrata = 1, alpha = 1,
+    orientation = "CLOCKWISE", startAngle = 0, endAngle = 360,
+    inverse = false, mirror = false,
+    compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
+    foregroundTexture = RING, backgroundTexture = RING, sameTexture = true,
+    desaturateForeground = false, desaturateBackground = false,
+    foregroundColor = color, backgroundColor = COL.track,
+    backgroundOffset = 0,
+    blendMode = "BLEND", textureWrapMode = "CLAMPTOBLACKADDITIVE",
+    crop_x = 0.41, crop_y = 0.41, rotation = 0, auraRotation = 0,
+    user_x = 0, user_y = 0,
+    progressSource = { -1, "" },
+    useAdjustededMin = false, useAdjustededMax = false,
+    adjustedMin = "", adjustedMax = "",
+    smoothProgress = true, overlayclip = false, overlays = {},
+    subRegions = {},
+    triggers = F.triggers(triggerList),
+    load = F.load(CLASS, gate),
+  })
+end
+
+-- Live unit portrait — a real 3D model of whoever is targeted, which is what lets the target
+-- side work without ever knowing the target's class, and renders NPCs and mobs too.
+--   modelIsUnit + model_fileId = "<unit>" -> PlayerModel:SetUnit(unit)
+--   portraitZoom = true                   -> SetPortraitZoom(1), Blizzard head framing
+-- model_fileId is the field current code reads; model_path is the 3.5.0 spelling and is
+-- emitted only because the Modernize bridge between them never runs on a 2.5.x client.
+-- The portrait carries the same Health trigger as its rings, so it self-hides with them.
+local function portrait(id, unit, x)
+  return reg(stub{
+    regionType = "model", id = id, uid = W.uid(), parent = nil,
+    model_fileId = unit, model_path = unit, modelIsUnit = true, modelDisplayInfo = false,
+    portraitZoom = true, api = false,
+    model_x = 0, model_y = 0, model_z = 0,
+    model_st_tx = 0, model_st_ty = 0, model_st_tz = 0,
+    model_st_rx = 270, model_st_ry = 0, model_st_rz = 0, model_st_us = 40,
+    sequence = 1, advance = false, rotation = 0,
+    width = G.portrait, height = G.portrait, alpha = 1,
+    selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
+    xOffset = x, yOffset = 0, frameStrata = 1,
+    border = false, borderColor = { 1, 1, 1, 0.5 }, backdropColor = { 1, 1, 1, 0.5 },
+    borderEdge = "None", borderOffset = 5, borderInset = 11,
+    borderSize = 16, borderBackdrop = "Blizzard Tooltip",
+    subRegions = {},
+    triggers = F.triggers({ orbHealth(unit) }),
+    load = F.load(CLASS),
+  })
+end
+
+-- The numbers sit OUTSIDE the rings, because the middle is occupied by the portrait and a
+-- `model` region cannot carry a text sub-region at all (SubText's supports() lists texture /
+-- progresstexture / icon / aurabar / empty — not model). Each number therefore rides on its
+-- own ring and appears and disappears with it: no target, no numbers; no mana pool, no mana
+-- number; no threat table, no threat number.
+local function pct(sym, size, yOffset, color)
+  local st = F.subtext("%" .. sym .. "%%", size, "CENTER", sym)
+  st.anchorYOffset = yOffset
+  st.text_color = color
+  return st
+end
 
 -- ===== v5 inverse size gate: "load everywhere EXCEPT an arena" =====
 -- An arena has no threat table, so both threat bars sit pinned and meaningless in there —
@@ -202,22 +399,110 @@ local function notInArena(gate)
   return g
 end
 
--- R5 Threat (Bear) — tank-inverted semantics: green while tanking, RED when aggro is lost
-local threatF = resBar("Druid - Threat (Bear)", -41, { 0.25, 0.8, 0.3, 1 }, notInArena(GATE_F))
-threatF.triggers = F.triggers({ F.threatTrigger() })
-threatF.subRegions[2] = F.subtext("%threatpct%%", 12, "INNER_RIGHT", "threatpct")
-threatF.subRegions[3] = F.subborder("bar")
-threatF.conditions = { F.condition(1, "aggro", "==", 0, "barColor", { 0.9, 0.12, 0.12, 1 }) }
+-- ===== the six rings, in the v7 uid order they inherit =====
+-- CONSTRUCTION order below is uid order and must not change. DISPLAY order is set separately
+-- by the adopt() calls at the end of this section: FixGroupChildrenOrder walks
+-- controlledChildren and adds +4 frame levels per child, so EARLIER = further behind.
 
--- R6 Threat (Caster) — orange at 70%, red on aggro (severe condition last)
-local threatB = resBar("Druid - Threat (Caster)", -41, { 0.25, 0.8, 0.3, 1 }, notInArena(GATE_B))
-threatB.triggers = F.triggers({ F.threatTrigger() })
-threatB.subRegions[2] = F.subtext("%threatpct%%", 12, "INNER_RIGHT", "threatpct")
-threatB.subRegions[3] = F.subborder("bar")
-threatB.conditions = {
-  F.condition(1, "threatpct", ">=", "70", "barColor", { 1, 0.6, 0.1, 1 }),
-  F.condition(1, "aggro", "==", 1, "barColor", { 0.9, 0.12, 0.12, 1 }),
+-- uid 6 (v7 "Druid - Health"). Outer ring, player cluster. Trigger 2 is the always-on Unit
+-- Characteristics feeder that v7's bars used for the out-of-combat fade; it never gates
+-- visibility and trigger 1 stays the progress source.
+-- v8 ADDS a low-health escalation the flat green bar never had: amber under 50%, red under
+-- 25%. `foregroundColor` is the progresstexture spelling of what an aurabar calls `barColor`.
+-- The last condition is the zero-total guard: an aurabar with total 0 draws EMPTY but a
+-- progresstexture draws FULL, and UnitHealthMax has no floor, so a target whose max health
+-- has not streamed yet would flash a full green circle.
+local playerHP = ring("Druid - Player Health", G.hpRing, -G.orbX, COL.health,
+  { orbHealth("player"), F.unitCharTrigger() })
+playerHP.subRegions[1] = pct("percenthealth", 16, -60, COL.text)
+playerHP.conditions = {
+  F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
+  F.condition(1, "percenthealth", "<", "50", "foregroundColor", COL.hurt),
+  F.condition(1, "percenthealth", "<", "25", "foregroundColor", COL.danger),
+  F.condition(1, "maxhealth", "<=", "0", "alpha", 0),
 }
+
+-- uid 7 (v7 "Druid - Rage"). Inner ring, player cluster — and it now replaces all THREE of
+-- v7's mutually exclusive power bars. The trigger is form-adaptive, and the resolved type is
+-- a stored, conditionable arg (`powertype`, init = powerTypeToCheck, conditionType select),
+-- so the ring recolours itself: mana blue is the base, rage red in bear, energy amber in cat.
+-- Numeric select values compile correctly — Conditions.lua takes the tonumber branch.
+-- No load gate at all: every druid has a primary resource in every form. v7's rage bar was
+-- Feral-gated and Bear-form-gated, so a feral in caster form saw no resource bar whatsoever.
+local playerPower = ring("Druid - Player Power", G.pwRing, -G.orbX, COL.mana,
+  { orbPower("player"), F.unitCharTrigger() })
+playerPower.subRegions[1] = pct("percentpower", 11, -78, COL.ptext)
+playerPower.conditions = {
+  F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
+  F.condition(1, "powertype", "==", 1, "foregroundColor", COL.rage),
+  F.condition(1, "powertype", "==", 3, "foregroundColor", COL.energy),
+  F.condition(1, "maxpower", "<=", "1", "alpha", 0),
+}
+
+-- uid 8 (v7 "Druid - Mana (Resto)"). Outer ring, target cluster. New capability: v7 drew no
+-- target state at all.
+local targetHP = ring("Druid - Target Health", G.hpRing, G.orbX, COL.health,
+  { orbHealth("target"), F.unitCharTrigger() })
+targetHP.subRegions[1] = pct("percenthealth", 14, -74, COL.text)
+targetHP.conditions = {
+  F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
+  F.condition(1, "maxhealth", "<=", "0", "alpha", 0),
+}
+
+-- uid 9 (v7 "Druid - Mana (Balance)"). Inner ring, target cluster: the healing target's mana
+-- for a resto druid, the caster target's mana in PvP. The maxpower guard catches the last
+-- honest gap in requirePowerType — most NPCs report mana as their primary bar with a 0/0
+-- pool, and the prototype's total = math.max(1, UnitPowerMax(...)) floor turns that into a
+-- valid 0% state. A real caster has maxpower in the thousands; a powerless unit has exactly
+-- 1, which is why the guard is `<= 1` and not `<= 0`.
+local targetMana = ring("Druid - Target Mana", G.pwRing, G.orbX, COL.mana,
+  { orbMana("target"), F.unitCharTrigger() })
+targetMana.subRegions[1] = pct("percentpower", 10, -92, COL.ptext)
+targetMana.conditions = {
+  F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
+  F.condition(1, "maxpower", "<=", "1", "alpha", 0),
+}
+
+-- uid 10 — Threat (Bear), id unchanged from v7. Outermost ring on the TARGET cluster, because
+-- threat is your threat on that unit. The Threat Situation prototype is progressType "static"
+-- and stores value = threatvalue, total = threatvalue*100/threatpct, so value/total is
+-- exactly threatpct/100: the ring fills 0..100% of the pull threshold with no extra wiring.
+-- Tank-inverted semantics preserved from v7: green while you are securely tanking, RED the
+-- moment aggro is lost. `barColor` -> `foregroundColor` is the whole port.
+-- The threatvalue guard is NOT cosmetic. threattotal is (threatvalue or 0) * 100 / threatpct,
+-- so total is 0 whenever threatvalue is 0 — post-Vanish, post-Feign, the instant before your
+-- first hit lands — and a progresstexture with total 0 draws a FULL ring while threatpct 0
+-- keeps the colour green. Shape and colour would contradict each other at exactly the wrong
+-- moment. alpha 0 removes the ring instead, matching what v7's aurabar did by accident.
+local threatF = ring("Druid - Threat (Bear)", G.thRing, G.orbX, COL.threat,
+  { orbThreat() }, notInArena(GATE_F))
+threatF.subRegions[1] = pct("threatpct", 12, 72, COL.text)
+threatF.conditions = {
+  F.condition(1, "aggro", "==", 0, "foregroundColor", COL.danger),
+  F.condition(1, "threatvalue", "<=", "0", "alpha", 0),
+}
+
+-- uid 11 — Threat (Caster), id unchanged from v7. Same ring, non-inverted semantics: green,
+-- orange at 70% of the pull threshold, red when you pull (severe condition last, so it wins).
+local threatB = ring("Druid - Threat (Caster)", G.thRing, G.orbX, COL.threat,
+  { orbThreat() }, notInArena(GATE_B))
+threatB.subRegions[1] = pct("threatpct", 12, 72, COL.text)
+threatB.conditions = {
+  F.condition(1, "threatpct", ">=", "70", "foregroundColor", COL.warn),
+  F.condition(1, "aggro", "==", 1, "foregroundColor", COL.danger),
+  F.condition(1, "threatvalue", "<=", "0", "alpha", 0),
+}
+
+-- DISPLAY order: threat rings furthest back, then the health rings, then the power rings.
+-- The four rage pips are adopted in the v2 block below and the two portraits in the v8 block
+-- at the bottom, so both end up in front of every ring — which is what keeps a pip readable
+-- and stops anything drawing over a face.
+adopt(gRes, threatF)
+adopt(gRes, threatB)
+adopt(gRes, playerHP)
+adopt(gRes, targetHP)
+adopt(gRes, playerPower)
+adopt(gRes, targetMana)
 
 -- ================= Buffs (0,-16): 40x40 timers per spec, slots shared =================
 -- Bear runs FOUR slots (-66/-22/+22/+66), the caster specs three (-44/0/+44); both rows stay
@@ -456,26 +741,43 @@ mangleCD.conditions[3] = F.condition(2, "inCombat", "==", 0, "sub.1.glow", false
 -- in-game import dialog on "Update". Each element is re-parented into its v1 group by the
 -- helper it is built with (adopt() appends to that group's controlledChildren).
 
--- R7-R10 Rage thresholds — the bear's two spend decisions drawn on the rage bar itself.
--- Rage caps at 100 and the bar is 172 wide anchored at x=0, so x(v) = -86 + 1.72*v.
--- Dim line = where the threshold is; the wider lit line pops in the moment you cross it.
-local function rageLine(id, rageValue, w, h, color, minRage)
-  local x = math.floor(-86 + 1.72 * rageValue + 0.5)
-  local line = reg(F.texture(id, CLASS, w, h, x, -27, nil, F.TEX_SQUARE, color))
-  line.triggers = F.triggers({ F.powerTrigger(1, minRage) })  -- rage only exists in bear form
-  line.load = F.load(CLASS, GATE_F)
+-- R7-R10 Rage thresholds — the bear's two spend decisions, v8 moves them onto the power ring.
+-- v7 drew them as thin vertical lines over a 172x14 bar at x = -86 + 1.72*v. The ring is a
+-- circle starting at 12 o'clock and filling CLOCKWISE, so the same value v now lands at angle
+-- v/100 * 360 and, per BaseRegions/TextureCoords.lua's exactAngles (index 1 = {0.5, 0} = top
+-- centre, index 3 = {1, 0.5} = right middle), x = r*sin(theta), y = r*cos(theta). 20 rage
+-- lands around 2 o'clock, 70 rage around 8 o'clock.
+--
+-- These stay FOUR SEPARATE AURAS rather than becoming sub-regions of the ring, deliberately:
+-- the aurabar tick sub-region cannot come along at all (SubRegionTypes/Tick.lua's supports()
+-- returns true only for "aurabar"), and the two sub-region types that DO support
+-- progresstexture would cost the pop. A subtexture/subcirculartexture mark can change colour
+-- by condition but cannot carry its own animation, and the pop-in on crossing IS the signal
+-- here. Keeping them as regions also keeps their triggers, their Feral gate and their v7 Bear
+-- form gate exactly as they were, and keeps them out of the sub.N condition index entirely.
+--
+-- Round pips, not lines: rotating a thin quad on a texture region rotates the ART INSIDE the
+-- quad (DoTexCoord -> GetRotatedPoints), so a 2x16 line rotated 126 degrees clips instead of
+-- tilting. A circle needs no rotation to point the right way.
+local function rageTick(id, rageValue, size, color, minRage)
+  local theta = math.rad(rageValue / 100 * 360)
+  local x = math.floor(-G.orbX + G.tickR * math.sin(theta) + 0.5)
+  local y = math.floor(G.tickR * math.cos(theta) + 0.5)
+  local pip = reg(F.texture(id, CLASS, size, size, x, y, nil, F.TEX_CIRCLE, color))
+  pip.triggers = F.triggers({ F.powerTrigger(1, minRage) })  -- rage only exists in bear form
+  pip.load = F.load(CLASS, GATE_F)
   if minRage then
-    line.animation.start  = F.animPreset("shrink", "0.25", "easeOut")  -- WA "shrink" = pop-in
-    line.animation.finish = F.animPreset("fade", "0.2")
+    pip.animation.start  = F.animPreset("shrink", "0.25", "easeOut")  -- WA "shrink" = pop-in
+    pip.animation.finish = F.animPreset("fade", "0.2")
   end
-  adopt(gRes, line)
-  return line
+  adopt(gRes, pip)
+  return pip
 end
 
-rageLine("Druid - Rage Line Mangle",     20, 2, 16, { 0.25, 0.95, 0.45, 0.55 }, nil)
-rageLine("Druid - Rage Line Maul",       70, 2, 16, { 1, 0.75, 0.2, 0.55 },     nil)
-rageLine("Druid - Rage Line Mangle Lit", 20, 4, 18, { 0.25, 0.95, 0.45, 1 },    20)
-rageLine("Druid - Rage Line Maul Lit",   70, 4, 18, { 1, 0.75, 0.2, 1 },        70)
+rageTick("Druid - Rage Tick Mangle",     20,  6, { 0.25, 0.95, 0.45, 0.55 }, nil)
+rageTick("Druid - Rage Tick Maul",       70,  6, { 1, 0.75, 0.2, 0.55 },     nil)
+rageTick("Druid - Rage Tick Mangle Lit", 20, 10, { 0.25, 0.95, 0.45, 1 },    20)
+rageTick("Druid - Rage Tick Maul Lit",   70, 10, { 1, 0.75, 0.2, 1 },        70)
 
 -- B10 Demoralizing Roar — bear priority #1 alongside Faerie Fire. Not own-only: any druid's
 -- roar satisfies the -240 AP debuff. Takes the fourth bear buff slot at x=+66.
@@ -711,6 +1013,17 @@ ccOut.cooldownTextDisabled = true
 ccOut.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
 ccOut.subRegions[3] = F.subborder()
 
+-- ================= v8 additions — the two unit portraits =================
+-- The ONLY genuinely new auras in v8, so they draw the only new uids, and they draw them here
+-- at the bottom, after every pre-existing uid() call in the file. Everything else in the orb
+-- layer reuses a v7 Resources uid in place (see the map in the header), which is what lets
+-- the in-game import stay a clean Update with nothing orphaned.
+--
+-- Adopted last, so they carry the highest frame level in the group and nothing draws over a
+-- face. No load gate beyond the class: a portrait has no spec.
+adopt(gRes, portrait("Druid - Player Portrait", "player", -G.orbX))
+adopt(gRes, portrait("Druid - Target Portrait", "target",  G.orbX))
+
 -- Mangle (Bear) and Mangle (Cat) are granted by the same talent. A spell-known
 -- load gate therefore identifies the Feral build, not the active form. Make the
 -- distinction at runtime by ANDing every Bear-gated element with form 1
@@ -727,7 +1040,12 @@ for _, aura in pairs(byId) do
     bearFormGated = bearFormGated + 1
   end
 end
-assert(bearFormGated == 15, "expected 15 Bear-only elements, gated " .. bearFormGated)
+-- 15 in v7, 14 in v8: the rage bar was the only Feral-gated element the orb migration made
+-- spec-neutral, because the form-adaptive power ring serves every druid in every form and so
+-- must not carry a Bear gate. The four rage pips, the Bear threat ring and the nine icon
+-- elements are unchanged. spec-preview.lua's `forbidSpellGate = 33878` Cat profile fails the
+-- build if any 33878-gated aura ever loses this trigger, so the count is belt and braces.
+assert(bearFormGated == 14, "expected 14 Bear-only elements, gated " .. bearFormGated)
 
 -- ================= assemble (v2000 nested), encode, verify, write =================
 local transmit = F.assemble(top, byId)
