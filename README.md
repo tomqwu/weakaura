@@ -23,7 +23,7 @@ use GitHub's copy button on the block to grab the whole string in one click.
 
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
-| Rogue — All Specs | Combat · Assassination · Subtlety | v45 | 56 | [string](tbc/rogue/README.md#import-string-v45) · [raw](tbc/rogue/all-specs.txt) |
+| Rogue — All Specs | Combat · Assassination · Subtlety | v46 | 61 | [string](tbc/rogue/README.md#import-string-v46) · [raw](tbc/rogue/all-specs.txt) |
 | Paladin — All Specs | Holy · Protection · Retribution | v7 | 43 | [string](tbc/paladin/README.md#import-string-v7) · [raw](tbc/paladin/all-specs.txt) |
 | Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v7 | 46 | [string](tbc/druid/README.md#import-string-v7) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v6 | 38 | [string](tbc/warlock/README.md#import-string-v6) · [raw](tbc/warlock/all-specs.txt) |
@@ -49,8 +49,9 @@ acceptance note instead of presenting static serialization as an in-game test.
 
 ## Packs
 
-- **tbc/rogue/all-specs.txt** — full HUD, v45 of a 45-iteration build: health/energy/threat
-  bars with 35/40 energy threshold lines, combo pips (always-visible sockets, green→orange gradient),
+- **tbc/rogue/all-specs.txt** — full HUD, v46 of a 46-iteration build: health/energy/threat
+  bars with 35/40 energy threshold lines, combo pips (always-visible sockets, green→orange
+  gradient, and a brief scale/brightness pop whenever a point is gained),
   spec-adaptive cooldown row
   (15 spells, talent-gated, tooltips + keybind labels), animated alert flow (SnD missing,
   Riposte window, Feint-at-70%-threat, Evasion-below-50%-HP), weapon enchant proc tracker
@@ -90,7 +91,7 @@ lua5.1 tools/verify-packs.lua && tools/verify-rebuild.sh
 parent wiring and historical UID continuity, validates root/pack/generator versions, aura
 counts and seed registration, checks each README copy block byte-for-byte, and enforces global
 id/uid uniqueness. `verify-rebuild.sh` independently discovers the same deliverables, re-runs
-every build script—including Rogue's v41→v45 lineage replay—in a sandbox, and proves byte-for-
+every build script—including Rogue's v41→v46 lineage replay—in a sandbox, and proves byte-for-
 byte reproduction.
 
 Uid uniqueness matters because WeakAuras matches auras across imports by uid: two packs built
