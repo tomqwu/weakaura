@@ -3,8 +3,27 @@
 -- Requires LibDeflate.lua + LibSerialize.lua next to this file (run setup.sh).
 
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
-local LibDeflate = dofile(dir .. "/LibDeflate.lua")
-local LibSerialize = dofile(dir .. "/LibSerialize.lua")
+
+-- The libraries are gitignored (fetched, not vendored), so on a FRESH CLONE the
+-- documented suite command is the first thing a contributor runs and the first thing
+-- that fails. A bare dofile of a missing file gives a traceback that never mentions
+-- setup.sh, which sends people looking in the wrong place. Say it plainly instead.
+local function requireLib(name)
+  local path = dir .. "/" .. name
+  local probe = io.open(path, "r")
+  if not probe then
+    error(name .. " not found next to wa_lib.lua.\n"
+      .. "  This repo fetches LibDeflate/LibSerialize rather than vendoring them.\n"
+      .. "  Run:  tools/tbc-weakaura-creator/scripts/setup.sh\n"
+      .. "  (once per clone; it also verifies both libraries against pinned checksums)",
+      0)
+  end
+  probe:close()
+  return dofile(path)
+end
+
+local LibDeflate = requireLib("LibDeflate.lua")
+local LibSerialize = requireLib("LibSerialize.lua")
 
 local M = { LibDeflate = LibDeflate, LibSerialize = LibSerialize }
 

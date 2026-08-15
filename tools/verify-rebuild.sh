@@ -2,8 +2,8 @@
 # verify-rebuild.sh — prove every shipped import string is reproducible from its
 # committed build script, without touching the working tree.
 #
-# Copies tbc/ into a sandbox, symlinks tools/, re-runs each generate script there,
-# and diffs the regenerated strings against the committed ones. A mismatch means
+# Copies tbc/ into a sandbox, mirrors tools/ READ-ONLY, re-runs each generate script
+# there, and diffs the regenerated strings against the committed ones. A mismatch means
 # either the script is non-deterministic or the shipped string was not built from it.
 #
 # Run: tools/verify-rebuild.sh   (from the repo root, after
@@ -14,7 +14,21 @@ SANDBOX="$(mktemp -d)"
 trap 'rm -rf "$SANDBOX"' EXIT
 
 cp -r "$ROOT/tbc" "$SANDBOX/tbc"
-ln -s "$ROOT/tools" "$SANDBOX/tools"
+# tools/ is COPIED, not symlinked. A symlink is not a sandbox: a build script that
+# writes to a path resolved through it (dir/../../tools/...) mutates the real working
+# tree during what this header advertises as a read-only verification — and the suite
+# runs immediately before commit, so a stray file would get committed.
+cp -r "$ROOT/tools" "$SANDBOX/tools"
+
+# Delete every shipped string INSIDE the sandbox before building. Without this the
+# copy above pre-seeds the sandbox with the committed .txt, so the final cmp compares
+# the pristine copy against its own original: a script that writes nothing — or writes
+# to a renamed path — still reports "reproduces". Removing them first turns a missing
+# write into a cmp failure, which is the guarantee this test claims to provide.
+while IFS= read -r shipped; do
+  rm -f "$SANDBOX/$shipped"
+done < <(find "$ROOT/tbc" -mindepth 2 -maxdepth 2 -type f -name all-specs.txt \
+  -printf 'tbc/%P\n' | sort)
 
 fails=0
 count=0
