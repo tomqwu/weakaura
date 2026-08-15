@@ -2,7 +2,14 @@
 -- Run: lua5.1 example_paladin.lua   (after ./setup.sh)
 -- Produces paladin_starter.txt: a "!WA:2!" string importable in game.
 
-math.randomseed(20260809)  -- FIXED seed per pack; append-only uid order across versions
+-- FIXED seed per pack; append-only uid order across versions.
+-- 20260899 is deliberately OUTSIDE the shipped-pack range (the root README registry
+-- reserves 20260809-20260816). This demo previously reused 20260809 — the ROGUE pack's
+-- seed — which meant its output replayed the rogue uid stream: importing it over an
+-- installed rogue HUD made WeakAuras match six auras by uid and silently "Update"
+-- Slice and Dice, Rupture and friends into paladin starter content. A demo must never
+-- share a seed with a shipped pack.
+math.randomseed(20260899)
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
 local F = dofile(dir .. "/wa_factory.lua")
 local W = F.W

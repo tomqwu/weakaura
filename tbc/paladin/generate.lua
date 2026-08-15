@@ -1,6 +1,13 @@
--- generate.lua — "Paladin TBC - All Specs" (v7)
+-- generate.lua — "Paladin TBC - All Specs" (v8)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code).
+--
+-- v8 — the Hammer of Wrath execute prompt now really is hostile-only. v4 set
+-- use_hostility on its Health trigger, but hostility is not an argument of the Health
+-- prototype (only Unit Characteristics defines it), so WeakAuras ignored the field and
+-- the prompt fired for a wounded ALLY under 20% too. Fixed with a third trigger — a
+-- Unit Characteristics hostility check AND-ed alongside, the same form the TARGET
+-- IMMUNE prompt already used. Gating and uids untouched.
 --
 -- v7 — the cooldown row shows what you CANNOT press. NOT ONE W.uid() call was added,
 -- removed or reordered, so the re-import is still an Update and every dragged position
@@ -353,16 +360,31 @@ hsNow.triggers = F.triggers({
   F.cdTrigger(20925, "Holy Shield", "showOnReady"),
 })
 
+-- Hostility is NOT an argument of the Health prototype — only Unit Characteristics
+-- defines it. Setting use_hostility on a Health trigger is a silent no-op: WeakAuras
+-- ignores the unknown field and the trigger fires for any unit under the threshold,
+-- friendly included. The only working form is a separate Unit Characteristics trigger
+-- AND-ed alongside (disjunctive "all"), which is what the TARGET IMMUNE prompt below
+-- also relies on.
+local function targetHostileTrigger()
+  local tr = F.unitCharTrigger()
+  tr.unit = "target"; tr.use_hostility = true; tr.hostility = "hostile"
+  return tr
+end
+
 -- 17) execute window: HOSTILE target under 20% HP AND Hammer of Wrath ready.
 -- Baseline at 44 and a numbered Protection priority line too, so it gates on its own
--- rank-1 id (known from 44 onward) instead of on a spec capstone. The hostility filter
--- stops a wounded ALLY under 20% from firing a prompt for a spell you cannot cast on them.
+-- rank-1 id (known from 44 onward) instead of on a spec capstone. Trigger 3 is what
+-- actually stops a wounded ALLY under 20% from firing a prompt for a spell you cannot
+-- cast on them — v4 tried to do it with use_hostility on trigger 1, which did nothing.
 local howHealth = F.healthTrigger(20)
 howHealth.unit = "target"
-howHealth.use_hostility = true
-howHealth.hostility = "hostile"
 local how = alert("Paladin - Hammer of Wrath", "Interface\\Icons\\ability_thunderclap", GOLD, 24275)
-how.triggers = F.triggers({ howHealth, F.cdTrigger(24275, "Hammer of Wrath", "showOnReady") })
+how.triggers = F.triggers({
+  howHealth,
+  F.cdTrigger(24275, "Hammer of Wrath", "showOnReady"),
+  targetHostileTrigger(),
+})
 -- v4: ...but an execute nuke is not a healing decision. Both load gates apply (WA ANDs
 -- them), so this is "knows Hammer of Wrath AND is not deep Holy" — Prot and Ret keep the
 -- prompt, a Holy paladin healing the pull never gets a glowing damage button.
@@ -596,14 +618,6 @@ end
 local function castTrigger(unit, remaining)
   local tr = trig{ type = "unit", event = "Cast", unit = unit, use_unit = true }
   tr.use_remaining = true; tr.remaining = remaining; tr.remaining_operator = "<"
-  return tr
-end
--- aura2 hostility filtering is silently ignored on target/arena units (it only
--- applies to group/nameplate), so hostility needs its own Unit Characteristics
--- trigger AND-ed alongside.
-local function targetHostileTrigger()
-  local tr = F.unitCharTrigger()
-  tr.unit = "target"; tr.use_hostility = true; tr.hostility = "hostile"
   return tr
 end
 

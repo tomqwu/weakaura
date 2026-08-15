@@ -24,10 +24,10 @@ use GitHub's copy button on the block to grab the whole string in one click.
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
 | Rogue — All Specs | Combat · Assassination · Subtlety | v46 | 61 | [string](tbc/rogue/README.md#import-string-v46) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v7 | 43 | [string](tbc/paladin/README.md#import-string-v7) · [raw](tbc/paladin/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v8 | 43 | [string](tbc/paladin/README.md#import-string-v8) · [raw](tbc/paladin/all-specs.txt) |
 | Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v7 | 46 | [string](tbc/druid/README.md#import-string-v7) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v6 | 38 | [string](tbc/warlock/README.md#import-string-v6) · [raw](tbc/warlock/all-specs.txt) |
-| Hunter — BM & Survival | Beast Mastery · Survival | v6 | 46 | [string](tbc/hunter/README.md#import-string-v6) · [raw](tbc/hunter/all-specs.txt) |
+| Hunter — BM & Survival | Beast Mastery · Survival | v7 | 46 | [string](tbc/hunter/README.md#import-string-v7) · [raw](tbc/hunter/all-specs.txt) |
 | Priest — All Specs | Shadow · Holy · Discipline | v6 | 40 | [string](tbc/priest/README.md#import-string-v6) · [raw](tbc/priest/all-specs.txt) |
 | Mage — Arcane & Frost | Arcane · Frost | v6 | 42 | [string](tbc/mage/README.md#import-string-v6) · [raw](tbc/mage/all-specs.txt) |
 
