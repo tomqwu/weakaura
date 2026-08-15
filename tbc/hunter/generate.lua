@@ -1,4 +1,4 @@
--- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v6).
+-- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v7).
 -- Run: lua5.1 tbc/hunter/generate.lua   (toolkit libs must be fetched once:
 --      tools/tbc-weakaura-creator/scripts/setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game.
@@ -74,6 +74,12 @@
 --     abilities harder to tell apart" — does not hold for an icon whose visible states
 --     include a live buff window.
 --
+-- v7: the PvP trinket readout tracked item 30346, which wowhead confirms is the
+-- PRIEST-restricted Medallion of the Horde — a hunter can never equip it, so its
+-- cooldown trigger could never fire and a Horde hunter's "Trinket DOWN" state was
+-- silently dead. Replaced with 37865, the all-class 2.4 Medallion of the Horde (the
+-- twin of 37864), which is the pair every other pack in this repo uses.
+--
 -- Every spell id was verified on wowhead.com/tbc. Aura triggers carry EVERY
 -- rank as strings; cooldown triggers carry the numeric rank-1 id; spellknown
 -- gates use ids that really sit in the spellbook when trained/talented.
@@ -141,9 +147,14 @@ local PVPTRINK = 42292                              -- "PvP Trinket" — the spe
 -- the equipment-slot trigger: that one tracks whatever sits in slot 13/14, so a PvE
 -- on-use trinket would report "medallion down" while the medallion is ready — a false
 -- negative in the one decision this element exists for.
+-- NB 37865, not 30346: wowhead item=30346 is the PRIEST-restricted Medallion of the
+-- Horde (classes bitmask 16), so a hunter can never equip it and its cooldown trigger
+-- could never fire — a Horde hunter's trinket readout was silently dead. 37865 is the
+-- 2.4 all-class Medallion of the Horde, the Alliance twin of 37864. Both verified on
+-- wowhead.com/tbc; the same pair is used by every other pack in this repo.
 local TRINKETS = {
-  30346,  -- Medallion of the Horde    (lvl 70, 2 min)
-  37864,  -- Medallion of the Alliance (lvl 70, 2 min)
+  37865,  -- Medallion of the Horde    (all classes, lvl 70, 2 min)
+  37864,  -- Medallion of the Alliance (all classes, lvl 70, 2 min)
   18846,  -- Insignia of the Horde    (Hunter, lvl 60, 5 min)
   18856,  -- Insignia of the Alliance (Hunter, lvl 60, 5 min)
 }

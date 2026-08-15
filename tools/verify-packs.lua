@@ -185,6 +185,32 @@ for _, p in ipairs(packs) do
   end
 end
 
+-- Seed discipline extends BEYOND tbc/*/generate.lua. Any script in the repo that seeds
+-- the uid stream with a shipped pack's seed produces that pack's uids, and WeakAuras
+-- matches auras across imports BY uid — so importing its output silently "Update"s over
+-- the real pack. This actually happened: the toolkit demo example_paladin.lua carried the
+-- rogue pack's seed 20260809 and its six auras collided with six shipped rogue auras.
+-- Retired seeds are protected too: a user may still have the retired pack installed.
+local retiredSeeds = {}
+for seed in rootReadme:gmatch("|%s*(%d+)%s*|%s*%*retired%*") do retiredSeeds[seed] = true end
+
+local otherScripts = capture("find " .. quote(ROOT)
+  .. " -name '*.lua' -not -path '*/.git/*' -not -path '*/tbc/*/generate.lua' -print | sort")
+for absolute in otherScripts:gmatch("[^\r\n]+") do
+  local relative = absolute:gsub("^" .. ROOT:gsub("([^%w])", "%%%1") .. "/", "")
+  local body = read(relative)
+  if body then
+    for seed in body:gmatch("math%.randomseed%((%d+)%)") do
+      if seedOwner[seed] then
+        fail("%s seeds the uid stream with %s, which belongs to the %s pack — its output "
+          .. "would import as an Update over that pack", relative, seed, seedOwner[seed])
+      elseif retiredSeeds[seed] then
+        fail("%s uses retired seed %s; users may still have that pack installed", relative, seed)
+      end
+    end
+  end
+end
+
 print(string.format("\n%d discovered packs, %d auras, %d unique ids",
   #packs, totalAuras, totalAuras))
 

@@ -88,6 +88,13 @@ embedded in the script, then replays `patch-v42.lua` through `patch-v46.lua` in 
 step decodes, edits and re-encodes through the shared toolkit, and the final build asserts
 historical UID continuity before writing. Re-importing therefore offers **Update**.
 
+**Known exception — the threat bar loads in arena.** Every other pack gates its threat bar
+and flash to "everywhere except arena", because an arena has no threat table. The rogue pair
+does not carry that gate yet. It is largely self-hiding (the trigger produces no state
+without a hostile target you are on the threat table of), so in practice it stays blank
+rather than lying — but it is an inconsistency, and the gate is a one-line addition whenever
+the pack next moves.
+
 Keybind labels currently baked: Sprint=G, Vanish=Z, Gouge=E, Distract=B5.
 
 ## Import string (v46)

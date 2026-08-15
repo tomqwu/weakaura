@@ -110,8 +110,9 @@ v4 is an in-place update of v3 (same UIDs — the import dialog offers **Update*
 duplicate group). It **adds nine auras and changes none of the 31 that were already there**.
 
 **Nothing changes in PvE.** Every one of the nine new elements carries its own Instance Size
-Type load gate — arena + battleground for most of them, arena alone for the three that read
-`arena1..arena5`, since those unit ids do not exist in a battleground. In a raid, a dungeon,
+Type load gate — arena + battleground for most of them, arena alone for the ones that read
+`arena1..arena5` (three as of v6, counting the v5 Enemy Mana row), since those unit ids do
+not exist in a battleground. In a raid, a dungeon,
 or the open world not one of them loads, and no existing element was touched: the raid HUD
 is byte-for-byte the v3 HUD. The gate is per aura, not on the group, which is also what lets
 the dynamic groups collapse the gaps.

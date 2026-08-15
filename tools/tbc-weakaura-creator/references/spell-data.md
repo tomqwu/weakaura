@@ -11,7 +11,7 @@
 - Talent-gated cooldowns: gate the aura with `load.use_spellknown = true,
   spellknown = <rank-1 id>` so the pack auto-adapts to spec.
 
-## Verified in the field (rogue pack, 37 versions)
+## Verified in the field (rogue pack)
 
 Buff/debuff aura IDs (all ranks):
 - Slice and Dice: 5171, 6774
