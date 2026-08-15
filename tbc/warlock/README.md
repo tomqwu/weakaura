@@ -127,9 +127,9 @@ cooldown row, no new icons, no new triggers running. Nothing was removed,
 renamed or moved either, so a v3 import offers Update and all 26 old UIDs are
 stable.
 
-Six of the nine also need arena specifically (they read `arena1`–`arena5`, unit
+Five of them need arena specifically (they read `arena1`–`arena5`, unit
 ids that do not exist in a battleground — a battleground-loaded arena element is
-a permanently blank slot).
+a permanently blank slot); the rest load in battlegrounds too.
 
 **This is not diminishing-returns tracking, and the pack never pretends it is.**
 DR does not exist anywhere in WeakAuras — no prototype, no bundled library — and

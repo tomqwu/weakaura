@@ -155,7 +155,7 @@ is untouched: same uids, same triggers, same load rules, same positions
 (`use_size = false, size = { multi = { arena = true, pvp = true } }`), not just the group it
 sits in — a group's load is not a child gate. In a raid, a dungeon, or out in the world the
 new group is empty, the cooldown row is the same nine icons it was in v3, and the alert flow
-holds the same nine prompts. Four of the new elements read `arena1..arena5` and are therefore
+holds the same nine prompts. Three of the current elements read `arena1..arena5` and are therefore
 **arena-only**, because those unit ids do not exist in a battleground and a BG-loaded arena
 element is a permanently blank slot.
 

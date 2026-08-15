@@ -76,12 +76,17 @@ size = { multi = { none = true, party = true, ten = true, twenty = true,
                    twentyfive = true, fortyman = true } },
 ```
 
-**VERIFY BEFORE SHIPPING THIS ONE.** WeakAuras.lua L1598-1626 only assigns `size = Type`
-inside `if inInstance or instanceType ~= "none"`; what `size` holds in the open world was not
-confirmed. If it is `nil` rather than `"none"` outdoors, this gate silently unloads the
-element everywhere outside instances. Test in the field (open world → dungeon → BG) before
-using it on anything a player relies on. `use_pvpmode = false` is the cheaper alternative
-("hide while flagged"), at the cost of also hiding during world PvP.
+**RESOLVED — safe, and shipped.** The open-world worry was that WeakAuras.lua only assigns
+`size = Type` inside `if inInstance or instanceType ~= "none"`, so a "not arena" gate might
+unload the element everywhere outdoors. It does not: `GetInstanceTypeAndSize` has an explicit
+fallthrough that returns the literal string `"none"` outside instances, so listing `none` in
+the multi table is exactly what keeps the element loaded while questing. Verified from source
+and shipped on the threat bar and threat flash of six packs.
+
+**`none` is mandatory.** The gate has no inverse — you enumerate the complement — so omitting
+`none` hides the element in the open world, which is the regression this warning was
+originally about. `use_pvpmode = false` remains a cheaper alternative ("hide while flagged"),
+at the cost of also hiding during world PvP.
 
 ---
 

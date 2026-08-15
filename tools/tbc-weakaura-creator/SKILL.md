@@ -13,8 +13,10 @@ exists to serve that, not the other way around.
 Builds real, importable WeakAuras strings programmatically: Lua factories construct the aura
 data tables, then the exact WeakAuras serialization pipeline (LibSerialize → LibDeflate →
 `!WA:2!` Base64) encodes them. Every generated string is round-trip decoded and structurally
-verified before delivery. Proven across a 41-version rogue HUD (bars, combo points, threat,
-alerts, animations) and seven more class packs, on a Chinese-language client.
+verified before delivery. Proven across a long-running rogue HUD (bars, combo points, threat, alerts, animations)
+and six more class packs — seven in total, each with a PvP layer — on a Chinese-language
+client. Current versions are in the root README table rather than repeated here, so this
+provenance line cannot go stale.
 
 ## Setup (once per session)
 

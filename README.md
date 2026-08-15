@@ -53,7 +53,7 @@ acceptance note instead of presenting static serialization as an in-game test.
   bars with 35/40 energy threshold lines, combo pips (always-visible sockets, green→orange
   gradient, and a brief scale/brightness pop whenever a point is gained),
   spec-adaptive cooldown row
-  (15 spells, talent-gated, tooltips + keybind labels), animated alert flow (SnD missing,
+  (16 spells, talent-gated, tooltips + keybind labels), animated alert flow (SnD missing,
   Riposte window, Feint-at-70%-threat, Evasion-below-50%-HP), weapon enchant proc tracker
   with clones, out-of-combat fade, plus the arena/BG-only PvP layer (CC-on-me with the
   break decision, Kick prompt and lockout bar, target immunity, trinket availability,
@@ -61,25 +61,41 @@ acceptance note instead of presenting static serialization as an in-game test.
   Locale-independent (pure spell-ID matching, built on a
   zhCN client). Combat / Mutilate / Subtlety auto-adapt via spell-known gates.
 - **tbc/paladin/all-specs.txt** — seal uptime + missing alarm, own Judgement debuff, Holy
-  Shield uptime, mana/health/threat bars, and a talent-gated cooldown row; Holy / Protection /
-  Retribution adapt via Holy Shock, Holy Shield and Crusader Strike gates.
-- **tbc/druid/all-specs.txt** — rage/mana/health/threat bars, Lacerate stacks and Mangle
-  debuff, Lifebloom/Rejuvenation/Regrowth timers, Moonfire and Insect Swarm, Omen of Clarity
-  proc; Bear / Restoration / Balance gate on Mangle, Swiftmend and Moonkin Form, with every
-  Bear element additionally requiring active Bear/Dire Bear form so Cat sees no tank HUD.
+  Shield uptime, mana/health/threat bars, and a 14-icon cooldown row that shows only what is
+  unavailable (rotational buttons stay visible and glow when ready); Holy / Protection /
+  Retribution adapt via Holy Shock, Holy Shield and Crusader Strike gates, and the row is
+  spec-selective — a healing Holy paladin is not shown Consecration or Avenging Wrath. PvP
+  layer: CC-on-me, HAMMER NOW, target immunity, trinket and Forbearance clocks, Cleanse.
+- **tbc/druid/all-specs.txt** — rage/mana/health/threat bars with bear rage thresholds,
+  Lacerate stacks and Mangle debuff, Demoralizing Roar, Lifebloom/Rejuvenation/Regrowth
+  timers, Moonfire and Insect Swarm, Omen of Clarity proc, and an 8-icon cooldown row showing
+  only what is down (Mangle keeps its ready glow); Bear / Restoration / Balance gate on
+  Mangle, Swiftmend and Moonkin Form, with every Bear element additionally requiring active
+  Bear/Dire Bear form so Cat sees no tank HUD. PvP layer: CC-on-me, Barkskin-while-stunned,
+  target immunity, trinket clocks, own Cyclone/Roots per opponent.
 - **tbc/warlock/all-specs.txt** — the five own-DoT timers (Corruption, Curse of Agony,
-  Immolate, Unstable Affliction, Siphon Life), Nightfall and Backlash proc alerts, Life Tap
-  and Soulshatter prompts, health/mana/threat bars.
-- **tbc/hunter/all-specs.txt** — Serpent Sting and Hunter's Mark timers, Bestial Wrath window,
-  aspect-missing alarm, Kill Command reactive prompt, proc tracker; BM and Survival only.
+  Immolate, Unstable Affliction, Siphon Life), Demonic Sacrifice and Fel Armor upkeep,
+  Nightfall and Backlash proc alerts, Life Tap and Soulshatter prompts, health/mana/threat
+  bars, and a 7-icon cooldown row showing only what is down (Conflagrate and Shadowburn keep
+  their ready glow). PvP layer: CC-on-me, target immunity, trinket clocks, per-opponent enemy
+  mana for the drain decision.
+- **tbc/hunter/all-specs.txt** — Serpent Sting and Hunter's Mark timers, Bestial Wrath and
+  Rapid Fire windows, aspect-missing and back-to-Hawk alarms, Kill Command reactive prompt,
+  pet health prompts, Misdirection/Feign Death threat pairing, proc tracker, and an 11-icon
+  cooldown row showing only what is down (Multi-Shot and Arcane Shot keep their ready glow);
+  BM and Survival only. PvP layer: CC-on-me, SILENCE NOW, trinket clocks, enemy mana.
 - **tbc/priest/all-specs.txt** — Shadow Word: Pain and Vampiric Touch timers, Vampiric Embrace
-  and Inner Fire uptime, Shadowform-missing alarm, shield and Fade prompts, mana/health bars,
+  and Inner Fire uptime, Shadowform-missing alarm, Weakened Soul shield-timing on the heal target,
+  Fade and Shadowfiend prompts, mana/health bars,
   plus the arena/BG-only PvP layer (CC-on-me colour-coded by CC category, Fear Ward and Mass
   Dispel prompts, trinket clocks, UA-on-ally warning, and a per-opponent enemy mana bar for
   the Mana Burn decision). The threat bar and Fade prompt do not load in an arena.
-- **tbc/mage/all-specs.txt** — Arcane Blast stacks (the Arcane rotation driver), Ice Barrier
-  uptime and missing alarm, Clearcasting proc, Evocation and Ice Block prompts, mana bar;
-  Arcane and Frost only.
+- **tbc/mage/all-specs.txt** — Arcane Blast stacks (the Arcane rotation driver), Arcane Power
+  and Icy Veins burn-window timers, Ice Barrier uptime and missing alarm, Clearcasting proc,
+  mana thresholds with Evocation/mana-gem prompts, Ice Lance shatter window, and a 10-icon
+  cooldown row showing only what is down; Arcane and Frost only. PvP layer: CC-on-me
+  colour-coded by category, COUNTERSPELL NOW plus its lockout bar, target immunity, trinket
+  clocks, own Polymorph per opponent, enemy mana.
 
 ## Verifying
 
