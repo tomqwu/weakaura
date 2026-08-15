@@ -1,7 +1,75 @@
--- generate.lua — "Paladin TBC - All Specs" (v10)
+-- generate.lua — "Paladin TBC - All Specs" (v11)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code)
--- except the two unit-orb region tables, which wa_factory has no builder for.
+-- except the globe region tables, which wa_factory has no builder for.
+--
+-- v11 — DIABLO GLOBES. The concentric rings of v9/v10 are gone. Health, mana and the
+-- target are now VESSELS that fill bottom-to-top like liquid: life on the LEFT, power on
+-- the RIGHT, the target between them, each with its number inside the glass. The same
+-- `progresstexture` region as the ring build, one different field:
+--
+--   orientation = "VERTICAL"   -- "Bottom to Top": the waterline rises
+--
+-- The name lies about the direction in the usual WA way (gotchas.md): VERTICAL fills UP,
+-- VERTICAL_INVERSE fills DOWN. Backwards, a globe DRAINS FROM THE TOP as you take damage,
+-- which looks deliberate and is wrong. Switching from the circular fill path to the linear
+-- one also swaps which fields are live: compress / slanted / slantMode were inert on a ring
+-- and MATTER here (all three stay off — a straight waterline is what reads as liquid);
+-- startAngle / endAngle are ignored on the linear path and are emitted for the schema only.
+-- crop_x / crop_y stay 0.41: the sqrt(2) expansion that value cancels is applied in the
+-- CIRCULAR branch, so on the linear path 0.41 is simply the texcoord scale.
+--
+-- THE CANONICAL NUMBERS ARE SHARED BY ALL SEVEN PACKS (see the constants block below).
+-- v9 shipped seven packs that had each invented their own orb diameters; v10 ended that for
+-- rings and v11 keeps the discipline for globes. GLOBE_Y is an ABSOLUTE SCREEN OFFSET, not
+-- a local one — the cluster groups carry it and every globe inside them carries y = 0, so
+-- the parent chain sums to exactly -150 (proof in the header of the assembly section).
+--
+-- THE PORTRAITS ARE GONE, AND THAT IS THE POINT. A `model` region can never carry a text
+-- sub-region (SubText's supports() lists texture / progresstexture / icon / aurabar / empty
+-- — not model), which is why the ring build had to park its percentages OUTSIDE the rings
+-- where they competed with the world. Dropping the face buys the centre of each vessel for
+-- its own number. NOTHING IS ORPHANED: neither portrait aura was deleted — both were
+-- RECYCLED, uid and all, into the two glass rims (see the assembly section). 48 auras
+-- before, 48 auras after, zero new W.uid() calls, changed = 0.
+--
+-- THREAT BECAME THE TARGET GLOBE'S RIM. Threat has no natural vessel — it is not a
+-- resource anyone holds — so "Paladin - Threat" keeps its id, its uid, its triggers, its
+-- thresholds and both load gates and becomes the glass around the target globe: green
+-- normally, orange from 70%, red once you hold aggro, with the percentage above the globe.
+-- It costs no extra element and no extra screen space. TWO TRAPS, both handled:
+--   * the property is `color` on a texture region, NOT `foregroundColor` (that is
+--     progresstexture-only) and NOT `barColor` (aurabar-only). Conditions.lua skips a
+--     condition whose property the region does not have — no error, no editor warning, the
+--     escalation simply never fires. Same class of silent no-op v9 renamed FOR, one region
+--     type further along.
+--   * the mandatory threatvalue <= 0 -> alpha 0 guard is kept verbatim. Without it the rim
+--     paints a full-aggro colour at zero threat.
+--
+-- NO BREAKPOINT MARKS TO RE-DERIVE, AGAIN. On a vessel a threshold is a horizontal line at
+-- yOffset = (threshold/max - 0.5) * GLOBE_MAIN, which is far easier than the ring-era
+-- trigonometry — but this pack has no resource breakpoint marks and never did. Its one
+-- resource threshold ("mana under 20%") is a COLOUR condition, carried across verbatim.
+--
+-- THE ONE COLOUR THAT HAD TO MOVE, and it moved to keep a signal alive rather than to
+-- restyle anything. The canonical life colour is D2 red {0.72, 0.09, 0.09}. The bar-era
+-- low-health escalation was {0.90, 0.12, 0.12} — chosen when the ring underneath was GREEN.
+-- Painting that red onto a red vessel is a condition that fires and changes nothing you can
+-- see: exactly the silent-no-op failure this pack renames properties to avoid, arrived at
+-- from the other direction. Both health escalations therefore take the escalation colours
+-- the committed prototype (poc/diablo-globes) already uses on a red vessel — a hot
+-- {1, 0.15, 0.15} for your own life and {1, 0.35, 0.10} for the target. Trigger, threshold
+-- (30% / 20%), property and condition order are untouched. Mana's red is UNCHANGED: red on
+-- a blue vessel reads perfectly.
+--
+-- TWO THINGS OUTSIDE THE GLOBES MOVED, both because a globe now occupies where they sat,
+-- and NEITHER changed in any other way — same triggers, gates, conditions, sizes, art:
+--   * the Buffs row (0, -156 -> 0, -60): the 76px target globe lands exactly on top of the
+--     old row. It now sits above the threat percentage instead.
+--   * the Swing Timer (-260, -170 -> -300, -76): it used to sit under the player ring
+--     cluster; a 122px life globe now fills that space. It rides just above the life globe,
+--     still 140x9, still gold in the last 0.4s. See the v9 note below for why it is still a
+--     bar and still a sibling of the clusters rather than a child.
 --
 -- v10 — ONE ORB SIZE ACROSS EVERY PACK. Pure geometry: not one trigger, load gate,
 -- condition, colour, spell id or region type changed, no aura was added or removed, and
@@ -9,7 +77,8 @@
 -- picked their own ring diameters (paladin 118/88/60, mage 120/100/72, warlock 128/96/64,
 -- ...) and, worse, the two clusters INSIDE this pack disagreed: the player orb was 88 wide
 -- and the target orb 118, so the same two faces read as different sizes side by side.
--- Every pack now builds from the same seven canonical constants (see ORB_OUTER below):
+-- Every pack built from the same seven canonical constants (ORB_OUTER / ORB_MID / ORB_INNER
+-- / PORTRAIT / CLUSTER_X / CLUSTER_Y / RING — all retired by v11's globe constants):
 --
 --   ring          v9 (paladin)   v10 (all seven packs)
 --   player health      88                104   ORB_OUTER
@@ -334,39 +403,39 @@ local function threatTrigger(minPct)
   return tr
 end
 
--- ===== v10 CANONICAL unit-orb geometry ======================================
--- THESE SEVEN CONSTANTS ARE SHARED BY ALL SEVEN CLASS PACKS. They are not paladin tuning
--- knobs: retuning one pack in isolation is exactly how v9 ended up with seven different
--- orb sizes on one screen. Change them in every pack or in none.
+-- ===== v11 CANONICAL DIABLO-GLOBE GEOMETRY ==================================
+-- THESE CONSTANTS ARE SHARED BY ALL SEVEN CLASS PACKS. They are not paladin tuning knobs:
+-- retuning one pack in isolation is exactly how v9 ended up with seven different orb sizes
+-- on one screen. Change them in every pack or in none. Nothing below is scaled, rounded or
+-- "improved" per pack.
 --
--- Ring assignment (identical in every pack, which is what makes the two sides match):
---   PLAYER cluster: health = ORB_OUTER, primary power = ORB_MID, portrait = PORTRAIT
---   TARGET cluster: threat = ORB_OUTER, health = ORB_MID, power = ORB_INNER, portrait
--- so both clusters present the same outer diameter and the same face, and the target just
--- nests one more ring. A pack with no target power ring leaves ORB_INNER unused rather
--- than resizing anything else — which is this pack (no target mana ring; see below).
-local ORB_OUTER = 104   -- outermost ring, BOTH clusters, EVERY pack
-local ORB_MID   = 78
-local ORB_INNER = 54    -- unused here on purpose: paladin draws no target power ring
-local PORTRAIT  = 46    -- the live 3D face in the middle of both clusters
-local CLUSTER_X = 260   -- player cluster at -260, target cluster at +260
-local CLUSTER_Y = -60   -- both cluster centres, in screen coords (see G.bandY)
--- Ring_20px.tga is a true annulus and ships inside WeakAuras. The number is the stroke
--- weight in the 256x256 source, so a ring drawn at S px carries a band of S*20/256:
--- 8.1px at ORB_OUTER, 6.1px at ORB_MID. Ring_10px — what v9 used — is half that, a 4px
--- wire at these diameters, which is what read as "thin and cheap" in game.
--- (F.TEX_CIRCLE / Circle_Smooth2.tga, what the rest of this repo uses, is a SOLID DISC
--- and would fill as a pie wedge, not a ring.)
-local RING = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_20px.tga"
+-- Both textures ship inside WeakAuras itself (Private.texture_types, "Shapes"), so no media
+-- addon is needed. Circle_Smooth is a SOLID DISC — the liquid; Circle_Smooth_Border is the
+-- matching ring — the glass. (Circle_Smooth2.tga, which the rest of this repo uses, is a
+-- different disc; the border art is cut for Circle_Smooth, so they are used as a pair.)
+local FILL_TEX = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth.tga"
+local RIM_TEX  = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth_Border.tga"
 
--- Percentage placement, also canonical across the seven packs. Each number rides on its
--- own ring as a subtext anchored CENTER, i.e. offsets are from the CLUSTER CENTRE, so the
--- two clusters put their numbers on the same baselines even though their rings differ.
-local PCT_MAIN_SIZE,   PCT_MAIN_Y   = 14, -60   -- health, just under the outer ring
-local PCT_SUB_SIZE,    PCT_SUB_Y    = 11, -76   -- power, under it
-local PCT_THREAT_SIZE, PCT_THREAT_Y = 11,  60   -- threat, ABOVE the ring: three numbers
-                                                -- stacked under one orb is a queue, not a
-                                                -- readout
+local GLOBE_MAIN = 116   -- life and power globes
+local GLOBE_TGT  = 76    -- target globe
+local RIM_PAD    = 6     -- a rim is its globe's size + 6, drawn at frameStrata 2
+local GLOBE_X    = 300   -- life at x = -300, power at x = +300, target at x = 0
+local GLOBE_Y      = -280  -- ABSOLUTE screen y for all three. See the assembly section: the
+                         -- cluster groups carry it and every globe carries y = 0, so the
+                         -- parent chain sums to exactly -150 and not to -150 PLUS whatever
+                         -- this pack's own groups happen to be offset by.
+
+-- The numbers live INSIDE the glass, anchored CENTER with no offset — the whole dividend of
+-- dropping the portrait. Threat is the exception: it has no vessel of its own (it is the
+-- target globe's RIM), so its percentage sits above the globe.
+local PCT_MAIN_SIZE,   PCT_MAIN_Y   = 18, 0
+local PCT_TGT_SIZE,    PCT_TGT_Y    = 13, 0
+local PCT_THREAT_SIZE, PCT_THREAT_Y = 11, 52
+
+-- "Bottom to Top". VERTICAL fills UP; VERTICAL_INVERSE fills DOWN and would drain the globe
+-- from the top as you take damage.
+local GLOBE_ORIENT = "VERTICAL"
+
 -- ===== pack-local layout ====================================================
 -- Everything below is paladin's own stacking, not shared geometry. All offsets are
 -- relative to the group that owns the region; the top-level group sits at (0, -140).
@@ -375,51 +444,44 @@ local G = {
   -- Resources holds the two cluster groups and the Swing Timer, and nothing else. It
   -- anchors at the SCREEN ORIGIN (which is what -TOP_Y means: it cancels the top group's
   -- own drop), so the cluster groups' offsets ARE their screen position and can carry the
-  -- canonical (+-CLUSTER_X, CLUSTER_Y) verbatim, exactly as every other pack's cluster
-  -- groups do. Give this band a drop of its own again and the cluster offsets stop being
-  -- the canonical numbers, which is the drift this whole version exists to end. v9 had the
-  -- band at 62 and the clusters at 0 — centres at -78; they now sit at -60, the 18px of
-  -- headroom the percentages needed once they moved to the shared baselines.
-  bandY      = -TOP_Y,
-  clusterX   = CLUSTER_X,   -- clears the Alerts column (x = -150, 40px icons) and the PvP
-                            -- column (x = 150): the widest cluster is ORB_OUTER, so its
-                            -- inner edge sits at 208, and the whole cluster stays above
-                            -- the cooldown row (top edge y = -190).
-  clusterY   = CLUSTER_Y,
-  thRing     = ORB_OUTER,   -- OUTERMOST, target cluster only: threat toward the pull point
-  flashRing  = ORB_OUTER,   -- the >=80% threat halo, pulsing ON the threat ring
-  hpRing     = ORB_OUTER,   -- PLAYER health: the outer ring of the player cluster
-  tHpRing    = ORB_MID,     -- TARGET health: one ring in from the target's threat ring
-  mpRing     = ORB_MID,     -- player mana, inside the player's health ring
-  portrait   = PORTRAIT,
-  hpTextY    = PCT_MAIN_Y,   hpTextSize = PCT_MAIN_SIZE,
-  mpTextY    = PCT_SUB_Y,    mpTextSize = PCT_SUB_SIZE,
-  thTextY    = PCT_THREAT_Y, thTextSize = PCT_THREAT_SIZE,
-  -- The runway keeps its v9 SCREEN position (absolute y = -170, between the mana
-  -- percentage at -136 and the cooldown row at -190); the offset changed only to absorb
-  -- the band move above. It is a child of Resources, not of the player cluster, so it is
-  -- measured from the band anchor and not from CLUSTER_Y.
-  swingY     = -170, swingW = 140, swingH = 9,
+  -- canonical GLOBE_Y verbatim, exactly as every other pack's cluster groups do. Give this
+  -- band a drop of its own again and the cluster offsets stop being the canonical numbers,
+  -- which is the drift the shared constants exist to end.
+  bandY  = -TOP_Y,
+  -- The runway had to move: it sat at (-260, -170), which is inside the 122px life globe's
+  -- footprint now. It rides just ABOVE the life globe instead — 8.5px of clearance over the
+  -- rim's top edge at y = -89 — on the same x as the globe it belongs to, and clear of the
+  -- Alerts column (x = -150, 40px icons) and of the cooldown row (top edge y = -190). It is
+  -- a child of Resources, not of the player cluster, so it is measured from the band anchor
+  -- and not from GLOBE_Y. Size and everything else are untouched.
+  swingY = -76, swingW = 140, swingH = 9,
 }
 
--- The bar colours are carried across byte-for-byte so the HUD still speaks the same
--- language; only the shape changed.
+-- Diablo's palette for the vessels, this pack's own palette for everything that escalates.
 local COL = {
-  health  = { 0.15, 0.78, 0.25, 1 },   -- the v8 health bar green
-  mana    = { 0.10, 0.45, 0.95, 1 },   -- the v8 mana bar blue
-  threat  = { 0.25, 0.80, 0.30, 1 },   -- the v8 threat bar green
-  flash   = { 1, 0.10, 0.10, 0.85 },   -- the v8 threat flash red
-  track   = { 0, 0, 0, 0.55 },         -- the unfilled arc behind every ring
-  lowHp   = { 0.90, 0.12, 0.12, 1 },
-  lowMana = { 0.85, 0.15, 0.15, 1 },   -- the v8 "mana under 20%" red, unchanged
+  life    = { 0.72, 0.09, 0.09, 1 },   -- D2 life red      | canonical, all seven packs
+  mana    = { 0.13, 0.30, 0.85, 1 },   -- D2 mana blue     | paladin power = mana, always
+  rim     = { 0.62, 0.55, 0.40, 1 },   -- brassy glass     | canonical
+  empty   = { 0.05, 0.05, 0.07, 0.85 },-- the EMPTY vessel, near-black: what sells the
+                                       -- container read, a liquid rising into a jar rather
+                                       -- than a shape appearing out of nothing
+  threat  = { 0.25, 0.80, 0.30, 1 },   -- the v8 threat green, now the target globe's rim
+  flash   = { 1, 0.10, 0.10, 0.85 },   -- the v8 threat flash red, unchanged
+  lifeLow = { 1, 0.15, 0.15, 1 },      -- <30% own life. The v8 {0.90,0.12,0.12} was picked
+  tgtLow  = { 1, 0.35, 0.10, 1 },      -- <20% target life. against a GREEN ring; on a D2-red
+                                       -- vessel both are the vessel colour, i.e. a condition
+                                       -- that fires and shows nothing. These are the
+                                       -- prototype's escalations on a red vessel.
+  lowMana = { 0.85, 0.15, 0.15, 1 },   -- the v8 "mana under 20%" red, UNCHANGED: red on a
+                                       -- blue vessel needs no help
   thHigh  = { 1, 0.60, 0.10, 1 },      -- the v8 ">= 70% threat" orange, unchanged
   thAggro = { 0.90, 0.12, 0.12, 1 },   -- the v8 "you hold aggro" red, unchanged
-  hpText  = { 1, 1, 1, 1 },
-  mpText  = { 0.55, 0.75, 1, 1 },      -- echoes its own ring, so the two numbers under an
-  thText  = { 0.72, 0.95, 0.74, 1 },   -- orb never need labels to tell them apart
+  pctText = { 1, 1, 1, 1 },            -- white inside the glass: the vessel's own colour is
+                                       -- what says which number this is, so the v9 tinting
+                                       -- that kept two stacked numbers apart is not needed
+  thText  = { 0.72, 0.95, 0.74, 1 },   -- threat prints on open screen above the globe
 }
 
--- RING (the bundled Ring_20px.tga annulus) is declared with the canonical geometry above.
 local IV, TOC = 45, 20501
 
 -- wa_factory's stub() is local to the factory, so the two hand-written region types below
@@ -437,36 +499,39 @@ local function orbStub(t)
   return t
 end
 
--- Radial progress ring. Field notes on the ones that are traps:
---   orientation CLOCKWISE  -> the only radial values are CLOCKWISE / ANTICLOCKWISE; every
---     other entry in orientation_with_circle_types is linear and would silently draw a bar.
---   startAngle 0 / endAngle 360 -> a full circle. WA normalises 0/360 -> 0/0 and then
---     corrects endAngle back up by 360, so this is handled, not a degenerate case.
---   crop_x / crop_y = 0.41 -> the IDENTITY value, NOT "no crop". The circular path expands
---     the texture by sqrt(2) so rotated quadrants never run off it, and 1 + 0.41 exactly
---     cancels that. Setting 0 blows the ring up 1.41x and clips it.
+-- THE VESSEL. Same region type the rings used, linear fill path. Field notes on the traps:
+--   orientation VERTICAL -> "Bottom to Top" in Private.orientation_with_circle_types. The
+--     key lies about the direction: VERTICAL fills UP, VERTICAL_INVERSE fills DOWN. A globe
+--     that drains from the top as you take damage looks deliberate and is wrong.
+--   backgroundColor is the EMPTY portion and is what makes this read as a container: a
+--     near-black disc that coloured liquid rises into. backgroundOffset = 0 keeps the empty
+--     part exactly the same disc as the full part rather than a halo around it (the default
+--     2 fattens it).
+--   crop_x / crop_y = 0.41 -> the IDENTITY value, NOT "no crop", and it stays 0.41 here.
+--     The sqrt(2) expansion 1 + 0.41 cancels is applied in the CIRCULAR branch; on the
+--     linear path this is simply the texcoord scale, so the same value is still correct.
+--   startAngle / endAngle are IGNORED on the linear path; emitted for the schema only.
+--   compress / slanted / slant / slantFirst / slantMode were inert on a ring and are LIVE
+--     here. All off on purpose: a straight waterline is what reads as liquid.
 --   auraRotation = 0 -> absent from the 3.5.0 default table but read unconditionally by
 --     current code as data.auraRotation / 180 * math.pi, so it must be emitted.
---   backgroundOffset = 0 -> the default 2 fattens the track relative to the fill, which
---     reads as a halo instead of a concentric track.
 --   adjustedMin/Max are STRINGS (""), because SetAdjustedMin does adjustedMin:find(...).
 --   progressSource is rewritten to {-1, ""} by Modernize < 71 whatever is emitted; it is
---     here for readability. {-1,""} = Automatic, which routes the first active trigger's
---     value/total into the fill with no further wiring.
---   compress / slanted / slant / slantFirst / slantMode are LINEAR-only and inert on a
---     circular ring; they are emitted because they are in the region's default table.
-local function ring(id, size, color, trigs)
+--     here for readability. {-1,""} = Automatic, which routes the FIRST ACTIVE trigger's
+--     value/total into the fill — which is why health and mana can never share a vessel and
+--     why the progress trigger must be trigger 1 on every globe here.
+local function globe(id, size, color, x, trigs)
   return orbStub{
     regionType = "progresstexture", id = id, uid = W.uid(), parent = nil,
     width = size, height = size,
     selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
-    xOffset = 0, yOffset = 0, frameStrata = 1, alpha = 1,
-    orientation = "CLOCKWISE", startAngle = 0, endAngle = 360,
+    xOffset = x, yOffset = 0, frameStrata = 1, alpha = 1,
+    orientation = GLOBE_ORIENT, startAngle = 0, endAngle = 360,
     inverse = false, mirror = false,
     compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
-    foregroundTexture = RING, backgroundTexture = RING, sameTexture = true,
+    foregroundTexture = FILL_TEX, backgroundTexture = FILL_TEX, sameTexture = true,
     desaturateForeground = false, desaturateBackground = false,
-    foregroundColor = color, backgroundColor = COL.track,
+    foregroundColor = color, backgroundColor = COL.empty,
     backgroundOffset = 0,
     blendMode = "BLEND", textureWrapMode = "CLAMPTOBLACKADDITIVE",
     crop_x = 0.41, crop_y = 0.41, rotation = 0, auraRotation = 0,
@@ -481,44 +546,28 @@ local function ring(id, size, color, trigs)
   }
 end
 
--- Live unit portrait — a real 3D portrait of whoever is targeted, not a static image and
--- not a class icon, which is what lets the target orb work without ever knowing the
--- target's class: it renders NPCs and mobs too.
---   modelIsUnit = true + model_fileId = "<unit>" -> PlayerModel:SetUnit(unit)
---   portraitZoom = true                          -> SetPortraitZoom(1), Blizzard framing
--- CRITICAL: current code reads the unit from `model_fileId`. WA 3.5.0 read `model_path`,
--- and the migration bridging the two (Modernize < 72) is guarded by IsClassicEra(), which
--- is a DISTINCT predicate from IsTBC() — so on a 2.5.x client that migration DOES NOT RUN
--- and emitting only model_path is a silent no-op. Both are emitted; model_fileId works.
--- The portrait carries the same Health trigger as its own orb, so it self-hides with it.
-local function portrait(id, unit, size)
-  local tr = F.healthTrigger()
-  tr.unit = unit
-  return orbStub{
-    regionType = "model", id = id, uid = W.uid(), parent = nil,
-    model_fileId = unit, model_path = unit, modelIsUnit = true, modelDisplayInfo = false,
-    portraitZoom = true, api = false,
-    model_x = 0, model_y = 0, model_z = 0,
-    model_st_tx = 0, model_st_ty = 0, model_st_tz = 0,
-    model_st_rx = 270, model_st_ry = 0, model_st_rz = 0, model_st_us = 40,
-    sequence = 1, advance = false, rotation = 0,
-    width = size, height = size, alpha = 1,
-    selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
-    xOffset = 0, yOffset = 0, frameStrata = 1,
-    border = false, borderColor = { 1, 1, 1, 0.5 }, backdropColor = { 1, 1, 1, 0.5 },
-    borderEdge = "None", borderOffset = 5, borderInset = 11,
-    borderSize = 16, borderBackdrop = "Blizzard Tooltip",
-    subRegions = {},
-    triggers = F.triggers({ tr }),
-    load = F.load(CLASS),
-  }
+-- THE GLASS. A plain texture, size + RIM_PAD, so the border art rings the fill. It carries
+-- the same trigger as its globe purely so the two appear and vanish together; it has no
+-- progress of its own, which is also why it is a `texture` and not a second progresstexture.
+-- Its colour property is therefore `color` — NOT foregroundColor (progresstexture-only) and
+-- NOT barColor (aurabar-only). That matters for the threat rim below, which is the only rim
+-- here that changes colour.
+-- The rims do NOT carry the out-of-combat fade the fills do. That is deliberate and is the
+-- job the portraits used to do: something stays at full alpha so the vessel is still where
+-- your eye finds the cluster while you ride around.
+local function rim(id, size, color, x, trigs)
+  local t = F.texture(id, CLASS, size, size, x, 0, nil, RIM_TEX, color)
+  t.frameStrata = 2
+  t.triggers = F.triggers(trigs)
+  return t
 end
 
--- The percentages sit OUTSIDE the rings: the middle is occupied by the portrait, and a
--- `model` region cannot carry a text sub-region at all (SubText's supports() gate lists
--- texture / progresstexture / icon / aurabar / empty — not model). So each number rides on
--- its own ring, which also means it appears and disappears with that ring: no target, no
--- numbers; no threat table, no threat number.
+-- The percentages go INSIDE the glass — the whole dividend of dropping the portraits. A
+-- progresstexture accepts a subtext (SubText's supports() gate lists texture /
+-- progresstexture / icon / aurabar / empty); a `model` region never did, which is why the
+-- ring build had to park these numbers outside. Each number still rides on its own region,
+-- so it appears and disappears with it: no target, no number; no threat table, no threat
+-- percentage.
 local function pct(sym, size, yOffset, color)
   local st = F.subtext("%" .. sym .. "%%", size, "CENTER", sym)
   st.anchorYOffset = yOffset
@@ -533,25 +582,28 @@ end
 local top = F.group(TOP, 0, -140, nil)
 top.frameStrata = 1
 
--- ===== 2) Resources: the two unit orbs (v9; was a 172px bar stack through v8) =====
+-- ===== 2) Resources: the globes (v9-v10 rings; a 172px bar stack through v8) =====
 -- This group now only holds the two cluster groups, which are created at the very BOTTOM
 -- of this script so their uids append after every existing one. Its own uid is unchanged,
 -- so a dragged Resources position survives the update.
 local gRes = reg(F.group("Paladin - Resources", 0, G.bandY, TOP))
 adopt(top, gRes)
 
--- 3) PLAYER HEALTH — the outer ring of the player orb. Was the 172x14 health aurabar
--- through v8; same aura id, SAME UID, so this updates in place rather than orphaning.
+-- 3) LIFE GLOBE, LEFT (x = -300). Was the 172x14 health aurabar through v8 and the outer
+-- ring of the player orb in v9/v10; same aura id, SAME UID every time, so this updates in
+-- place rather than orphaning.
 -- Trigger 2 is the existing Unit Characteristics state feeder and drives the out-of-combat
 -- fade ONLY; progress comes from trigger 1 (Automatic progress = first active trigger).
--- v9 adds the low-health tier the bar never had: at ring scale colour does far more work
--- than length, and "I am about to die" is the one state a 52px radius must shout.
-local hp = reg(ring("Paladin - Health", G.hpRing, COL.health,
+-- The percentage now sits INSIDE the glass at 18pt — twice the ring-era size, because the
+-- centre of the vessel is free and 14pt outside a ring was the smallest thing on the HUD.
+local hp = reg(globe("Paladin - Health", GLOBE_MAIN, COL.life, -GLOBE_X,
   { F.healthTrigger(), F.unitCharTrigger() }))
-hp.subRegions[1] = pct("percenthealth", G.hpTextSize, G.hpTextY, COL.hpText)
+hp.subRegions[1] = pct("percenthealth", PCT_MAIN_SIZE, PCT_MAIN_Y, COL.pctText)
 hp.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
-  F.condition(1, "percenthealth", "<", "30", "foregroundColor", COL.lowHp),
+  -- Same trigger, same 30% threshold, same property, same position in the order as v9/v10.
+  -- Only the colour moved, and only because the vessel underneath is now red: see COL above.
+  F.condition(1, "percenthealth", "<", "30", "foregroundColor", COL.lifeLow),
   -- LAST: UnitHealthMax has no floor in the prototype, so a unit whose max health has not
   -- streamed yet gives total == 0 — and progresstexture draws total == 0 as FULL, the exact
   -- inverse of what the aurabar did. Hide instead of lying. Must come after the fade,
@@ -560,37 +612,44 @@ hp.conditions = {
 }
 -- adopted into the player cluster at the bottom of this script
 
--- 4) PLAYER MANA — the inner ring. The paladin resource in every spec; red below 20%,
--- carried across from the v8 bar with `barColor` renamed to `foregroundColor` (the ONLY
--- name progresstexture exposes — a carried-over `barColor` is silently dropped).
-local mp = reg(ring("Paladin - Mana", G.mpRing, COL.mana,
+-- 4) POWER GLOBE, RIGHT (x = +300). A paladin's power is MANA in all three specs and in
+-- every form there is, so this vessel is D2 mana blue and needs no recolour condition — the
+-- druid, whose power type changes with form, is the pack that recolours by condition. Red
+-- below 20%, carried across from the v8 bar with `barColor` renamed to `foregroundColor`
+-- (the ONLY name progresstexture exposes — a carried-over `barColor` is silently dropped).
+local mp = reg(globe("Paladin - Mana", GLOBE_MAIN, COL.mana, GLOBE_X,
   { F.powerTrigger(0), F.unitCharTrigger() }))
-mp.subRegions[1] = pct("percentpower", G.mpTextSize, G.mpTextY, COL.mpText)
+mp.subRegions[1] = pct("percentpower", PCT_MAIN_SIZE, PCT_MAIN_Y, COL.pctText)
 mp.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "percentpower", "<", "20", "foregroundColor", COL.lowMana),
   -- The Power prototype floors total at math.max(1, UnitPowerMax(...)), which is why this
-  -- guard reads <= 1 and not <= 0. Dead weight on a paladin, kept for ring discipline.
+  -- guard reads <= 1 and not <= 0. Dead weight on a paladin, kept for globe discipline.
   F.condition(1, "maxpower", "<=", "1", "alpha", 0),
 }
 -- adopted into the player cluster at the bottom of this script
 
--- 5) THREAT — now the OUTERMOST ring of the TARGET orb, because your threat is threat on
--- that target. Party/raid only, and never in an arena. For prot, red = "I have aggro" =
--- the goal state, not an alarm. The Threat Situation prototype is progressType "static"
--- with hidden value/total args and threattotal = threatvalue * 100 / threatpct, so
--- value/total is exactly threatpct/100 and the ring fills 0..100% of the pull threshold.
-local th = reg(ring("Paladin - Threat", G.thRing, COL.threat, { threatTrigger() }))
-th.subRegions[1] = pct("threatpct", G.thTextSize, G.thTextY, COL.thText)
+-- 5) THREAT — now the TARGET GLOBE'S RIM, because threat has no vessel of its own: it is
+-- not a resource anybody holds, it is your standing on someone else's table. Making it the
+-- glass costs no extra element and no extra screen space, and it puts the reading exactly
+-- where the unit it describes already is. Party/raid only, and never in an arena. For prot,
+-- red = "I have aggro" = the goal state, not an alarm.
+-- Same id, same uid, same triggers, same thresholds, same two load gates as v6-v10.
+-- THE PROPERTY IS `color`. A texture region has no `foregroundColor` (progresstexture-only)
+-- and no `barColor` (aurabar-only), and Conditions.lua skips a condition whose property the
+-- region does not define — no error, no editor warning, the escalation just never fires.
+-- This is the same silent no-op v9 renamed barColor -> foregroundColor to avoid, one region
+-- type further along, and it is the single easiest thing to get wrong in this version.
+local th = reg(rim("Paladin - Threat", GLOBE_TGT + RIM_PAD, COL.threat, 0, { threatTrigger() }))
+th.subRegions = { pct("threatpct", PCT_THREAT_SIZE, PCT_THREAT_Y, COL.thText) }
 th.conditions = {  -- severe last: a later match overwrites the same property
-  F.condition(1, "threatpct", ">=", "70", "foregroundColor", COL.thHigh),
-  F.condition(1, "aggro", "==", 1, "foregroundColor", COL.thAggro),
-  -- THE MIGRATION'S WORST TRAP, guarded. threattotal is threatvalue-derived, so it is 0
+  F.condition(1, "threatpct", ">=", "70", "color", COL.thHigh),
+  F.condition(1, "aggro", "==", 1, "color", COL.thAggro),
+  -- MANDATORY GUARD, kept verbatim from v9. threattotal is threatvalue-derived, so it is 0
   -- whenever threatvalue is 0 — the instant before your first hit lands, and right after a
-  -- Divine Shield drop. The v8 aurabar drew that as EMPTY; a progresstexture draws it as
-  -- FULL, i.e. "you are at the pull threshold", while these colour conditions stay green
-  -- because threatpct is 0. Shape and colour would contradict each other at the worst
-  -- possible moment. `threatvalue` is a stored number arg; the hidden `total` is not.
+  -- Divine Shield drop. Without this the rim is painted at full strength on a target you
+  -- have no threat on at all, which reads as aggro. `threatvalue` is a stored number arg;
+  -- the hidden `total` is not.
   F.condition(1, "threatvalue", "<=", "0", "alpha", 0),
 }
 inGroup(th)
@@ -598,13 +657,14 @@ noArena(th)   -- v6: an arena party is still a party, but has no threat table
 -- adopted into the target cluster at the bottom of this script
 
 -- 6) >=80% threat HALO — Ret only (a tank AT aggro must not be alarmed). Was a 176x18
--- rectangle pulsing over the bar through v8, then a 132px ring floating outside the 118px
--- threat arc in v9. v10 draws it at ORB_OUTER with the same art as the threat ring, so the
--- halo pulses exactly ON that ring (ADD blend over the same circle = the ring itself
--- flaring red) instead of hovering in empty space 7px outside it — the same failure the
--- other packs' breakpoint ticks had. Same trigger, same threshold, same gates, same uid.
-local flash = reg(F.texture("Paladin - Threat Flash", CLASS, G.flashRing, G.flashRing, 0, 0,
-  nil, RING, COL.flash))
+-- rectangle pulsing over the bar through v8, a 132px ring floating outside the threat arc
+-- in v9, and the threat ring itself flaring in v10. v11 draws it as the same circle as the
+-- threat rim (GLOBE_TGT + RIM_PAD) with ADD blend, so the glass around the target globe
+-- flares red rather than a halo hovering in empty space. Same trigger, same threshold, same
+-- gates, same uid. It keeps frameStrata 1 (inherited) rather than the rim's 2 and is adopted
+-- LAST, so the pulse is the topmost thing in the cluster.
+local flash = reg(F.texture("Paladin - Threat Flash", CLASS,
+  GLOBE_TGT + RIM_PAD, GLOBE_TGT + RIM_PAD, 0, 0, nil, RIM_TEX, COL.flash))
 flash.blendMode = "ADD"
 flash.triggers = F.triggers({ threatTrigger(80) })
 flash.animation.main = F.animPreset("alphaPulse", "1")
@@ -614,7 +674,13 @@ gate(flash, GATE_RET)
 -- adopted into the target cluster at the bottom of this script
 
 -- ===== 7) Buffs: static row of timers =====
-local gBuffs = reg(F.group("Paladin - Buffs", 0, -16, TOP))
+-- v11: the row MOVED, and moved only. Its three 40px icons sat at absolute y = -156, x from
+-- -86 to +42 — which is precisely where the 76px target globe (centre 0, -150; rim radius
+-- 41) now sits. It goes above the cluster instead: absolute y = -60, i.e. icon edges at -40
+-- and -80, clearing the threat percentage (y = -98, 11pt) by 11px and the Alerts column
+-- (x = -150) and PvP column (x = +150) horizontally as before. Not one trigger, gate,
+-- condition, size, icon or uid in this section changed.
+local gBuffs = reg(F.group("Paladin - Buffs", 0, 80, TOP))
 adopt(top, gBuffs)
 
 -- 8) seal uptime — the rotation's metronome; glows under 5s so you re-seal in time
@@ -864,25 +930,28 @@ end
 --      arc it becomes a rotating tick with no edge to aim at, which is measurably harder
 --      to time and is exactly the judgement the twist depends on.
 -- So it stays an aurabar (and therefore correctly keeps `barColor`, which does not exist
--- on progresstexture), and it is positioned UNDER THE PLAYER ORB rather than in the vacated
--- centre: it is player state, it is read together with the player's own mana, and putting it
--- back in the middle would give up the whole point of v9. It is 140x9 instead of 172x10 so it
--- stays clear of the Alerts column at x = -150 and of the cooldown row below it.
+-- on progresstexture), and it is positioned WITH THE PLAYER'S OWN VESSEL rather than in the
+-- vacated centre: it is player state, and putting it back in the middle would give up the
+-- whole point of v9. It is 140x9 instead of 172x10 so it stays clear of the Alerts column at
+-- x = -150 and of the cooldown row below it.
 --
--- It is a SIBLING of the two orb clusters inside Resources, not a child of the player orb,
--- even though it sits under it. Two reasons: a twister who hides the player orb (Blizzard
--- unit frames, a different health addon) must keep the runway, and a 0.4s window is the one
--- element people genuinely want to drag somewhere personal — right under the crosshair, say —
--- without dragging their health and mana ring along with it. Its x offset therefore repeats
--- the cluster's, rather than inheriting it.
+-- It is a SIBLING of the two clusters inside Resources, not a child of one, even though it
+-- sits with them. Two reasons: a twister who hides the life globe (Blizzard unit frames, a
+-- different health addon) must keep the runway, and a 0.4s window is the one element people
+-- genuinely want to drag somewhere personal — right under the crosshair, say — without
+-- dragging their health and mana readouts along with it. Its x offset therefore repeats the
+-- globe's, rather than inheriting it.
 --
--- v10 — it did not move on screen. The Resources anchor moved to the screen origin so the
--- cluster groups could carry the canonical (+-260, -60) verbatim, and G.swingY absorbed
--- exactly that re-anchoring (-92 -> -170, both of which are absolute y = -170). The bar is
--- therefore where it always was: 22px below the mana percentage (was 5px, because v9's orb
--- hung 18px lower and its numbers with it) and 15px above the cooldown row's top edge.
+-- v11 — IT MOVED, because a 122px globe now occupies where it was. It sat at absolute
+-- (-260, -170), which is inside the life globe's rim (centre -300, -150; radius 61). It now
+-- rides at (-300, -76), directly ABOVE the life globe on the globe's own x: 8.5px of
+-- clearance over the rim's top edge (-89), well clear of the Alerts column beside it and of
+-- the cooldown row far below. Under the globe was not available — the 140px bar would have
+-- had to drop past y = -222 to clear both the rim and the cooldown row's left end in a full
+-- 14-icon PvP row. Nothing about the bar itself changed: same size, trigger, gate, colour
+-- and gold twist window.
 local swing = reg(F.aurabar("Paladin - Swing Timer", CLASS, G.swingW, G.swingH,
-  -G.clusterX, G.swingY, nil, { 0.55, 0.55, 0.62, 1 }))
+  -GLOBE_X, G.swingY, nil, { 0.55, 0.55, 0.62, 1 }))
 swing.triggers = F.triggers({ swingTrigger() })
 swing.subRegions[2] = F.subborder("bar")
 swing.conditions = {
@@ -1203,68 +1272,90 @@ pvpCd("Blessing of Protection", "Blessing of Protection", 1022, 1022)
 -- so it can never double up with the icon above it.
 pvpCd("Hammer of Justice (PvP)", "Hammer of Justice", 853, GATE_HOLY)
 
--- ===== 44-48) v9: the unit orbs =====
--- EVERYTHING BELOW IS NEW UID TERRITORY. These five constructors sit at the very bottom of
--- the script on purpose: W.uid() draws from a seeded stream, so a new uid() call inserted
--- anywhere above would shift every later aura's uid and turn the whole re-import from an
--- Update into 48 duplicates. Regions built earlier are re-parented down here instead —
--- creation order is what the uid stream sees, parenting order is not.
+-- ===== 44-48) the globe clusters (v9 orbs; v11 globes) =====
+-- THE UID STREAM ENDS HERE, AND ITS ORDER IS SACRED. W.uid() draws from a seeded stream, so
+-- a uid() call inserted, removed or reordered ANYWHERE above shifts every later aura's uid
+-- and turns the whole re-import from an Update into 48 duplicates. v11 adds NO uid() call
+-- and removes none: these are the same five constructors in the same five positions v9/v10
+-- had, and the last two — which built the player and target PORTRAITS — now build the two
+-- glass rims instead. That is the recycling the portrait removal is paid for with: the
+-- regions change type and name, the uids do not move, and nothing is orphaned in anyone's
+-- WeakAuras. Regions built earlier are re-parented down here — creation order is what the
+-- uid stream sees, parenting order is not.
 --
 -- Sibling stacking inside a group is exact, not "roughly creation order":
 -- FixGroupChildrenOrder walks controlledChildren and adds +4 frame levels per child, so
--- EARLIER = FURTHER BEHIND. Outer ring first, inner rings next, portrait LAST so nothing
--- ever draws over the face.
+-- EARLIER = FURTHER BEHIND. Fills first, glass after them.
+--
+-- ABSOLUTE POSITIONS — the whole point of GLOBE_Y being an absolute number. Walk the chain:
+--   top ................. (   0, -140)
+--   + Resources ......... (   0, +140)  = (   0,    0)   bandY cancels the top group's drop
+--   + cluster group ..... (   0, -150)  = (   0, -150)   GLOBE_Y, carried once
+--   + life globe ........ (-300,    0)  = (-300, -150)
+--   + power globe ....... (+300,    0)  = (+300, -150)
+--   + target globe ...... (   0,    0)  = (   0, -150)
+-- Every rim repeats its globe's offset exactly, so the glass lands on its own fill. This is
+-- verified by decoding the shipped string and summing the parent chain, not by reading it
+-- off this comment.
 
--- 44/45) the two clusters. Separate groups so each orb can be dragged on its own, and so a
--- player who wants only one of them can disable a single group.
--- v10: both carry the canonical (+-CLUSTER_X, CLUSTER_Y) — the same pair of offsets the
--- cluster groups hold in every other pack.
-local gPlayerOrb = reg(F.group("Paladin - Player Orb", -G.clusterX, G.clusterY, gRes.id))
+-- 44/45) the two clusters. Separate groups so the player's pair and the target's globe can
+-- be dragged independently, and so a player who wants only one side can disable one group.
+-- Both carry (0, GLOBE_Y): the x offsets live on the globes because the player's two vessels
+-- are 600px apart and belong to one draggable unit.
+local gPlayerOrb = reg(F.group("Paladin - Player Globes", 0, GLOBE_Y, gRes.id))
 adopt(gRes, gPlayerOrb)
-local gTargetOrb = reg(F.group("Paladin - Target Orb", G.clusterX, G.clusterY, gRes.id))
+local gTargetOrb = reg(F.group("Paladin - Target Globe", 0, GLOBE_Y, gRes.id))
 adopt(gRes, gTargetOrb)
 
--- 46) TARGET HEALTH — the target orb's own ring, and the only fill it has besides threat.
+-- 46) TARGET GLOBE — smaller than yours (76 vs 116) so it reads as secondary, and centred
+-- between the two. Diablo has no target globe; WoW needs one.
 -- Red under 20% is a single unambiguous statement ("this unit is nearly dead") that reads
 -- correctly in both directions: on a hostile target it is the Hammer of Wrath execute
 -- window that the alert column is already prompting for, and on a friendly target it is
--- the Lay on Hands / Flash of Light emergency. The self-hide needs no condition and no
--- load gate: the Health prototype ANDs in `WeakAuras.UnitExistsFixed(unit, smart)`, so
--- unit = "target" with no target produces NO STATE and this entire cluster vanishes.
+-- the Lay on Hands / Flash of Light emergency. On a red vessel that escalation is the
+-- prototype's orange-red rather than the ring era's near-identical red — same trigger, same
+-- 20% threshold, same property. The self-hide needs no condition and no load gate: the
+-- Health prototype ANDs in `WeakAuras.UnitExistsFixed(unit, smart)`, so unit = "target"
+-- with no target produces NO STATE and this entire cluster vanishes.
 local tHealthTrigger = F.healthTrigger()
 tHealthTrigger.unit = "target"
-local tHp = reg(ring("Paladin - Target Health", G.tHpRing, COL.health, { tHealthTrigger }))
-tHp.subRegions[1] = pct("percenthealth", G.hpTextSize, G.hpTextY, COL.hpText)
+local tHp = reg(globe("Paladin - Target Health", GLOBE_TGT, COL.life, 0, { tHealthTrigger }))
+tHp.subRegions[1] = pct("percenthealth", PCT_TGT_SIZE, PCT_TGT_Y, COL.pctText)
 tHp.conditions = {
-  F.condition(1, "percenthealth", "<", "20", "foregroundColor", COL.lowHp),
-  F.condition(1, "maxhealth", "<=", "0", "alpha", 0),   -- see the player ring's note
+  F.condition(1, "percenthealth", "<", "20", "foregroundColor", COL.tgtLow),
+  F.condition(1, "maxhealth", "<=", "0", "alpha", 0),   -- see the life globe's note
 }
 -- adopted below, in back-to-front order with the rest of the target cluster
 
--- NO TARGET MANA RING, deliberately — which is why ORB_INNER (the third target ring in the
--- packs that do draw target power) is defined above and left unused instead of being spent
--- on something else here: the target cluster's outer two rings must stay at the canonical
--- ORB_OUTER / ORB_MID whatever this pack chooses not to show. Most TBC bosses report mana as their primary bar and
--- sit near full all fight, so the ring would be a permanent blue circle carrying no
--- decision — and v6 already settled the PvP half of this question for this pack: a paladin
--- has no mana drain, burn or punish (Judgement of Wisdom GIVES the attacker mana), so an
--- opponent's mana would not change one paladin button press. The packs that can act on it
--- (warlock / priest / hunter / mage) are where that readout belongs.
+-- NO TARGET POWER GLOBE, deliberately. Most TBC bosses report mana as their primary bar and
+-- sit near full all fight, so it would be a permanent blue vessel carrying no decision — and
+-- v6 already settled the PvP half of this question for this pack: a paladin has no mana
+-- drain, burn or punish (Judgement of Wisdom GIVES the attacker mana), so an opponent's mana
+-- would not change one paladin button press. The packs that can act on it (warlock / priest
+-- / hunter / mage) are where that readout belongs. The target side is one vessel and its
+-- threat rim, which is exactly why the threat readout fits there for free.
 
--- 47/48) the faces. Created last of all so nothing draws over them.
-local pPortrait = reg(portrait("Paladin - Player Portrait", "player", G.portrait))
-local tPortrait = reg(portrait("Paladin - Target Portrait", "target", G.portrait))
+-- 47/48) THE GLASS — and the two auras that used to be the portraits. Same uids, same two
+-- positions at the end of the stream; `Paladin - Player Portrait` becomes the life globe's
+-- rim and `Paladin - Target Portrait` becomes the power globe's rim. Each carries its
+-- globe's own trigger, so glass and liquid appear and vanish together. The target globe's
+-- glass is not built here: it is `Paladin - Threat` above, which is the whole trick that
+-- lets threat cost nothing.
+local pRim = reg(rim("Paladin - Life Globe Rim", GLOBE_MAIN + RIM_PAD, COL.rim, -GLOBE_X,
+  { F.healthTrigger() }))
+local tRim = reg(rim("Paladin - Mana Globe Rim", GLOBE_MAIN + RIM_PAD, COL.rim, GLOBE_X,
+  { F.powerTrigger(0) }))
 
--- Re-parent the surviving v8 regions into their clusters, back to front. None of these
--- consume a uid — they were constructed in their original positions above.
-adopt(gPlayerOrb, hp)          -- outer ring
-adopt(gPlayerOrb, mp)          -- inner ring
-adopt(gPlayerOrb, pPortrait)   -- face on top
+-- Re-parent the surviving regions into their clusters, back to front. None of these consume
+-- a uid — they were constructed in their original positions above.
+adopt(gPlayerOrb, hp)          -- life, the liquid
+adopt(gPlayerOrb, mp)          -- power, the liquid
+adopt(gPlayerOrb, pRim)        -- the glass around each
+adopt(gPlayerOrb, tRim)
 
-adopt(gTargetOrb, th)          -- outermost ring: threat
-adopt(gTargetOrb, flash)       -- the >=80% halo, just outside it
-adopt(gTargetOrb, tHp)         -- health ring
-adopt(gTargetOrb, tPortrait)   -- face on top
+adopt(gTargetOrb, tHp)         -- the target's liquid
+adopt(gTargetOrb, th)          -- its glass IS the threat readout
+adopt(gTargetOrb, flash)       -- the >=80% pulse, topmost so it flares over both
 
 adopt(gRes, swing)             -- sibling of both clusters; see its own note above
 
