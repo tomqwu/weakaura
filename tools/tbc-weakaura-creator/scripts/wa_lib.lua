@@ -162,6 +162,9 @@ end
 -- Compares uids of a new build against the previous version's string.
 -- Every old uid must survive, even when an aura is renamed. A same-id uid
 -- change is reported separately because it is always an update-flow break.
+-- missingIds names the auras behind the `missing` count, sorted, so a caller
+-- can tell a DELIBERATE removal from an accidental one: the count alone says
+-- "something disappeared", never "the target cluster disappeared".
 function M.uidContinuityStrings(encoded, previous)
   local old = M.decode(previous)
   local new = M.decode(encoded)
@@ -181,11 +184,17 @@ function M.uidContinuityStrings(encoded, previous)
   for uid in pairs(oldUids) do
     if newUids[uid] then retained = retained + 1 else missing = missing + 1 end
   end
+  local missingIds = {}
+  for _, ch in ipairs(old.c or {}) do
+    if not newUids[ch.uid] then missingIds[#missingIds + 1] = ch.id end
+  end
+  table.sort(missingIds)
   return {
     stable = stable,
     changed = changed,
     retained = retained,
     missing = missing,
+    missingIds = missingIds,
     oldCount = #(old.c or {}),
     newCount = #(new.c or {}),
     parentSame = old.d.uid == new.d.uid,
@@ -199,14 +208,42 @@ function M.uidContinuity(encoded, prevPath)
   return M.uidContinuityStrings(encoded, previous)
 end
 
-function M.assertUidContinuity(cont, label)
+-- allowedRemovals (optional): the ids a version DELIBERATELY drops, as an array
+-- {"Pack - Aura", ...} or a set {["Pack - Aura"] = true}. Default (nil) is the
+-- historical contract: no uid may disappear, ever.
+--
+-- WHY AN ALLOWANCE EXISTS AT ALL. missing == 0 is the right default — it is what
+-- makes an in-game re-import an Update rather than a duplicate — but it is not a
+-- law of the universe: a HUD that may never delete a region can only grow, and
+-- "keep the uid alive" is exactly how filler regions get invented to absorb slots
+-- nobody wants. Deleting is allowed here only when it is DECLARED, one id at a
+-- time, so the removal is a reviewable line in a diff instead of a silent count.
+-- An undeclared disappearance still fails, and `changed` (an id that kept its name
+-- and swapped uid) is never forgivable — that is an update-flow break, not a removal.
+-- Declared-but-still-present ids are NOT an error: a pack script re-runs against its
+-- own freshly written string, where the removal has already happened on both sides.
+function M.assertUidContinuity(cont, label, allowedRemovals)
   if not cont then return true end
   label = label or "uid continuity"
   assert(cont.parentSame, label .. ": top-level uid changed")
   assert(cont.changed == 0, label .. ": existing ids changed uid: " .. cont.changed)
-  assert(cont.missing == 0,
-    ("%s: %d of %d previous child uids disappeared")
-      :format(label, cont.missing, cont.oldCount))
+  if allowedRemovals == nil then
+    assert(cont.missing == 0,
+      ("%s: %d of %d previous child uids disappeared")
+        :format(label, cont.missing, cont.oldCount))
+    return true
+  end
+  local allowed = {}
+  for k, v in pairs(allowedRemovals) do
+    if type(k) == "number" then allowed[v] = true elseif v then allowed[k] = true end
+  end
+  local undeclared = {}
+  for _, id in ipairs(cont.missingIds or {}) do
+    if not allowed[id] then undeclared[#undeclared + 1] = id end
+  end
+  assert(#undeclared == 0,
+    ("%s: %d undeclared uid removal(s): %s")
+      :format(label, #undeclared, table.concat(undeclared, ", ")))
   return true
 end
 
