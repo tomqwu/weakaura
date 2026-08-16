@@ -1,4 +1,4 @@
--- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v9.
+-- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v10.
 -- Run: lua5.1 tbc/mage/generate.lua   (toolkit libs live in tools/tbc-weakaura-creator/scripts/)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (internalVersion 45).
 --
@@ -177,6 +177,36 @@
 --     Decode the shipped string and add the chain up — that is the check this migration is
 --     graded on, and it is the one the previous migration failed in six packs out of seven.
 
+-- v10 (THE GLOBES MOVE BESIDE THE CHARACTER, AND THE GLASS CATCHES LIGHT. Two changes, both
+-- applied identically in all seven packs. NO aura added, removed or renamed, NO uid() call
+-- moved or added, no trigger, load gate, condition, colour, spell id or region type touched,
+-- and nothing outside the globe layer changed — the diff is three constants, one cluster
+-- offset, and one appended subregion per vessel):
+--   * POSITION. v9 parked all three vessels on a band at y = -262, which read as a second bar
+--     bolted under the HUD rather than as part of the character. They now FLANK the character:
+--     life at (-190, 40), power at (+190, 40), the target globe above and between them at
+--     (0, 110). Those three positions are fixed across the seven packs and were scanned against
+--     every element in all of them; they are the tightest collision-free arrangement, and the
+--     near misses are worth recording so nobody "tidies" them later: x = ±170 walks into the
+--     Alerts column (x = -150) and the PvP column (x = +150), which every pack carries, and
+--     x = ±210 walks into the PvP-layer elements at (200, -44). This pack's own columns sit at
+--     exactly those two x values (see "Mage - Alerts" and "Mage - PvP"), so the margin here is
+--     real, not theoretical.
+--   * ABSOLUTE, NOT LOCAL — the same trap v9 documented and the reason this migration is
+--     graded on a decode. GLOBE_Y and GLOBE_TGT_Y are SCREEN coordinates; the globes hang two
+--     groups deep under a top group at y = -140, so the layer cancels it (GLOBE_LAYER_Y = 180)
+--     and the target cluster carries the 70 that lifts it above the pair. Walk it in the
+--     shipped string, not here.
+--   * LOOK. Every vessel gains a specular highlight: a soft off-centre bright spot in the upper
+--     left, sized to its own globe, in ADD blend so it brightens the liquid AND the percentage
+--     sitting inside the glass instead of dimming either. It is APPENDED as the last subregion
+--     of each globe, never inserted, because conditions address subregions positionally as
+--     sub.N — see highlight()/addHighlight() for the full reasoning on both points.
+--   * WHAT IS NOT IN IT: no dark edge vignette (it would sit over the number, which is
+--     unreadable exactly when the number matters), no per-globe tuning of the highlight
+--     geometry, and no change to the rims — the glass rim is still Circle_Smooth_Border drawn
+--     BEHIND the fill at frameStrata 2, which is deliberate and documented in rim().
+
 math.randomseed(20260816)  -- FIXED pack seed; uid() call order is append-only forever
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
 -- wa_factory/wa_lib resolve their own dependencies (wa_lib.lua, assets/icon_proto.lua)
@@ -289,11 +319,12 @@ local RIM_TEX  = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth_B
 -- this shared geometry exists to fix.
 local GLOBE_MAIN   = 72        -- life and power globes
 local GLOBE_TGT    = 44         -- target globe, secondary by size
-local RIM_PAD      = 4          -- every rim texture is its globe's size + 6, at frameStrata 2
+local RIM_PAD      = 4          -- every rim texture is its globe's size + 4, at frameStrata 2
                                 -- (= BACKGROUND, i.e. BEHIND the fill — see rim() for why that
                                 -- is the right way round for a disc-with-border texture)
-local GLOBE_X      = 150        -- life at x = -300, power at x = +300, target at x = 0
-local GLOBE_Y      = -262       -- ABSOLUTE screen y for all three (see GLOBE_LAYER_Y below)
+local GLOBE_X      = 270        -- v10: life at x = -190, power at x = +190, target at x = 0
+local GLOBE_Y      = 40         -- v10: ABSOLUTE screen y of the LIFE and POWER globes
+local GLOBE_TGT_Y  = 110        -- v10: ABSOLUTE screen y of the TARGET globe, above the pair
 local PCT_MAIN     = 13         -- percentage inside the life and power glass
 local PCT_TGT      = 10         -- percentage inside the target glass
 local PCT_THREAT   = 11         -- threat percentage, the one read-out with no vessel
@@ -303,10 +334,19 @@ local TOP_Y        = -140       -- the pack's top group; the globe layer offsets
 -- THE ABSOLUTE-POSITION RULE, spelled out because the previous migration got it wrong in six
 -- packs out of seven: GLOBE_Y is a SCREEN coordinate, not a local one, and every globe here
 -- hangs two groups deep off a top group that carries its own y. Offsets ADD down the chain,
--- so the globe layer has to cancel TOP_Y before the clusters place their globes at y = 0:
---     top (0, -140) + layer (0, -10) + cluster (x, 0) + globe (0, 0) = (x, -150)
--- Decode the shipped string and walk the parents to prove it; do not trust this comment.
-local GLOBE_LAYER_Y = GLOBE_Y - TOP_Y   -- -10
+-- so the globe layer has to cancel TOP_Y before the clusters place their globes at y = 0.
+-- v10 moves the vessels off the bottom band to either side of the character, and the target
+-- globe no longer shares the pair's height, so there are now TWO absolute y values and the
+-- target cluster carries the difference. The full chain, which the decode check reproduces:
+--     life:   top (0, -140) + layer (0, 180) + cluster (-190,  0) + globe (0, 0) = (-190,  40)
+--     power:  top (0, -140) + layer (0, 180) + cluster ( 190,  0) + globe (0, 0) = ( 190,  40)
+--     target: top (0, -140) + layer (0, 180) + cluster (   0, 70) + globe (0, 0) = (   0, 110)
+-- Decode the shipped string and walk the parents to prove it; do not trust this comment. (The
+-- v9 note above quotes "layer (0, -10) ... = (x, -150)": that arithmetic was already stale when
+-- v9 shipped — it described an early draft, not the -262 band v9 actually built. It is left as
+-- written because it is history; THIS block is the live one.)
+local GLOBE_LAYER_Y = GLOBE_Y - TOP_Y        -- 180: cancels the top group's own y
+local GLOBE_TGT_DY  = GLOBE_TGT_Y - GLOBE_Y  -- 70: the target cluster's lift above that pair
 
 local COL = {
   life     = { 0.72, 0.09, 0.09, 1 },    -- D2 life red
@@ -432,6 +472,55 @@ local function globe(id, size, color, triggers)
   }
 end
 
+-- THE SPECULAR HIGHLIGHT (v10) — the field that separates "flat coloured disc" from "liquid
+-- behind curved glass". A vessel lit from the upper left catches a soft bright spot up and to
+-- the left of centre; without it the fill reads as a sticker, which is exactly the complaint
+-- v9 shipped with. It is the same disc art as the fill, scaled to 46% x 34% of the globe and
+-- offset by (-17%, +21%) of its width, at 28% white.
+--   * BLEND MODE IS "ADD", NOT "BLEND", and that is load-bearing rather than taste. The
+--     percentage lives INSIDE the glass as a subtext, subregions draw in the order they are
+--     listed, and this one is APPENDED — so it draws over the number. A BLEND overlay at 28%
+--     white would wash 28% of the number away; ADD can only brighten, so white-on-liquid text
+--     stays readable and merely picks up the same sheen the liquid does. This is why the
+--     recipe is a highlight and not the more obvious dark edge vignette: a dark overlay over
+--     the number is unreadable in exactly the moment (low health) the number matters most.
+--   * APPENDED, NEVER INSERTED. Conditions address subregions POSITIONALLY as "sub.N.property"
+--     (Conditions.lua resolves the index at load time, with no name to fall back on), so
+--     inserting anything ahead of a referenced index silently retargets that condition onto a
+--     different subregion — no error, no editor warning. Nothing on the three mage globes uses
+--     sub.N today (the pack's only sub.N conditions are the CC ON ME glow and the Arcane Blast
+--     stack glow, both on ICONS), but the rule holds regardless: append, and the existing
+--     indices cannot move.
+--   * textureRotate is the GATE for textureRotation (SubTexture.modify passes it as canRotate
+--     and DoTexCoord only rotates when it is set); both stay off because a smooth disc has no
+--     orientation. xOffset/yOffset are NOT in the subtexture default() table but ARE read by
+--     modify -> AnchorSubRegion in "point" mode — omit them and the highlight sits dead centre,
+--     which is a dull flat glow rather than a light source.
+local function highlight(size)
+  return {
+    type = "subtexture",
+    textureTexture = FILL_TEX,
+    textureColor = { 1, 1, 1, 0.28 },
+    textureBlendMode = "ADD",
+    textureVisible = true,
+    textureDesaturate = false, textureMirror = false,
+    textureRotate = false, textureRotation = 0,
+    width  = size * 0.46,
+    height = size * 0.34,
+    xOffset = -size * 0.17,
+    yOffset =  size * 0.21,
+    anchor_mode = "point", anchor_point = "CENTER", self_point = "CENTER",
+    mirror = false, rotate = false, scale = 1,
+  }
+end
+
+-- The one way the highlight is ever attached: onto the END of whatever subregion list the globe
+-- already has. Never `subRegions[n] = ...` with a literal index — see the sub.N note above.
+local function addHighlight(region, size)
+  region.subRegions[#region.subRegions + 1] = highlight(size)
+  return #region.subRegions
+end
+
 -- THE GLASS: a plain texture the size of its vessel + RIM_PAD, carrying its globe's own
 -- triggers purely so the two appear, vanish and fade together; it has no progress of its own.
 -- On the target globe this same region is also the threat read-out — see "Mage - Target Globe
@@ -441,8 +530,8 @@ end
 -- { [1] = Inherited, [2] = "BACKGROUND", [3] = "LOW", [4] = "MEDIUM", [5] = "HIGH", ... }, so
 -- 2 places the rim in BACKGROUND — BEHIND the globes, which stay at 1 (inherited). That is the
 -- right way round for this art: "Circle_Smooth_Border" is a disc WITH a border, so drawn on
--- top it would paint over the liquid and the number, while drawn behind and 6 px wider the
--- only part of it that shows is the 3 px ring standing past the vessel's edge — exactly the
+-- top it would paint over the liquid and the number, while drawn behind and RIM_PAD (4) px
+-- wider the only part that shows is the 2 px ring standing past the vessel's edge — exactly the
 -- glass around the liquid. It is listed in the pack README as one of the two things only a
 -- live 2.5.x client can settle.
 local function rim(id, size, color, triggers)
@@ -505,6 +594,9 @@ local life = reg(globe("Mage - Life Globe", GLOBE_MAIN, COL.life,
   { unitHealthTrigger("player"), F.unitCharTrigger() }))
 -- The percentage now sits INSIDE the glass, where the portrait used to be.
 life.subRegions[1] = pct("percenthealth", PCT_MAIN, 0, COL.hpText)
+-- v10: and the sheen goes on LAST, over the number — ADD blend, so it brightens the digits
+-- rather than veiling them (see highlight()).
+addHighlight(life, GLOBE_MAIN)
 -- v2's escalating colour tiers, carried across intact for the second time. The property is
 -- `foregroundColor`, NOT the aurabar's `barColor`: progresstexture has no barColor, and
 -- Conditions.lua skips any change whose property is missing from the region's properties table
@@ -529,6 +621,7 @@ life.conditions = {
 local manaGlobe = reg(globe("Mage - Mana Globe", GLOBE_MAIN, COL.mana,
   { unitManaTrigger("player"), F.unitCharTrigger() }))
 manaGlobe.subRegions[1] = pct("percentpower", PCT_MAIN, 0, COL.mpText)
+addHighlight(manaGlobe, GLOBE_MAIN)   -- v10 sheen, appended after the percentage
 -- Power is the one prototype that cannot hit total == 0 — its init floors the total at
 -- math.max(1, UnitPowerMax(...)) — which is exactly why this guard reads <= 1 and not <= 0.
 manaGlobe.conditions = {
@@ -801,8 +894,10 @@ coldsnap.conditions[2] = allOf({
 -- pop as a real animation.
 local MANA_CONSERVE_PCT = 30
 -- v9: straight out of the breakpoint formula, so both marks follow GLOBE_MAIN instead of being
--- left behind in empty space. 30% of a 116 px vessel is y = (0.30 - 0.5) * 116 = -23.2, and the
--- disc is 106.32 px wide at that height, so the line spans the glass and stops at it. At the v8
+-- left behind in empty space. 30% of the 72 px vessel is y = (0.30 - 0.5) * 72 = -14.4, and the
+-- disc is 65.99 px wide at that height, so the line spans the glass and stops at it. (The v9
+-- header note quotes -23.2 / 106.32: that was a 116 px draft, not what v9 shipped — the values
+-- are computed by markY/markWidth, so the code was right and only the comment was stale.) At v8's
 -- ring the same breakpoint was a bead at (34.19, -11.11) computed by trigonometry; nothing here
 -- is hand-entered either, and the two marks share the one pair of calls.
 local MANA_MARK_Y = markY(MANA_CONSERVE_PCT / 100)       -- -23.2
@@ -1183,11 +1278,11 @@ adopt(gPvP, emana)
 -- order, because a uid() call may never be reordered. NOTHING NEW IS ADDED: v9 emits the same
 -- 48 auras as v8, and the six slots are recycled onto the globe HUD like this:
 --     v8 aura                  uid slot now carries
---     Mage - Player Orb    ->  the LIFE cluster group           (x = -300)
---     Mage - Target Orb    ->  the TARGET cluster group         (x =    0)
+--     Mage - Player Orb    ->  the LIFE cluster group           (x = -190 since v10)
+--     Mage - Target Orb    ->  the TARGET cluster group         (x =    0, y = +70 since v10)
 --     Mage - Player Portrait -> the life globe's glass rim      (portrait RECYCLED, not deleted)
 --     Mage - Target Health ->  the TARGET GLOBE itself
---     Mage - Target Mana   ->  the POWER cluster group          (x = +300)
+--     Mage - Target Mana   ->  the POWER cluster group          (x = +190 since v10)
 --     Mage - Target Portrait -> the mana globe's glass rim      (portrait RECYCLED, not deleted)
 -- That is why a group, a rim, a globe and another group interleave below: the order is
 -- dictated by uid continuity, not by tidiness. Every uid the v8 string shipped is still in
@@ -1205,13 +1300,18 @@ adopt(gPvP, emana)
 -- +4 frame levels per entry, so EARLIER = further behind. Vessel first, then the breakpoint
 -- marks so they sit over the liquid, then the glass. Frame LEVEL only orders regions inside
 -- one strata, so it decides the marks vs the vessel; the rims are settled by strata instead
--- (2 = BACKGROUND, behind everything here, which is what leaves only their 3 px overhang
+-- (2 = BACKGROUND, behind everything here, which is what leaves only their 2 px overhang
 -- visible), and the threat flare is last AND at strata 1 so it pulses on top of all of it.
 -- sharedFrameLevel is deliberately left off the cluster groups: it would zero the level
 -- offset and make the overlap order ambiguous.
 local gLife = reg(F.group("Mage - Life Cluster", -GLOBE_X, 0, nil))
 adopt(gGlobes, gLife)
-local gTgt = reg(F.group("Mage - Target Cluster", 0, 0, nil))
+-- v10: the target cluster is the ONE cluster with a y of its own. Life and power sit on the
+-- globe layer's own height (GLOBE_Y); the target vessel rides GLOBE_TGT_DY above them, so it
+-- sits between and above the pair instead of in line with them. Everything inside this cluster
+-- (globe, rim, threat percentage, 80% flare) is positioned relative to the cluster, so all of
+-- it travels with the one number.
+local gTgt = reg(F.group("Mage - Target Cluster", 0, GLOBE_TGT_DY, nil))
 adopt(gGlobes, gTgt)
 
 -- The life rim carries the same two triggers as its vessel, so it fades out of combat with it
@@ -1234,6 +1334,9 @@ lifeRim.conditions = {
 local tgtGlobe = reg(globe("Mage - Target Globe", GLOBE_TGT, COL.life,
   { unitHealthTrigger("target") }))
 tgtGlobe.subRegions[1] = pct("percenthealth", PCT_TGT, 0, COL.hpText)
+-- v10: the same sheen scaled to this vessel — GLOBE_TGT, not GLOBE_MAIN, so the bright spot
+-- keeps the same proportion of the glass on a 44px globe as it does on a 72px one.
+addHighlight(tgtGlobe, GLOBE_TGT)
 tgtGlobe.conditions = { F.condition(1, "maxhealth", "<=", "0", "alpha", 0) }
 
 local gPower = reg(F.group("Mage - Power Cluster", GLOBE_X, 0, nil))

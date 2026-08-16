@@ -1,4 +1,4 @@
--- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v10).
+-- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v11).
 -- Run: lua5.1 generate.lua   (toolkit libs live in ../../tools/tbc-weakaura-creator/scripts/,
 -- fetch them once with that directory's setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (copy whole -> /wa -> Import).
@@ -179,6 +179,50 @@
 -- `foregroundColor` and not the aurabar's `barColor`. Conditions.lua skips a change whose
 -- property is absent from the region's properties table with no error and no editor warning,
 -- so the three threat/rim escalations would have been dead on arrival if ported mechanically.
+--
+-- v11 (the globes flank the character and the glass catches light) — see README "## v11 — the
+-- globes move up beside you and the glass catches light". TWO changes, both cosmetic, NO aura
+-- added, removed or reordered: 48 tables before, 48 after, every uid byte-identical to v10, so
+-- the in-game import dialog still offers Update. Every trigger, load gate, condition, colour,
+-- spell id and region type is untouched, as is everything outside the globe layer.
+--
+--   1. POSITION. v10 parked all three vessels on one band at absolute y = -262, which reads as
+--      a second bar bolted under the HUD rather than as part of the character. They now FLANK
+--      the character: life at (-190, 40), power at (+190, 40), target at (0, 110). The two
+--      main globes rise to eye level either side of the model and the target sits above and
+--      between them, so the layer surrounds the character instead of underlining him.
+--      |x| = 190 IS THE TIGHTEST COLLISION-FREE ARRANGEMENT and is not a taste call: the
+--      Alerts column sits at x = -150 and the PvP column at x = +150 (icons up to 40 wide, so
+--      they occupy |x| <= 170), and the PvP layer also has elements at (200, -44). A 72px
+--      vessel spans 36 either side of its centre, so at |x| = 190 its inner edge is at 154 and
+--      its outer edge at 226 — clear of the icon columns, and clear in y of (200,-44) because
+--      the globes are now 84px above it. |x| = 170 would sit ON the icon columns and |x| = 210
+--      would sit ON the PvP element. Do not "tidy" these numbers.
+--      The target globe is the one element whose y is no longer GLOBE_Y, so its own absolute
+--      height is a constant of its own (GLOBE_Y_TGT) and globe()/rim() now take an explicit
+--      absolute y. The absolute->local conversion still happens exactly once, in localY(), and
+--      the assembled parent chain is still re-walked and asserted before anything is written.
+--
+--   2. LOOK. Each vessel gains a SPECULAR HIGHLIGHT: a soft off-centre bright spot in the
+--      upper left, which is what the eye reads as a curved glass surface catching light. It is
+--      a `subtexture` sub-region on the same Circle_Smooth.tga disc, 46% x 34% of the globe's
+--      diameter, offset (-17%, +21%) of it, white at 28% alpha.
+--      TWO RULES THIS OBEYS, both of them silent-breakage class:
+--        * APPENDED, NEVER INSERTED. Conditions address sub-regions POSITIONALLY as sub.N
+--          (Conditions.lua builds the property name from the 1-based subRegions index), so
+--          inserting ahead of a referenced index silently retargets that condition at the new
+--          occupant. No condition on any of the three globes references sub.N today, but the
+--          pattern is enforced here anyway because it is the rule the rogue pack's energy
+--          breakpoints (sub.4 / sub.5) live and die by.
+--        * BLEND MODE "ADD", not "BLEND". The percentage sits INSIDE the glass and sub-regions
+--          draw in index order, so an appended BLEND overlay would draw OVER the number and
+--          dim it. ADD can only brighten what is under it, so the number stays readable — and
+--          that constraint is the whole reason the recipe is a highlight rather than the more
+--          obvious dark edge vignette, which would have to be a BLEND and would have to be
+--          inserted before the text to avoid muddying it.
+--      `textureRotate` is the gate that makes `textureRotation` do anything, and xOffset /
+--      yOffset are read only in anchor_mode = "point" — the same two traps the priest pack's
+--      marks document; both are set accordingly.
 
 math.randomseed(20260812)  -- FIXED pack seed; append-only uid order across versions
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -200,19 +244,27 @@ local TOP = "Druid TBC - Bear, Restoration & Balance"
 -- diameters and the HUD read as uneven. Derive from them; never hand-write a size, a colour or
 -- an offset anywhere below.
 --
--- VESSEL ASSIGNMENT:
---   life   = GLOBE_MAIN at x = -GLOBE_X   (player health)
---   power  = GLOBE_MAIN at x = +GLOBE_X   (player primary power, coloured for the type it reads)
---   target = GLOBE_TGT  at x = 0          (target health; its RIM is the threat readout)
+-- VESSEL ASSIGNMENT (v11 positions — the globes flank the character):
+--   life   = GLOBE_MAIN at (-GLOBE_X, GLOBE_Y)      (player health)
+--   power  = GLOBE_MAIN at (+GLOBE_X, GLOBE_Y)      (player primary power, coloured for the
+--                                                    type it reads)
+--   target = GLOBE_TGT  at (0, GLOBE_Y_TGT)         (target health; its RIM is the threat
+--                                                    readout — above and between the pair)
 -- Every globe carries a rim texture of its own size + RIM_PAD at frameStrata 2, so the fill
--- reads as liquid inside glass rather than a flat disc.
+-- reads as liquid inside glass rather than a flat disc, plus a specular highlight sub-region
+-- (glassHighlight below) so the glass reads as curved rather than as a flat sticker.
 local FILL_TEX   = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth.tga"
 local RIM_TEX    = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth_Border.tga"
 local GLOBE_MAIN = 72  -- life and power globes
 local GLOBE_TGT  = 44   -- target globe
-local RIM_PAD    = 4    -- rim = its globe's size + 6
-local GLOBE_X    = 150  -- life at -300, power at +300, target at 0
-local GLOBE_Y      = -262 -- ABSOLUTE screen y for all three (see localY below)
+local RIM_PAD    = 4    -- rim = its globe's size + 4
+-- |x| = 190 is the tightest arrangement that clears every other element in the pack: the
+-- Alerts column is at x = -150 and the PvP column at x = +150 (icons up to 40 wide, so
+-- |x| <= 170), and the PvP layer also holds elements at (200, -44). 170 would sit on the icon
+-- columns, 210 on the PvP element. See the v11 header block.
+local GLOBE_X     = 270   -- life at -190, power at +190, target at 0
+local GLOBE_Y     =  40   -- ABSOLUTE screen y of the two main globes (see localY below)
+local GLOBE_Y_TGT = 110   -- ABSOLUTE screen y of the target globe, above and between them
 
 -- Numbers, all anchored CENTER on the region that owns them, so each appears and vanishes with
 -- its vessel. The main and target percentages sit INSIDE the glass (yOffset 0) — the whole
@@ -433,13 +485,15 @@ end
 --     emitted, which is why each globe has exactly ONE progress-supplying trigger and it is
 --     trigger 1: activeTriggerMode -10 is first_active, and Automatic reads that trigger's
 --     value/total. A second trigger can only feed conditions, never the fill.
--- absX is an ABSOLUTE screen x; localX/localY do the one conversion (see the constants block).
-local function globe(id, size, absX, color, triggerList, gate)
+-- absX/absY are ABSOLUTE screen coordinates; localX/localY do the one conversion (see the
+-- constants block). v11 passes absY explicitly because the target vessel no longer shares the
+-- main globes' height.
+local function globe(id, size, absX, absY, color, triggerList, gate)
   return reg(stub{
     regionType = "progresstexture", id = id, uid = W.uid(), parent = nil,
     width = size, height = size,
     selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
-    xOffset = localX(absX), yOffset = localY(GLOBE_Y), frameStrata = 1, alpha = 1,
+    xOffset = localX(absX), yOffset = localY(absY), frameStrata = 1, alpha = 1,
     orientation = "VERTICAL", startAngle = 0, endAngle = 360,
     inverse = false, mirror = false,
     compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
@@ -468,9 +522,9 @@ end
 -- FIELD-NAME TRAP: on a texture region the conditionable tint property is `color`. It is
 -- `foregroundColor` on a progresstexture and `barColor` on an aurabar, and Conditions.lua
 -- skips an unknown property silently — a mis-ported escalation simply never fires.
-local function rim(id, globeSize, absX, color, triggerList, gate)
+local function rim(id, globeSize, absX, absY, color, triggerList, gate)
   local t = reg(F.texture(id, CLASS, globeSize + RIM_PAD, globeSize + RIM_PAD,
-    localX(absX), localY(GLOBE_Y), nil, RIM_TEX, color))
+    localX(absX), localY(absY), nil, RIM_TEX, color))
   t.frameStrata = 2
   t.subRegions = {}
   t.triggers = F.triggers(triggerList)
@@ -490,6 +544,48 @@ local function pct(sym, place, color)
   st.anchorYOffset = place.y
   st.text_color = color
   return st
+end
+
+-- THE SPECULAR HIGHLIGHT (v11) — the one thing that turns a flat disc into a sphere. A soft,
+-- off-centre bright spot in the UPPER LEFT is the cue the eye reads as a curved surface
+-- catching a light source; centred or symmetrical, it reads as a sticker again. The proportions
+-- are fractions of the globe's own diameter, so the highlight scales with the vessel and the
+-- 44px target globe gets the same read as the 72px pair with no second set of numbers.
+--   textureBlendMode = "ADD" IS LOAD-BEARING. Sub-regions draw in index order and this one is
+--     APPENDED, so it draws over the percentage that sits inside the glass. ADD only ever
+--     brightens what is beneath it, so the number stays readable; a BLEND overlay at the same
+--     alpha would grey it out. That single constraint is why the recipe is a highlight and not
+--     the more obvious dark edge vignette.
+--   anchor_mode = "point" is what makes xOffset/yOffset live at all (they are not in the
+--     subtexture default table but ARE read by modify -> AnchorSubRegion, and only in point
+--     mode); omit either offset and the spot lands dead centre and the illusion dies.
+--   textureRotate is the GATE for textureRotation. The art is a radially symmetric disc, so
+--     both stay off.
+local function glassHighlight(globeSize)
+  return {
+    type = "subtexture",
+    textureTexture = FILL_TEX,
+    textureColor = { 1, 1, 1, 0.28 },
+    textureBlendMode = "ADD",
+    textureVisible = true,
+    textureDesaturate = false, textureMirror = false,
+    textureRotate = false, textureRotation = 0,
+    width  = globeSize * 0.46,
+    height = globeSize * 0.34,
+    xOffset = -globeSize * 0.17,
+    yOffset =  globeSize * 0.21,
+    anchor_mode = "point", anchor_point = "CENTER", self_point = "CENTER",
+    mirror = false, rotate = false, scale = 1,
+  }
+end
+
+-- APPEND-ONLY sub-region helper. Conditions address sub-regions positionally (sub.N is the
+-- 1-based subRegions index), so a new sub-region must go on the END or every condition at or
+-- after the insertion point silently retargets. This is the only way anything is ever added to
+-- a globe's subRegions after construction.
+local function appendSub(region, sub)
+  region.subRegions[#region.subRegions + 1] = sub
+  return region
 end
 
 -- ===== v5 inverse size gate: "load everywhere EXCEPT an arena" =====
@@ -533,9 +629,10 @@ end
 -- `barColor`. The last condition is the zero-total guard: an aurabar with total 0 draws EMPTY
 -- but a progresstexture draws FULL, and UnitHealthMax has no floor, so a unit whose max health
 -- has not streamed yet would flash a full vessel.
-local lifeGlobe = globe("Druid - Life Globe", GLOBE_MAIN, -GLOBE_X, COL.life,
+local lifeGlobe = globe("Druid - Life Globe", GLOBE_MAIN, -GLOBE_X, GLOBE_Y, COL.life,
   { orbHealth("player"), F.unitCharTrigger() })
 lifeGlobe.subRegions[1] = pct("percenthealth", PCT_MAIN, COL.text)
+appendSub(lifeGlobe, glassHighlight(GLOBE_MAIN))  -- v11: sub.2, appended after the number
 lifeGlobe.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "percenthealth", "<", "50", "foregroundColor", COL.hurt),
@@ -551,9 +648,10 @@ lifeGlobe.conditions = {
 -- compile correctly — Conditions.lua takes the tonumber branch.
 -- No load gate at all: every druid has a primary resource in every form. v7's rage bar was
 -- Feral-gated and Bear-form-gated, so a feral in caster form saw no resource bar whatsoever.
-local powerGlobe = globe("Druid - Power Globe", GLOBE_MAIN, GLOBE_X, COL.mana,
+local powerGlobe = globe("Druid - Power Globe", GLOBE_MAIN, GLOBE_X, GLOBE_Y, COL.mana,
   { orbPower("player"), F.unitCharTrigger() })
 powerGlobe.subRegions[1] = pct("percentpower", PCT_MAIN, COL.text)
+appendSub(powerGlobe, glassHighlight(GLOBE_MAIN))  -- v11: sub.2, appended after the number
 powerGlobe.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "powertype", "==", 1, "foregroundColor", COL.rage),
@@ -565,9 +663,10 @@ powerGlobe.conditions = {
 -- between the two big ones and smaller so it reads as secondary. Diablo has no target globe;
 -- WoW needs one. It self-hides completely with no target, because the Health prototype's
 -- hidden UnitExistsFixed test produces no state for an absent unit.
-local targetGlobe = globe("Druid - Target Globe", GLOBE_TGT, 0, COL.life,
+local targetGlobe = globe("Druid - Target Globe", GLOBE_TGT, 0, GLOBE_Y_TGT, COL.life,
   { orbHealth("target"), F.unitCharTrigger() })
 targetGlobe.subRegions[1] = pct("percenthealth", PCT_TGT, COL.text)
+appendSub(targetGlobe, glassHighlight(GLOBE_TGT))  -- v11: sub.2, appended after the number
 targetGlobe.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "maxhealth", "<=", "0", "alpha", 0),
@@ -579,7 +678,7 @@ targetGlobe.conditions = {
 -- anyone in an arena, would get a bare rimless disc while the player's two globes kept their
 -- glass. It carries the target globe's trigger pair and both of its alpha guards, so rim and
 -- vessel appear, fade out of combat and vanish together.
-local targetRim = rim("Druid - Target Globe Rim", GLOBE_TGT, 0, COL.rim,
+local targetRim = rim("Druid - Target Globe Rim", GLOBE_TGT, 0, GLOBE_Y_TGT, COL.rim,
   { orbHealth("target"), F.unitCharTrigger() })
 targetRim.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
@@ -598,7 +697,7 @@ targetRim.conditions = {
 -- post-Feign, the instant before your first hit lands — and threatpct 0 keeps the colour green
 -- while the rim sits fully lit. alpha 0 removes it instead, and the brass rim underneath shows
 -- through, which is exactly the "no threat table" state.
-local threatF = rim("Druid - Threat (Bear)", GLOBE_TGT, 0, COL.threat,
+local threatF = rim("Druid - Threat (Bear)", GLOBE_TGT, 0, GLOBE_Y_TGT, COL.threat,
   { orbThreat() }, notInArena(GATE_F))
 threatF.subRegions[1] = pct("threatpct", PCT_THREAT, COL.text)
 threatF.conditions = {
@@ -608,7 +707,7 @@ threatF.conditions = {
 
 -- uid 11 — Threat (Caster), id unchanged since v7. Same rim, non-inverted semantics: green,
 -- orange at 70% of the pull threshold, red when you pull (severe condition last, so it wins).
-local threatB = rim("Druid - Threat (Caster)", GLOBE_TGT, 0, COL.threat,
+local threatB = rim("Druid - Threat (Caster)", GLOBE_TGT, 0, GLOBE_Y_TGT, COL.threat,
   { orbThreat() }, notInArena(GATE_B))
 threatB.subRegions[1] = pct("threatpct", PCT_THREAT, COL.text)
 threatB.conditions = {
@@ -1161,7 +1260,7 @@ ccOut.subRegions[3] = F.subborder()
 -- stream, now the glass rim of the life globe and of the power globe. Each mirrors its globe's
 -- trigger pair and alpha guards so rim and vessel behave as one object.
 -- Adopted last, so they carry the highest frame level in the group.
-local lifeRim = rim("Druid - Life Globe Rim", GLOBE_MAIN, -GLOBE_X, COL.rim,
+local lifeRim = rim("Druid - Life Globe Rim", GLOBE_MAIN, -GLOBE_X, GLOBE_Y, COL.rim,
   { orbHealth("player"), F.unitCharTrigger() })
 lifeRim.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
@@ -1169,7 +1268,7 @@ lifeRim.conditions = {
 }
 adopt(gRes, lifeRim)
 
-local powerRim = rim("Druid - Power Globe Rim", GLOBE_MAIN, GLOBE_X, COL.rim,
+local powerRim = rim("Druid - Power Globe Rim", GLOBE_MAIN, GLOBE_X, GLOBE_Y, COL.rim,
   { orbPower("player"), F.unitCharTrigger() })
 powerRim.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
@@ -1229,15 +1328,38 @@ assertAt("Druid - Life Globe",       -GLOBE_X, GLOBE_Y)
 assertAt("Druid - Life Globe Rim",   -GLOBE_X, GLOBE_Y)
 assertAt("Druid - Power Globe",       GLOBE_X, GLOBE_Y)
 assertAt("Druid - Power Globe Rim",   GLOBE_X, GLOBE_Y)
-assertAt("Druid - Target Globe",             0, GLOBE_Y)
-assertAt("Druid - Target Globe Rim",         0, GLOBE_Y)
-assertAt("Druid - Threat (Bear)",            0, GLOBE_Y)
-assertAt("Druid - Threat (Caster)",          0, GLOBE_Y)
+-- the target tier sits higher than the pair since v11, so it asserts against its own constant
+assertAt("Druid - Target Globe",             0, GLOBE_Y_TGT)
+assertAt("Druid - Target Globe Rim",         0, GLOBE_Y_TGT)
+assertAt("Druid - Threat (Bear)",            0, GLOBE_Y_TGT)
+assertAt("Druid - Threat (Caster)",          0, GLOBE_Y_TGT)
 -- and the rage marks, which are the one thing in the layer whose y is not GLOBE_Y
 assertAt("Druid - Rage Mark Mangle",     GLOBE_X, GLOBE_Y + markY(0.20))
 assertAt("Druid - Rage Mark Mangle Lit", GLOBE_X, GLOBE_Y + markY(0.20))
 assertAt("Druid - Rage Mark Maul",       GLOBE_X, GLOBE_Y + markY(0.70))
 assertAt("Druid - Rage Mark Maul Lit",   GLOBE_X, GLOBE_Y + markY(0.70))
+
+-- APPEND PROOF (v11). Conditions address sub-regions positionally as sub.N, so the highlight
+-- is only safe while it is the LAST entry on its globe: insert one ahead of a referenced index
+-- and every condition from that index on silently retargets the new occupant. Assert on the
+-- assembled tables that the number is still sub.1 and the highlight is sub.#, and that the
+-- highlight is ADD (a BLEND overlay drawn after the text would dim the number it covers).
+local function assertHighlight(id, globeSize)
+  local node = assert(byId[id], "missing aura: " .. id)
+  local subs = node.subRegions or {}
+  assert(subs[1] and subs[1].type == "subtext",
+    id .. ": the percentage is no longer sub.1")
+  local last = subs[#subs]
+  assert(#subs >= 2 and last.type == "subtexture",
+    id .. ": the highlight must be the LAST sub-region, never inserted")
+  assert(last.textureBlendMode == "ADD",
+    id .. ": the highlight must be ADD, or it dims the number it draws over")
+  assert(last.width == globeSize * 0.46 and last.height == globeSize * 0.34,
+    id .. ": the highlight is not scaled to its own globe")
+end
+assertHighlight("Druid - Life Globe",   GLOBE_MAIN)
+assertHighlight("Druid - Power Globe",  GLOBE_MAIN)
+assertHighlight("Druid - Target Globe", GLOBE_TGT)
 
 local encoded = W.encode(transmit)
 W.verify(transmit, encoded)

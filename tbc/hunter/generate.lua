@@ -1,4 +1,4 @@
--- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v10).
+-- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v11).
 -- Run: lua5.1 tbc/hunter/generate.lua   (toolkit libs must be fetched once:
 --      tools/tbc-weakaura-creator/scripts/setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game.
@@ -170,6 +170,35 @@
 --     which also puts the target's two debuff timers directly above the target globe.
 --     Nothing else about those icons changed: same ids, uids, triggers, gates, sizes.
 --
+-- v11: THE GLOBES COME UP BESIDE THE CHARACTER AND THE GLASS CATCHES LIGHT. Nothing else at
+-- all: not one trigger, load gate, condition, colour, spell id or region type moved, no aura
+-- was added or removed (stable=53 changed=0 missing=0), and everything outside the vessels —
+-- buffs, alerts, cooldown row, procs, the whole PvP layer — is byte-for-byte what v10 shipped.
+--   * POSITION. v10 parked all three globes on one band at absolute y = -262, which reads as
+--     a separate bar bolted under the HUD rather than as part of the character. They now
+--     FLANK them: life at (-190, +40), power at (+190, +40), the target globe above and
+--     between at (0, +110). Those three coordinates are the tightest collision-free
+--     arrangement available in this repo's shared layout and were scanned against every
+--     element in all seven packs — x = ±170 hits the Alerts column at -150 and the PvP
+--     column at +150, x = ±210 hits the PvP layer's elements at (200, -44).
+--     The target cluster is now the only thing at a different height, so ITS GROUP carries
+--     the 70px difference and every child rides along; nothing below the canon block names a
+--     coordinate, and the position proof at the bottom of this file walks each parent chain
+--     and refuses to write a string whose globes land anywhere else.
+--   * LOOK. A flat-coloured disc reads as a sticker; a sphere reads as one because light
+--     strikes its curve off centre. Every vessel — including the target's 22px power globe —
+--     gains a SPECULAR HIGHLIGHT: the same Circle_Smooth disc, squashed to 0.46 x 0.34 of
+--     the globe, pushed up and left, white at 0.28 alpha, blend mode ADD.
+--     ADD IS THE LOAD-BEARING FIELD. Subregions draw in order and the percentage lives
+--     INSIDE the glass, so this overlay is painted over the number; a BLEND sheet would grey
+--     out the readout the vessel exists to carry, while ADD can only brighten. That is also
+--     why the recipe is a highlight and not the more obvious dark edge vignette — a dark
+--     overlay has no additive form.
+--     APPENDED, NEVER INSERTED: sub.2 on life, sub.4 on mana (after both waterlines), sub.2
+--     on the target globe, sub.1 on the target's power globe. Conditions reach subregions
+--     positionally as sub.N, and an insert ahead of a referenced index retargets it with no
+--     error at all, so the build asserts the pre-v11 prefix of every vessel is untouched.
+--
 -- Every spell id was verified on wowhead.com/tbc. Aura triggers carry EVERY
 -- rank as strings; cooldown triggers carry the numeric rank-1 id; spellknown
 -- gates use ids that really sit in the spellbook when trained/talented.
@@ -293,7 +322,7 @@ end
 -- current client runs. (The `model` builder v8 needed is gone with the portraits.)
 local IV, TOC = 45, 20501
 
--- ===== v10 CANON: the globe geometry every pack in this repo shares ==========
+-- ===== v11 CANON: the globe geometry every pack in this repo shares ==========
 -- These constants are IDENTICAL in all seven packs. Do not scale, round or "improve" them
 -- here: the moment one pack drifts, the player sees differently-sized globes the instant
 -- they run two classes, which is exactly the bug the shared canon exists to prevent.
@@ -307,9 +336,16 @@ local FILL_TEX   = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth
 local RIM_TEX    = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth_Border.tga"
 local GLOBE_MAIN = 72   -- the life and power globes
 local GLOBE_TGT  = 44    -- the target globe
-local RIM_PAD    = 4     -- a rim texture is its globe's size + 6, drawn at frameStrata 2
-local GLOBE_X    = 150   -- ABSOLUTE screen x: life at -300, power at +300, target at 0
-local GLOBE_Y      = -262  -- ABSOLUTE screen y of all three globe centres
+local RIM_PAD    = 4     -- a rim texture is its globe's size + RIM_PAD, drawn at frameStrata 2
+-- v11 POSITION. The three globes no longer share one Y: they FLANK THE CHARACTER instead of
+-- sitting on a band under the HUD, which is what stops them reading as a second bar bolted
+-- to the bottom of the screen. These exact numbers were scanned against every element in all
+-- seven packs and are the tightest collision-free arrangement there is — do not "tidy" them:
+--   x = ±170 walks into the Alerts column (x = -150) and the PvP column (x = +150),
+--   x = ±210 walks into the PvP layer's elements at (200, -44).
+local GLOBE_X     = 270   -- ABSOLUTE screen x: life at -190, power at +190, target at 0
+local GLOBE_Y     = 40    -- ABSOLUTE screen y of the LIFE and POWER globe centres
+local GLOBE_TGT_Y = 110   -- ABSOLUTE screen y of the TARGET globe centre, above the pair
 
 -- The readouts, and the whole point of losing the portrait: the number goes INSIDE the
 -- glass, dead centre, where the eye already is.
@@ -318,22 +354,31 @@ local PCT_TGT    = { size = 13, y =  0 }   -- target health, inside the small gl
 local PCT_THREAT = { size = 11, y = 52 }   -- threat, ABOVE the target globe
 
 -- Pack-local geometry, all of it derived from the canon so the two can never drift.
+--   NOTHING below hard-codes a coordinate. Every globe is placed by a canon constant minus
+--   the offsets its ancestors already carry, so moving a globe means editing exactly one
+--   number in the canon block above and nothing here.
 --   resY expresses GLOBE_Y in the top group's frame: `top` sits at -140, so the Resources
---   group offsets a further 10 DOWN to land its children at an absolute -150, and every
---   globe below carries its own x. Walk it: top(0,-140) -> Resources(0,-10) -> cluster
---   group(0,0) -> globe(±300,0) = (±300,-150).
+--   group offsets +180 to land the player pair at an absolute +40, and every globe below
+--   carries its own x. Walk it: top(0,-140) -> Resources(0,+180) -> player globe
+--   group(0,0) -> globe(±190,0) = (±190,+40).
+--   tgtY does the same one level deeper: the target cluster is the ONLY thing that sits at
+--   a different height now, so its group carries the difference (110 - 40 = +70) and every
+--   child inside it — globe, rim, threat rim, halo, power globe — rides up with it without
+--   a single one of them learning an absolute number. Walk it: top(0,-140) ->
+--   Resources(0,+180) -> target globe group(0,+70) -> globe(0,0) = (0,+110).
 --   flashHalo and the target's power globe are the only sizes NOT in the canon (no other
 --   pack has this pack's threat halo, and the canon has no fourth vessel). Both are
 --   DERIVED, never guessed: the halo is one rim-pad outside the target rim, and the target
 --   power globe is half the target globe, set beside it with one rim-pad of clearance —
 --   power to the RIGHT of life, the same sentence the two main globes speak.
 local TOP_Y = -140
-local TGT_POWER = GLOBE_TGT / 2                                        -- 38
-local TGT_POWER_X = (GLOBE_TGT + RIM_PAD) / 2                          -- rim radius, 41
-                  + (TGT_POWER + RIM_PAD) / 2                          -- its rim radius, 22
-                  + RIM_PAD                                            -- clearance -> 69
+local TGT_POWER = GLOBE_TGT / 2                                        -- 22
+local TGT_POWER_X = (GLOBE_TGT + RIM_PAD) / 2                          -- rim radius, 24
+                  + (TGT_POWER + RIM_PAD) / 2                          -- its rim radius, 13
+                  + RIM_PAD                                            -- clearance -> 41
 local G = {
-  resY       = GLOBE_Y - TOP_Y,     -- -10: the Resources group's own offset
+  resY       = GLOBE_Y - TOP_Y,          -- +180: the Resources group's own offset
+  tgtY       = GLOBE_TGT_Y - GLOBE_Y,    -- +70: the target cluster's own offset
   globeX     = GLOBE_X,
   lifeGlobe  = GLOBE_MAIN,          -- PLAYER health, left
   powerGlobe = GLOBE_MAIN,          -- PLAYER mana, right
@@ -536,15 +581,64 @@ local function waterMark(fraction, diameter, color)
   }
 end
 
+-- v11 THE GLASS CATCHES LIGHT. A globe whose fill is one flat colour reads as a sticker on
+-- the screen, not as liquid inside a vessel; the single cue that turns a disc into a sphere
+-- is a specular highlight — a soft bright spot up and to the left, where a light source
+-- above the shoulder would strike a curved surface. It is the SAME Circle_Smooth disc as the
+-- fill, squashed to an ellipse (0.46 x 0.34 of the globe) and pushed off centre, so it needs
+-- no new art.
+--
+-- THE BLEND MODE IS THE WHOLE RECIPE. Subregions draw in creation order and the percentage
+-- number lives INSIDE the glass, so this overlay is painted OVER the text. On "BLEND" a
+-- 28%-alpha white sheet would wash the number toward grey — the readout the globe exists to
+-- carry would get harder to read to make the globe prettier. "ADD" can only ever brighten
+-- what is under it, so white text stays white and the dark empty portion of the vessel
+-- lights up. That is also why this is a highlight and not the more obvious dark vignette
+-- around the edge: a dark overlay has no additive form.
+--
+-- APPENDED, NEVER INSERTED. Conditions address subregions POSITIONALLY as sub.N, so putting
+-- a new subregion ahead of a referenced index silently retargets that condition at the wrong
+-- thing (no error, no warning — see the CC glow's sub.1.glowColor block below, and the mana
+-- globe's two waterlines at 2 and 3). Every call site therefore appends at #subRegions + 1
+-- and the helper below refuses to be used any other way.
+local function highlight(diameter)
+  return {
+    type = "subtexture",
+    textureTexture = FILL_TEX,
+    textureColor = { 1, 1, 1, 0.28 },
+    textureBlendMode = "ADD",
+    textureVisible = true,
+    textureDesaturate = false, textureMirror = false,
+    textureRotate = false, textureRotation = 0,
+    width  = diameter * 0.46,
+    height = diameter * 0.34,
+    xOffset = -diameter * 0.17,
+    yOffset =  diameter * 0.21,
+    anchor_mode = "point", anchor_point = "CENTER", self_point = "CENTER",
+    mirror = false, rotate = false, scale = 1,
+  }
+end
+
+-- The only way this pack adds a highlight: LAST, after every other subregion on that region
+-- already exists, sized from the vessel's own width so the fourth vessel (the target's 22px
+-- power globe) gets a highlight in proportion rather than a main globe's.
+local function addHighlight(vessel)
+  vessel.subRegions[#vessel.subRegions + 1] = highlight(vessel.width)
+end
+
 -- ===== 1. top-level group, anchored below the character =====
-local top = F.group(TOP, 0, -140, nil)
+-- TOP_Y is this group's own offset and every absolute number in the canon is expressed
+-- against it, so the literal below and TOP_Y must stay the same value.
+local top = F.group(TOP, 0, TOP_Y, nil)
 top.uid = W.uid()
 
 -- ===== 2. Resources: the three globes =====
--- v8 emptied the middle of the screen of its bar stack; v10 fills the low band with the
--- three vessels instead. The group keeps its id and its uid — a v9 user gets an in-place
--- Update, not a second copy — and only its own offset changes, from +80 (which put the
--- clusters at an absolute -60) to -10, which puts every globe centre at an absolute -150.
+-- v8 emptied the middle of the screen of its bar stack; v10 filled the low band with the
+-- three vessels instead. The group keeps its id and its uid across every one of those
+-- versions — an existing user gets an in-place Update, not a second copy — and only its own
+-- offset ever changes: +80 in v9 (clusters at an absolute -60), -122 in v10 (globes at an
+-- absolute -262), and now +180, which lifts the player pair off the bottom band and puts it
+-- either side of the character at an absolute +40.
 local gRes = reg(F.group("Hunter - Resources", 0, G.resY, nil))
 adopt(top, gRes)
 
@@ -559,6 +653,7 @@ local hp = reg(globe("Hunter - Health", G.lifeGlobe, COL.life,
   F.triggers({ F.healthTrigger(nil), F.unitCharTrigger() })))
 hp.xOffset = -G.globeX
 hp.subRegions[1] = pct("percenthealth", PCT_MAIN.size, PCT_MAIN.y, COL.hpText)
+addHighlight(hp)   -- v11: sub.2, appended after the readout it must never displace
 hp.conditions = {
   F.condition(1, "percenthealth", "<", "30", "foregroundColor", { 0.9, 0.12, 0.12, 1 }),
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
@@ -587,6 +682,9 @@ mana.subRegions[1] = pct("percentpower", PCT_MAIN.size, PCT_MAIN.y, COL.mpText)
 -- due and the green one exactly when Hawk is.
 mana.subRegions[2] = waterMark(0.20, G.powerGlobe, { 0.85, 0.2, 0.2, 1 })   -- Go Viper
 mana.subRegions[3] = waterMark(0.80, G.powerGlobe, { 0.4, 1, 0.4, 1 })      -- Back to Hawk
+-- v11: sub.4. The highlight goes AFTER both waterlines, never between them — the marks are
+-- addressed by index everywhere a condition or a future version might reach for them.
+addHighlight(mana)
 mana.conditions = {
   F.condition(1, "percentpower", "<", "20", "foregroundColor", { 0.85, 0.2, 0.2, 1 }),
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
@@ -660,16 +758,18 @@ flash.load.size = noArenaSize()
 flash.animation.main = F.animPreset("alphaPulse", "1")
 
 -- ===== 7. Buffs: static row of aura timers =====
--- v10, and this is the ONE thing outside the globes that had to move. The canonical target
--- globe sits at an absolute (0, -150) and this row sat at an absolute (0, -156): the globe
--- would have been drawn straight through Serpent Sting and Hunter's Mark. The row is
--- re-anchored 96px up to an absolute (0, -60) — the band the player orb occupied until
--- this version, now empty — which also puts the two TARGET debuff timers directly above
--- the TARGET globe, where they belong. Only this group's yOffset changed: every icon in it
--- keeps its id, uid, trigger, load gate, condition, size and x offset.
---   The height is derived, not picked: the threat percentage above the target globe sits at
---   GLOBE_Y + PCT_THREAT.y = -98 and an 11pt line is ~13px tall, so its top edge is ~-91;
---   a 40px icon row centred at BUFF_Y = -60 hangs down to -80 and clears it by 11px.
+-- v10 was the ONE version in which something outside the globes had to move: this row sat at
+-- an absolute (0, -156), the globes landed on the band at -262, and the target globe would
+-- have been drawn straight through Serpent Sting and Hunter's Mark. The row was re-anchored
+-- 96px up to an absolute (0, -60).
+-- v11 DOES NOT TOUCH IT. The globes left the bottom band entirely for (±190, +40) and
+-- (0, +110), so this row keeps v10's home and every icon in it keeps its id, uid, trigger,
+-- load gate, condition, size and both offsets — the row is byte-identical to v10.
+--   The clearance is derived, not picked: the threat percentage above the target globe now
+--   sits at GLOBE_TGT_Y + PCT_THREAT.y = +162 and the target rim's bottom edge is at
+--   GLOBE_TGT_Y - (GLOBE_TGT + RIM_PAD)/2 = +86, while a 40px icon row centred at
+--   BUFF_Y = -60 spans -80..-40. The two are 126px apart, which is the whole point of
+--   moving the vessels up rather than nudging the row again.
 local BUFF_Y = -60
 local gBuffs = reg(F.group("Hunter - Buffs", 0, BUFF_Y - TOP_Y, nil))
 adopt(top, gBuffs)
@@ -1338,7 +1438,9 @@ adopt(gPvP, enemyMana)
 -- TWO genuinely new auras follow after them, at the very end, as new uid() calls.
 
 -- 46. Player globes. A plain group, not a dynamic one: its children are placed by hand at
---     -300 and +300 rather than flowed.
+--     -GLOBE_X and +GLOBE_X (v11: ±190) rather than flowed. It carries no offset of its own —
+--     the pair sits at the Resources group's height, and only the TARGET cluster below
+--     departs from it.
 local gPlayerOrb = reg(F.group("Hunter - Player Globes", 0, 0, nil))
 adopt(gRes, gPlayerOrb)
 
@@ -1353,7 +1455,11 @@ pPortrait.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
 -- 48. Target globe group. Every element inside it self-hides with no target (the Health,
 --     Power and Threat prototypes all end in a UnitExistsFixed test), so with nothing
 --     selected the centre of the screen is genuinely empty.
-local gTargetOrb = reg(F.group("Hunter - Target Globe", 0, 0, nil))
+--     v11: this group is where the target globe's DIFFERENT height lives. It is the only
+--     cluster that no longer shares the player pair's Y, so it carries G.tgtY (+70) and
+--     every child inside it — globe, base rim, threat rim, halo, power globe and its rim —
+--     rides up to an absolute +110 without one of them naming a coordinate.
+local gTargetOrb = reg(F.group("Hunter - Target Globe", 0, G.tgtY, nil))
 adopt(gRes, gTargetOrb)
 
 -- 49. Target health — the kill-window read (execute range, swap decisions, and whether the
@@ -1363,6 +1469,7 @@ adopt(gRes, gTargetOrb)
 local tHealth = reg(globe("Hunter - Target Health", G.tgtGlobe, COL.life,
   F.triggers({ unitHealth("target") })))
 tHealth.subRegions[1] = pct("percenthealth", PCT_TGT.size, PCT_TGT.y, COL.hpText)
+addHighlight(tHealth)   -- v11: sub.2, scaled to the 44px vessel
 tHealth.conditions = { F.condition(1, "maxhealth", "<=", "0", "alpha", 0) }
 
 -- 50. Target mana — deliberately a SHAPE and not a number. Rogues, warriors and every
@@ -1375,6 +1482,10 @@ tHealth.conditions = { F.condition(1, "maxhealth", "<=", "0", "alpha", 0) }
 local tMana = reg(globe("Hunter - Target Mana", G.tgtPower, COL.mana,
   F.triggers({ unitMana("target") })))
 tMana.xOffset = G.tgtPowerX
+-- v11: sub.1 — this vessel carries no readout, so its highlight is its only subregion. It
+-- is the one globe with no canon diameter, so it is sized from its OWN width (22): a 72px
+-- highlight on a 22px vessel would be a bright blob three times the size of the glass.
+addHighlight(tMana)
 tMana.conditions = { F.condition(1, "maxpower", "<=", "1", "alpha", 0) }
 
 -- 51. TARGET RIM — was the target portrait, and it keeps that aura's uid and its trigger
@@ -1452,12 +1563,12 @@ placeAfter(gCDs, arcane.id, cdMulti.id)
 placeFirst(gAlerts, kc.id)
 
 -- ===== ABSOLUTE POSITION PROOF =====
--- GLOBE_X / GLOBE_Y are ABSOLUTE screen offsets, and every globe here is nested two groups
--- deep under a top group that carries its own -140. Applying the canon numbers LOCALLY is
--- the exact mistake that put seven packs' orbs at seven different heights, so the build
--- refuses to write a string whose globes do not land where the canon says. It walks each
--- region's parent chain and sums every xOffset/yOffset, which is what WeakAuras does when
--- it anchors a child to its group.
+-- GLOBE_X / GLOBE_Y / GLOBE_TGT_Y are ABSOLUTE screen offsets, and every globe here is
+-- nested two groups deep under a top group that carries its own -140. Applying the canon
+-- numbers LOCALLY is the exact mistake that put seven packs' orbs at seven different
+-- heights, so the build refuses to write a string whose globes do not land where the canon
+-- says. It walks each region's parent chain and sums every xOffset/yOffset, which is what
+-- WeakAuras does when it anchors a child to its group.
 local nodes = { [top.id] = top }
 for id, t in pairs(byId) do nodes[id] = t end
 local function absolutePos(a)
@@ -1469,16 +1580,16 @@ local function absolutePos(a)
   return x, y
 end
 local EXPECT = {
-  { hp,         -GLOBE_X,       GLOBE_Y, "life globe" },
-  { pPortrait,  -GLOBE_X,       GLOBE_Y, "life rim" },
-  { mana,        GLOBE_X,       GLOBE_Y, "power globe" },
-  { powerRim,    GLOBE_X,       GLOBE_Y, "power rim" },
-  { tHealth,     0,             GLOBE_Y, "target globe" },
-  { tPortrait,   0,             GLOBE_Y, "target rim" },
-  { threat,      0,             GLOBE_Y, "threat rim" },
-  { flash,       0,             GLOBE_Y, "threat halo" },
-  { tMana,       G.tgtPowerX,   GLOBE_Y, "target power globe" },
-  { tPowerRim,   G.tgtPowerX,   GLOBE_Y, "target power rim" },
+  { hp,         -GLOBE_X,       GLOBE_Y,     "life globe" },
+  { pPortrait,  -GLOBE_X,       GLOBE_Y,     "life rim" },
+  { mana,        GLOBE_X,       GLOBE_Y,     "power globe" },
+  { powerRim,    GLOBE_X,       GLOBE_Y,     "power rim" },
+  { tHealth,     0,             GLOBE_TGT_Y, "target globe" },
+  { tPortrait,   0,             GLOBE_TGT_Y, "target rim" },
+  { threat,      0,             GLOBE_TGT_Y, "threat rim" },
+  { flash,       0,             GLOBE_TGT_Y, "threat halo" },
+  { tMana,       G.tgtPowerX,   GLOBE_TGT_Y, "target power globe" },
+  { tPowerRim,   G.tgtPowerX,   GLOBE_TGT_Y, "target power rim" },
 }
 for _, e in ipairs(EXPECT) do
   local region, wantX, wantY, label = e[1], e[2], e[3], e[4]
@@ -1486,6 +1597,39 @@ for _, e in ipairs(EXPECT) do
   assert(gotX == wantX and gotY == wantY,
     ("%s (%s) lands at absolute (%d,%d), canon says (%d,%d)")
       :format(label, region.id, gotX, gotY, wantX, wantY))
+end
+
+-- ===== v11 HIGHLIGHT PROOF =====
+-- Two things have to be true of every vessel and neither of them is visible by reading one
+-- line of this file:
+--   1. EVERY globe carries a highlight. Missing one is not a crash, it is a single flat disc
+--      sitting among three glass ones, which is the drift these guards exist to catch.
+--   2. The highlight is the LAST subregion on its globe, and nothing was inserted ahead of
+--      an existing index. Conditions address subregions positionally (sub.N), so an insert
+--      retargets them in silence; the mana globe's waterlines at 2 and 3 are exactly the
+--      kind of index a future condition would name. This walks each vessel and asserts the
+--      pre-highlight prefix still matches what the build put there.
+local VESSELS = {
+  { hp,      { "subtext" },                             "life globe" },
+  { mana,    { "subtext", "subtexture", "subtexture" }, "power globe" },
+  { tHealth, { "subtext" },                             "target globe" },
+  { tMana,   {},                                        "target power globe" },
+}
+for _, v in ipairs(VESSELS) do
+  local region, prefix, label = v[1], v[2], v[3]
+  local subs = region.subRegions
+  assert(#subs == #prefix + 1,
+    ("%s (%s) has %d subregions, expected %d + one appended highlight")
+      :format(label, region.id, #subs, #prefix))
+  for i, want in ipairs(prefix) do
+    assert(subs[i].type == want,
+      ("%s: sub.%d is a %s, expected the pre-v11 %s — a subregion was INSERTED, not appended")
+        :format(label, i, tostring(subs[i].type), want))
+  end
+  local hl = subs[#subs]
+  assert(hl.type == "subtexture" and hl.textureBlendMode == "ADD"
+     and hl.textureTexture == FILL_TEX and hl.width == region.width * 0.46,
+    label .. ": last subregion is not this globe's ADD highlight")
 end
 
 -- ===== assemble (v2000 nested), encode, verify, write =====

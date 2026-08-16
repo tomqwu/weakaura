@@ -1,4 +1,4 @@
-# Warlock — All Specs HUD (v9)
+# Warlock — All Specs HUD (v10)
 
 Import `all-specs.txt` whole (copy all → `/wa` → Import → paste). One pack for
 Affliction, Demonology, and Destruction: every spec-specific piece loads through
@@ -6,19 +6,73 @@ a `spellknown` gate, so the HUD auto-adapts on respec with no user action. All
 triggers match by exact spell ID — aura triggers carry every rank, cooldown
 triggers use the numeric rank-1 ID — never by name, so the pack is safe on zhCN
 and every other client. There is zero custom code, so the import dialog shows no
-code-review panel. Since v9 the layout is **three glass globes**: your life on
-the left, your mana on the right, your target's health between them, with the DoT
-row and cooldown row below, the alert column on the left and — in arena or a
-battleground only — the PvP column on the right. Drag whole groups in `/wa` to
-taste. Note: the `/wa` editor preview force-shows everything with fake data (all
-load gates ignored, so the PvP column and both curse states and all three specs'
-icons appear at once, placeholder durations, no animations) — judge the HUD in
-combat, not in the preview.
+code-review panel. Since v9 the layout is **three glass globes**, and since v10
+they **flank your character** instead of sitting in a band underneath it: your
+life to the left at `x = -270`, your mana to the right at `x = +270`, your
+target's health above and between them at `(0, 110)`, with the DoT row and
+cooldown row below, the alert column on the left and — in arena or a battleground
+only — the PvP column on the right. Drag whole groups in `/wa` to taste. Note:
+the `/wa` editor preview force-shows everything with fake data (all load gates
+ignored, so the PvP column and both curse states and all three specs' icons
+appear at once, placeholder durations, no animations) — judge the HUD in combat,
+not in the preview.
 
 Upgrading from any earlier version: paste the new string and the import dialog
 offers **Update** (the UIDs are unchanged), which upgrades the group in place
-instead of duplicating it. That is true of v9 as well, including the auras that
-used to be the ring orbs and the two portraits — see "nothing to delete" below.
+instead of duplicating it. That is true of v10 and v9 as well, including the
+auras that used to be the ring orbs and the two portraits — see "nothing to
+delete" below.
+
+## v10 — the globes stand beside you, and the glass catches light
+
+Two changes, no new auras, nothing removed.
+
+**1. They moved out from under the HUD and up beside your character.** v9 parked
+all three vessels on one band at `y = -262`, which read as a *separate bar bolted
+under the HUD* rather than as part of you. They now flank the character:
+
+```
+                        ,---.
+                       ( 41% )        target      (0, 110)
+                        `---'
+       ,-----.                            ,-----.
+      ( 83%   )                          ( 62%   )
+       `-----'                            `-----'
+      LIFE  (-270, 40)                MANA  (+270, 40)
+```
+
+Your life and mana keep a shared line, because "can I Life Tap?" is still one
+glance at two objects. The target's vessel sits above and between them, where
+your eye already goes for a nameplate. **Sizes did not change** — 72 px for
+yours, 44 px for the target's, each rim 4 px wider.
+
+Those x coordinates are a repo-wide contract rather than a taste call: `∓170`
+collides with the Alerts column at `x = -150` and the PvP column at `x = +150`,
+and `±210` collides with the PvP layer's elements at `(200, -44)`. `±270` is the
+one width that clears both in every class pack. It also ends v9's honest note
+about the target globe landing on top of the DoT row — the DoT icons are at
+`y = -156` and the target vessel is now at `y = +110`, so they no longer share
+screen space.
+
+**2. Each vessel now catches the light.** A flat disc of colour reads as a
+sticker; real glass has a bright spot where it faces the light. Every globe gets
+a soft, off-centre highlight in its upper left — sized as a fraction of that
+globe, so the small target vessel gets the same look and not the same pixels —
+and the liquid inside starts reading as liquid *in something*.
+
+The highlight is drawn in **ADD** blend, which is the deliberate part: the
+percentage lives inside the glass, overlays draw on top of it, and a normal
+overlay would dim the number. ADD only ever brightens, so the number stays as
+readable as it was. That is also why this is a highlight and not the more obvious
+dark rim shadow — a dark overlay in that position would have cost you the text.
+
+**Nothing else changed.** No aura was added, removed, renamed or reordered; every
+trigger, load gate, condition, colour and spell ID is untouched; the alerts, the
+DoT row, the cooldown row, the procs and the whole PvP layer are exactly as they
+were. All 44 UIDs are byte-for-byte identical to v9, so the import dialog offers
+**Update** and leaves nothing orphaned. Let the Update dialog's **Arrangement**
+checkbox through, or the globes will keep their v9 coordinates and you will not
+see the move at all.
 
 ## v9 — Diablo globes
 
@@ -34,6 +88,9 @@ target's health as a smaller vessel between them.
     x = -150                  x = 0                 x = +150
 ```
 
+(v10 moved all three — see above. The rest of this section describes what v9
+changed, and every word of it still holds.)
+
 A ring told you a value by how far an arc had swept round a hoop. A globe tells
 you the same thing the way a glass of water does: the liquid has a **level**, and
 you read it without decoding anything. That is the whole reason for the change —
@@ -41,9 +98,9 @@ under pressure you glance at a level, you do not measure an arc.
 
 | Globe | Where | What it does |
 |---|---|---|
-| **Life** | left, 116 px | your health, deep red, **amber at or below 60%** — the health half of the Life Tap decision |
-| **Mana** | right, 116 px | your mana, blue, **violet below 30%** — the mana half of the same decision |
-| **Target** | centre, 76 px | your target's health, half size so it reads as secondary; **disappears entirely when you have no target** |
+| **Life** | left, 72 px | your health, deep red, **amber at or below 60%** — the health half of the Life Tap decision |
+| **Mana** | right, 72 px | your mana, blue, **violet below 30%** — the mana half of the same decision |
+| **Target** | centre, 44 px | your target's health, smaller so it reads as secondary; **disappears entirely when you have no target** |
 
 Both of your globes carry a real decision, and neither is decoration: **Life Tap
 trades the left globe for the right one.** "Can I tap?" is now literally "is the
@@ -59,7 +116,7 @@ it is inside the glass.
 
 They used to sit *under* the orbs, on a shared baseline, where they competed with
 the world behind them. They are now **in the middle of each globe**, where your
-eye already is: 18 pt on your two, 13 pt on the target's.
+eye already is: 13 pt on your two, 10 pt on the target's.
 
 That is possible only because **the portraits are gone**. A WeakAuras `model`
 region — which is what a live 3D portrait is — cannot carry a text sub-region at
@@ -114,17 +171,19 @@ where this update looks wrong — let Arrangement through and re-drag afterwards
   arena it is still there and better — the per-opponent **Enemy Mana** bars in
   the PvP column give you a number per enemy instead of one ring for your current
   target.
-- **The globes sit at fixed screen coordinates** — `x = ∓300` and `x = 0`, all
+- **The globes sit at fixed screen coordinates** — `x = ∓150` and `x = 0`, all
   three on the line `y = -262` — which is the same geometry every class pack in
-  this repo now uses, so a warlock and a mage sitting next to each other have
-  their globes in exactly the same places.
+  this repo used at v9, so a warlock and a mage sitting next to each other have
+  their globes in exactly the same places. **(v10 moved them to `∓190` at
+  `y = 40`, with the target at `(0, 110)` — same cross-pack contract, new
+  numbers.)**
 - **The target globe lands on the DoT row.** It is centred at `y = -262` and the
-  DoT icons at `y = -156`, so the 76 px vessel sits on top of your Immolate /
+  DoT icons at `y = -156`, so the 44 px vessel sits on top of your Immolate /
   Corruption timers. That is a consequence of the shared cross-pack geometry, not
   of anything warlock-specific — every pack in the repo puts its centre row in
-  the same place — so it will be fixed the same way everywhere. Until then, drag
-  `Warlock - Target Globe` (or `Warlock - DoTs`) in `/wa` to separate them; both
-  are independent groups.
+  the same place — so it will be fixed the same way everywhere. **(Fixed in v10:
+  the target vessel is at `y = +110` and the DoT row is untouched at `y = -156`,
+  so they no longer overlap.)**
 - **A globe fills upward.** WeakAuras' orientation names lie about direction, and
   the opposite setting produces a globe that *drains from the top* as you take
   damage — which looks deliberate and is wrong. This one rises, like liquid.
@@ -574,12 +633,16 @@ it shares a row with.
 
 ## Groups
 
-**Resources** (three globes) — since v9 this group holds your **life globe** at
-x=−300, your **mana globe** at x=+300 and the **target globe** between them at
-x=0, all three centred on the line y=−150 and all three filling bottom-to-top
-like liquid in a vessel. The two player globes are 116 px, the target's is 76 px
-so it reads as secondary, and each wears a brass rim; the percentage sits inside
-the glass (18 pt on yours, 13 pt on the target's). These are the numbers every
+**Resources** (three globes) — since v9 this group holds your **life globe**,
+your **mana globe** and the **target globe**, all three filling bottom-to-top
+like liquid in a vessel; since v10 they flank your character rather than sitting
+in a band below it, with life at `(-270, 40)`, mana at `(+270, 40)` and the
+target above and between them at `(0, 110)`. The two player globes are 72 px, the
+target's is 44 px so it reads as secondary, and each wears a brass rim and a soft
+specular highlight in its upper left that makes the disc read as curved glass;
+the percentage sits inside the glass (13 pt on yours, 10 pt on the target's) and
+stays readable under the highlight because the highlight is drawn in ADD blend,
+which only brightens. These are the numbers every
 class pack in this repo uses, so the globes land in the same places on every
 character you play. Your life globe is deep red and flips **amber at or below
 60%**; your mana globe is blue and flips **violet below 30%**. Those two colours
@@ -732,7 +795,13 @@ and it is the strongest form of the v7 trick: **every one of the eleven orb aura
 is recycled**, including the two portraits, whose UIDs now carry the life and
 mana globe rims — a portrait that was simply deleted would be left stranded in
 your WeakAuras with nothing to update it, so the region type changes underneath a
-UID that never moves. Removing a
+UID that never moves. v10 is the mildest of all of them: it moves two group
+offsets and appends one sub-region to each of the three globes, so not one aura
+and not one `W.uid()` call site is touched and all 44 v9 UIDs are identical.
+(That sub-region is *appended*, never inserted, which is the rule this pack lives
+by: conditions address sub-regions positionally as `sub.N`, so inserting one
+ahead of a referenced index silently retargets that condition at the wrong
+sub-region.) Removing a
 `W.uid()` call site is not an option: it reshuffles every UID after it, and
 `W.assertUidContinuity` fails the build if any previously shipped UID
 disappears.) The
@@ -743,8 +812,8 @@ it (expect `changed=0`). One more re-import caveat: the Update dialog's
 dragged in game back to the string's defaults — uncheck it, or report your
 coordinates so they can be baked into the script.
 
-## Import string (v9)
+## Import string (v10)
 
 ```
-!WA:2!DZvFuUXv19mwXeBLeWEJTtStauCInEnjgjT6RnedrsRKTwVRK8iT761XLDgnAKMz3rZmEMr7UYabY2KGjKsBwOPLu(iNTqAHsBHfsc0c90AA5pAdWLTL0HYjN2ULtAY)bMw6xhG(EVzK0OD1kTETDID854zh9(AEZ7(7(7EVV3BEuJ2d3t92p7BDPcSCtvutrnUIKI2GUC5kRlVhkOApCkYgAkss8fJlikvuJx(GQ38ySAskCt55U9KvITgVMNJiPuGxxDxnZipRwzEdRmwUGIwrETy2pc1Tfts8mNHvRON8kksgIQAZMPujDEdQcQSONGrZNq(yXrnwujjp5u550ly1scA1SQWPxqJVSOIC(AQ80L1uQQUGvjYjEg(nVOOCjfTkSgOs4ErRmSE)OOOCTeBvdbfTmQ4S1Dxa9MwsSSBnwoscHO1ny1mCxOKOSOUG7yO)y4EodnXYL510tVFn7BFIyg4NoBvnw)NdFvxLxssSO(E6XBSQOkvqLminhj9uf1DVSE1c8tJEpZvTujXzxCI4rZLFIC5JsNVrwz14rzrNlBIHg68v15tmlQFLZQfyOLzRWR7EHI8fqTa(Lx7OjgkBYrgA(QY2Dl3lwuuFYQYO3MP59ZkjPUDwY95TYFyLI8FXRXE4krXY8QBp3PRIg(9KSkA4Embrd(ZzLR1y9wNNvw0AWmeSJKNJNvNpNbsCv2q46GDhtwrMFPIO3FCjMapMOPZJgulQphUO4Ej4nwfwr5KW7avbWl4d8d9H(7oxzkZRZlvkRIOSrH4jsNpb9EflQEtnrx086kv1441ppQi8AYSsJIEAON79Vyjn0ydQFXAW668SYCirCsCs4NFHCXPtKi9cgkCtBv(TKDN(RkwCXJe60gf0ssp6ihJwNJvI31cijbnbCPxh7Ksgnm4Ab87KOfOjMKcBr3lA9yi9xi0zFRavdfiytd2g1LJYZkziOUZvLXWSYSQ3sZKhsSeVLoKhAXkQ72rfuMPUEholyZWBaUokylqyWTaC9311d3aCJWBCZWBYnSncEh2UBOh3WnHeEUHD6g2LB4MtVF4wEc0a)EGBfHwHBdEZWBXn8wbpWTd7fUdg4oDd7d2p82Cdha6fo4x8AG3oCxWDVv4qymWkLJb6UKfccHqctWfe5(H(Db3d8oH7fjfGdVy8mzQiMTKXyAPH3Tl4(CdrDbXCdXDddGgwVNci1aTjQrz93zPGRtARlYwCYQ6g8fhMD2n18hIYBcUEkC1u3rrEDwdmSKhtaHjjKlkSOogsWplkdEgNLjPcIrXQm06sSYguZXlxmQCzj(hAxO(8YQAkL1411ZraGh82UMnHFLqd8UWJUB39CAkgevakAwjvbw0RW9SFAobEUPsc3IR5MMvtKTGe)si9doKIUablqpnRuv(9gY7Evu379Eynobw5Y867z)W4dM9A9EO(dsGt4B9f01COobQ6g1oFPgDxcX2(HrrpKndJnNOCCLkfynGXPWn5HpmCsCJzbkVFyeRs6cgB(kSZA1hGX7X(XBvwkC5G7BpNDxQ9yGgQMqxGTOYmNWMREEsA4lQBBFT8YSV9PUnhvOjL7YwPwx3ow0rYNr9MijIiJvWKlCJjw0qiwu0pppjdeliFrsIp4sw6zJB3bohjFSexSuni0cKbEIqnw6mPta7wdPcJlZcKcYv3YMlREEjKLn1TLut8mEoEv2Iycdp5ZR6TXR1ewgpMOL3TjkYZHybLMqvdDdMcHQLrN6DULiPndI3ymnw15gZ(MLA8OjS2zgj)qPsNWE4QfAe1E7shHi1j8S0LKuu0SgoMg1NqOlMMpiSPWB1EORUStDFDPXTsSq6QvkWRvqGxSSGXJVHv6lWHWRtudJEd4ZjdK62q6YrT1AjkXcQBVqd1uBfu13zkmlFjwo(tfTyXmY6NAmE2PIIT1EQH5lkYEk7sQFQ4IACs8tKRIIIHWHmkZsyxwGylNOftbXhDE0tDcojwDDMcgiYEzJDrxPkYte30Ku3FbDrCz1glk9qzIFm4r2f8HzIHmGZTl4rChthnKIVbU53Jnb6THjnPjwUlyXUBtMoh(rH9cGHqP2Gp1z9GhtDhJGkIN4cSy3p41eryAo968XF0vu36CXfQiQPPOjSYrrrzb4goFDIkdRHM5uqM8qwz0DppcFixeB)No2qjspaXPf66SwlRtg6YAxBMfiSGjf10new0Un4KevfWu3N3UXXqBCdQUJ4dfD4S5ZeBOOXpw0bgiv(uJIG3nfP2aWZ3mfl6bm2WBqhxdJVgj4CCkvuXDebSvJeWPiLmSFsz636QlKHe6zWuepU62BYiAJjG5q2ws2B(Yjp2ujpXaX1eLXg)5fMN8MH72fsLoxQbsSOIMisasghMB0e05tfp6qwy3zTXUVj3AKAXxu4S3dmifCmKzOIBfgAtWW1n5aPfGmmqwb44uanXQbKB1gkG8uWieRd1PIpNToOk22om(E7dth3Z9AXgB9EtgB8h0YKGleb9PAq5d)ADLRFoexVDJ3JV2t1dtqbmNFFo7j7BFqblpi4GIapuck)GGafiIEBMeMcHILGkV8GGmOaNMs9aRf1cPXCqBbZcAGoyavHPrnvng17SZv1kn49dN5wH3lL67OZLE1e1WdSXPWGpWQzVGpOa8Gi4fX)LFDmXc8qmWdtyg(q7hol8HTioGhLK0hPjLXZ2u1NM4jhwvFEs)gpYq1Iw)sykKg5X0wce43SBKfWVLa84iEbyE4J5g(4WVn8euWVdd87kaFcIUm8KWVh8jPGp1llaFAI2wsBTnF9HHs9zPqIv2GpZJdpfrVY7KZgFsjjF5Ohfwqa(9Hpl85GNg(dAOUa)HcN92XEQvx5Of)pFpR4T43yTElUGFBr6CiTTfA6yNawFd5t5d8jky5OGW6tEHhvqdD3GMnvhzO7zuJTbnjnrmsOeeltyQG(3mb(GhUpcnxdQWqecUGeV(c4cZt8z(eyoJdVy1JNm9Wh70OykdG4ru3okkponEd(jA435ghJh7GxiSjW7P9EmIe6i4ewQxCTL6o0aG)uI08l1kQh(YmxCYE4R0uKdF1lqPn8mwYz4zxPu6OWZ9YFDNceFtn1bINF2jdwRiMy)R)Q34)xO9042J)Dimu7jNXom0DSQmWXAUnhPkOXZA0YS7qsXtsKZscx1f651U6qppMVPegruBWZKxQTHEw3sp1fKH(RTvd9xsuUAyJgyx)wLvPqgMBXy7miJV1yGZStKHu49HmP(aJFfIPXvyoa5FogsEjXMWfUfW)C4uVSiXG342g8keS6X7nDun1rJ0rdEuRB7D)LxcT35GZJ9IJZ7ADY59nAW5XAX5nYmP0hE8ePpEX4VkZ51vBoR9a)txFaDbdc9foKl0O)D6EzSdwntJbpqJLlpM62Sj6YjAuLyCLm6Fjrevxp(C7Z6jRYz0WrB17AvU22OqTZVwNmaI1zauV9o0inCLMqtmiXkrelxoCz7iVt(I2mFbnBRw8O)m3mMrbrTydaFeeaCr84lkGA88ZZqcighaTGfUuZod097hUrMyASIfzwlW600QO44RX4xDAulH6jg1QWkZ43GxMzbJzq((xRK408OO6j3ZaEzwhW7Vj8CdAhxfzya7SRlNW9(pWjugiE)sSXLUOH7d2CM3AmeII1lmbu)USb1wcKq4l(Wr59CnQenBz0WfmUlN6jdIlijyyF(TU6OsRpfRfT6mKPHSJQyEiJE4bvIj8xOUkWsnvIqVrmW3IOAb)1mWpyVr8Iumu7PjKbp7LSgkA4xyIMg834qZQHgd6r(Cwdf(SUqIabltqcuKAowMIKhFC)rhyaS562lvkb7UaEkeqwrW)gL9pAbYuZMTQKo)C1xYIE8rQYQfziXTtUemaIywZYlcBNk(lWmpiiJL29Hxm)GhxFKPkknCFttmTGzKEGAnujG)wg4VZwdaEEBSp8DwBGp8DzGVhdGS7)9zGLyG)Ec2(ZuBfU5DsNEZfxrtRkz5ToVJeRQPZR2tZesvPIIekEi13CZ0grw3apj1EIwQKKizbXCUAf5evfuKjRortV)2kX7VBG6kBV)wU5BXak51xTRG9xnHyYQ(MQ44ITZvW7ybrofzRj))2Ug46ESnBBVzjoffPIkZiNBgruu6NR(pXlTMqmCLySETFARx7h1VVW(JfYVFYL(IfouGi0(8fkSpYv)0(d2NpF0(d73xinu7KrwcXNz7UWkgO0oAu6HtoYqTAT58tXZRgfpPLg0yeUqDZp33bp7nrS9S39PUoCIKmN5RYOW5sLoDc6jILjF(mddN5nBr7J01MxVQ9Y0UK1FMqXE(6T)jxZ1dWoL6tAT96SnbpAmdUR6)cBSWf8ahF95nZnaVIfPT3cdR17j0J3plos7FmMjb9VyNrrPcHHFU6siMggc(Nv3r9eXrVpGOowjazoc7b4XTHEy80UT4rSHERiLDUQuqOFKVIovaWaoeOcPJmIRZEhWlHHspFJ4k(3zaKlOVsRaMN6M93FeVX851xaeIXxyemjSpFKR(jx7JawI4pK3(O7ZB)(qLnq)EXz5Num)(XfWpcLfosiuvc3FFHjP0V)WEdGaGbJGV0pPXSYjum0Tbij0pC(1c(b)Sv4MZ)XLwOg8F6eFb)C4)Ic(VTAR)hg4)fXl8)TbWhP1hz8zcwtrDMuoWhWVGaoGFztuX)c8REvcbq1raWt6VVarqIQWimq)bI5V)aeQIqbjxdtUgbtB4TFcsi4gtIDpVWsLLuMjPg)PRYlZvZYZiRvtdNX5qg6pIK9Y6XmhojY2ViR4S8slG)5qK9eWoxeFF91dB(Y1RcYGoowPGwo3qku9LLkg(hcKIMJSi8KEsEbrUPK511DrYzir09BN8GSMlnHRyHy5tYvyAzKhPHMSZqS)1lFqS90WfVL5Nvv0YxN8IvqE5533Hc60ppg4(X76Hd57q4b3wHMJ3rO59GiC85nc6AaVbix3WGptQBVoIZKAVMu3bJj1DAsTptQ9VttQ3gLj1biU7g2YnDxMu9Is7GcMuVD093f6)392nPo0RQGIPrGcsqKKT4ZuYeJkwGKhDvqLfAwOTu9tUsitKktMpXq0jgs)eDgYS8RgqgtkVW4Mu(wbkXKYFROJVChrhtsJTkHOPIejC)4Rr8sUs8UjuaIXkFxfyEblMnPcT2IwtQWB5iJVsrQbVO8aZe3BWPQ2zr6)2LFdnEJHIECM9oswytpPZzeohzZl4jVgRmxlrhG3Zm4z51zAKDLuEw1wcjqbfmLaRHbVM6T2AYOYlpLNHtLlxQ0hXzMj5L8evRIIwJmVdhENZxrrwKZtowonXsIC8nkKJEs84EYK2ZWjAzYTJsFKe59KA4HhjDcs4jiPW1)xrGNwbKqRRYYXFJxSrKSiYr2QvKZHBmY2zkyblVHPzLelldH0qbrH3QDKjKdf)qZa10S2kD8mK4ME3UMdjuSBhuqu4iDUHZvSMmBfroYKJGINkMUIMb4D(YAIwBhMRFo8TytV7LEaAjXkIgxpEYvgcFNWYOaoqpEzJKSCOaTlqhDGuJKRGgBrXQ6p0nGIKAEwnoll1p0UQdbDoR)rL41m0xOuvjjRvWIPEKsOaCrXeHxtVnCWyiyQfMeZ4D8j1gprLirR1f)GQlEWUUgW36kOXnG1LFYMYzBtH51ABkDLSj5FYkjBkj6)4NC6txwyqjylMu3)AY2ysfTv6gC35hb9PH3SMzQAqMNKf1LelYxqXWqPc8I(XTawc2gIOZUT5j7BsmECjDdnw8ogI4ehS7cCv1rnqbsbQrwstOptkgReM1kHxShFWiuKDMdjzMEQvCR9ml18KPQb3SZvVzXp8Lq3lRJN3cCwQBVEE5RNmQNznLu1tGH02KwJ5IZF8g4W(c0FFHUCHdT8toy9983vnyYZoZkXKQNi7WYdCKAJh)yDdtgRTysewHahnPyHx0KQWAdcnP4mPkIhu5nPk1eQzsv2jmZKsOo(YKs0KAsCtzsnLjLeQXmPQGQGCxrj3j8suTfKGxTHxQ(eJQUZw2wk1N6ZEUx4ZV3(8wF5Vj7HRw2almDCfX)2nw6HtS3qEBS1jqLcvfC5)OmQB3rtATV(yu3vR7ZVg9M3vNrShCD7xEF2RIWAcy7meRuJ4RwGSj9iBIvMogRfEJUJ3I9PqM8upyZ9Lb(36NISN5NWY)MjIvvtwuUCouCqIgwGZ4d5xLNtkzmT0TfCk0eCg)1nGZMOhZwNP((XZup8dXZlFRZjpQsND70iYuUPIH3RUwGRY8Y8AIC5euMjJmZsT8Zf1j)HMNTynY2BIe3tA2k8BXyby30KFAV9h3DC7PDZt99DONdqeC9Q2dzXJklROXJ39HixE4zwczKskx9MBrh(EUuJOWW5qwjpC)3sbAEB7bCtXOEt475XFufol(fj(NWy3N9mBSXW)prlRgqBMObYAhqiHjQbygx0WzdLbtQPv3x71bIQXXkZB)hV(SG)6rILUYrhDS89MQBW)bEDb83rCP7H2Fq)(JSeYtCobEDly7swW2Hf1X7b4nGX9laOIVUzCVZyLhPU5ylcXh2cpuLzvMKhmFRaKotsEewK1bnRFOBHsMzOrpzzruayCcDdLK41BOKds7pIVWHWxJ0Vj1JAs9rE9bQqEBTIk2FhrfOG1XXQxvZM3yiUCI1MzyFtxUBiIKVUXSPnI4K0(IeocEMScJxFf0vFKR(P7lyyV(6ogXbfKj1h(Qam1t3Elryy2YYkgoM3texJLj7wtUH1QQeOxQIxiesz1RXjGCRGdz2VIf8Rx5PdW7F8Yks92n43rUAc(15apNM42MniPUFnpM62IRPmtrpXB8P6Iroxkc(03vmbFoUDKbn2ZeRrab7h(Em04VHyum(nI)mC8jREYXMs0)uZ0T4ppADWY4xbdwEYM7Ah7ppBYhx74XYLFK0TSVGAvkc3)5BU8oo(Ebjt0)NggFjC9Ny4eXpA00PI3XgYK6PATUXsMik9Q2ts1xKM2uHLWvO9pSUutT4zsNCKCjwvDc44lLST9r6mzYVQAr(4gc3(NuUudLiD8eREOic5P4VTVyzJgpvYX3ivvDB5IF0mzgAIu4V5z6rYMVlv)cz6QM0FOa(J5ZRFV(d0FKybdgUp6abd0xe6(853FG1AXxUONovxFRRoyp(jUGMugsfJY5)ONUWrhB8UrzK6QbkJgR)Jj19TWrZqN6KzsNp6qWMoJ6EQpL)XhapR)vuLelvZEBIDRTKhE9AgqPIOmznKB(DQtYez9PKeBz8NAtZvJHKJLv8cv1KBBgLQQvBfzmapkeeulkkTIEWrvMrYJsjp55XF4JnwCN76ADS6oMudU1l2L2XK6yUS3VUMudJVKE1lIJjvgb71VXKkBZvUXK64WBCZMu0aA0o31BsLFV0dysnc6UrfmPqQ6NWKACYAWysDshl(Yn5CR7znFi6MuNALR7c1LKLDjLM0qdCC2r01PXo92b(JZIuwRzsDgtQ3lcJ9(w2ka569q8WPj1dSLJOIHWFaRj0XK6dAs9GOsp3sTaOmPEOvmNmMupmQypY6BQxSwN)7WET(D4SIlRPB0MfcZWCNlvOQHHICgRVy11HBUrxVlWRAtFxXZrP9zycJ9w(iuFQhptKStPRIjo(ADG44ld)kbcXr0lBl37fKG1K6pRUWm1oARWC5wzaEvuAAs9nUekcrVEoc)4BAl6cvEAUCbgD0E1y7MOBXRCfDjpyBfDl6GF(Qw5g6DRnYnP(s4pGSOua)L7MC7RCLRClXpOTYTfAA98QwXg6vRnITrlpwTIrhCMSdmq3eBF1RCfBtFSoj2W(2CvRyd9Q1gXwVhzY(ud23rcXvRBITN5kxX2EE42l2A655vTIn0RwBeB1cC6HkeBGaPK7TBITN9kxX2oLAVFjTgxWvIIUgZkFJyqBV0d9gwFESmP(KmTkeRymyTa6H5ZKnD3eIp3LFHiowYydKzS04OiD(XHRjkpfVHhCwo3rFJjkresgc8EsQOPZofVSvHCS79siZxPw9MW5w9ljpRMNmvnAzxlINLypdH)rM0o7cKcpg(egCKSo)IOSAD8PSwB3yGOqhVXlzHo6pFMSDm4rMlLbpUKJJgUPZ2MOglEPz36LCScHvcnqSGJvyTxRKV2Byt4J4H5en4RqwW)P)q4XmS(m8yQ3sBwS)uOs2R1UxXwJhn(EoYs)B3gmWUJHVV5sO8SMuVWwM(XA2YMu)JRSjmPmzW6R)WvuTp2RSXQ2lVHQwQp7gRAFHlOQbhWpRCTvYTXa33E6m106EQXWRutVRCLAsLE0jgKFgEjTAtyR2MD0StuF)fKIMDGjJntWb0jZ9()qhOSE(l)uw3Xg0UZB5(ARDhe1sB40UGn)0Dr0JylIAzjDdT6L0f1pBDEmho9KZEcD5izpdB3g()oVQy2FTxUD8Es6X0SpKu3dDa83Lgza)f97ZVx8zKMfDFCwDdp5QYXXJpSZGBdzMCXg76Nufz623GVdJ(x0kgOR7QPz6laTd)wINIX8puUaLhGo7KDt88DFTw74fwapXFXLuK51zSmj(fIfmCe83VQV(WxcglyGibW7oB)rIfISc5OBdsUgI89eIkwFbJSOkVg(GwaF0RnhBPs8Cgibj(7)anwUmEl)jkZN1Qmmxo(aIUczlEVoiE38Z2uxMUSUq8kdnYGvMUBGLV3R1FYIiPWlX0yxwfWFW(nP(PMuNVUu2K6NDzrY26AKDvOqo)Gc9ogFMP4ZnC3eYWR1c5VTdHmsXoqiBzCNeWxSBNLoSCIDqoK6cwoewt37SJLSqqjHUjh((1LdPU8fQ1c6QSAtr(UF2jrMq6t2N8aK8ACaEQU9w(nMKfbUFfHMwzDCURHKuyJLw70CltMQ7aBnf)1)kQXtoCcZto2bBS7ZRl(iNecoowDTxWS5kWQ18m906SQmqJtSYVIW5iDpRV43Xrbgn4UGDVi(iifvVjq)3w5KEF4d58nS(5cwhpbdLizE7t5QAm1p5S(JUqB1VOZJQYfTAz6uh5O5Xh0n)X4dKsYt4pHcVbD(51p2dSoYD9JELApOC3Rtq5YKbSy1p0wH)j4dkyHhI3CS36m2aF8wPzpw6CC(eB81mCEIuwxSipT1RStq6VGArYt5OKdi4ddpdDCjEwzeK16Px)a89an9lc7(MOC5ySANAKu3DZFD35iOws1CS7TwcZ(GvU(PenIdV4yzQ5vBWGhysVNgPYy)4flwKxMoDIrtqdFotQVKZVHv4ZVQJs1vTrk(Ly9Spfwcr2mi9uPNI9u8SVLwpAvGWWp2Kcv6Vgw3Z(CpbFMN88B5k8t8UTU6J5eJifZfktVEhj3rBZXCsp609DOGhYBptFTV)))p
+!WA:2!DZ3EuUXv99NXYM4i7a2RFKyNaiCID9AsmsZQxBioejTsE16DLKhPDxVoMSZiPrAMDhnZ4zgT7ktP9hlHGd1ajlTbiqk0f(LwE2dBPuAlp3qGduo98TBpnD4DXqPP5qBbtHZP)tP37DgjnAxTRw)io2XNJND0DU37CV3VF((6(97CPgPRcF4x7zF1lLNRWKf1uuJPiPOnGlxUY4Y7HdO2vbfzdnfjj(IXeeLkQXlFi1BzuonjLct65U9KrIRgVMNJkPKNxxD3nFqooTY8gwp485v0kYRf1(vOUTOsIN5mCAf9KtrrYquvBM0LkPZBqLxLd9gmA(gYfngQZIij5jRkFb98w9KGwnRgC6514llQiNRMkptznLQQZBvJSINHFtlikxsrRcNbQgUxW6bwZpkkkxlXv1qqrlTk(X6UZJMPLel7wJRaPGGm6gCAgUZxsuwuxWDu0FmCpRHMy5Y8A6PoGM9TpEud8BNRQgh9I4R6Q8ssIf13BxEJwf1O8QKfPzjLNSOU7ZRxnp)uO5z2QLkjoZcJhls2CJNnxeMCnEugnE0JyYMj(GdEHQ68XNbnUYA1dSmYCv41DpFr(8OEap516p(Gzsm8GZvv2Ey5EHII6tuvgnBMINMtssD7CK7Zz98HukY)jVb7LR4flZRU9SNUkA53tIQOL7rfen4x06PwR130CCYIwlMbHDMyrEoD(SgiYvzdHBe2tuzfz(LkIM)4AmoEnrtNhTOwuFwCvXJsWB0kCIYjGxhQbGxWhqd9G(7UwEjZPZlvkJIOSr(yXtLloZ(elQUJMOlgEDLQAf41VaQk8AYCsJGEBO37dSqjn0AdACXzW56cCYfqK4e4IWV)8zJXepEQ5nukmLv93CMDrxvS4chn4PnYRLGzKHpgJEbojExZJOemeWLEDStsz0YGR5XZjrlqtujfUIUxW61qgVqWZ(QbQgmqWggOnSl9ZZjziOURv8GH4K5uV1MfpOyjElEipmIvu3JJgOmDD(o8JGnbVm4gPGndHa3cWw(FGTc3m8Y3e8kCdBJa3HT7g6YnSdeTZnSl3WUDd3sQda36JJw33lCBiWkC7WReEvUHxn4bEnW(G7GfUt3W(Hda)oUHdcDdh6tEdWRfUl4UVj4WyiWYjJ(7mHfcabr0sWfe(bGEDb3d86H7freGJSqS0PRiMPKXOAPG3Gl4(DdrCbrDdXCd9HwvVN8iUaTXRrz93zOGB8NVTf4korvDd(IdXnZgA(dr5naBHc3m1DwKxNZaJk5XYFWYiKlkSGogrWpd6b8SoRtcfKafR6WOlXjBqnlVCXiYLL4FODJgZNxvtPSgVUEwc(7q3(nSb8ucTU7cV6UD3ZQPyq4aOy4Kuf4qtH75amfe4lmzc4wDn7uCAIC5L4xcXEuaXNlqGcmtXjvLFFb9Upf19DVhrRGaNCzE99EaySbYSrVhU3ae0e(wFbCnlAqGAUrTluQXWLix7aWiOxYMGrNvuoMsL8CgWyu4U8ihbojUZSWKpamSvnDbJoxfUzSgdWyDz)6TQlfUEW9FOZUB1UmqlvJRlWvuz6tylQEosz4lQBB)Tmz2)(v3MJg0uI75TkToRD0idNlT6oifIKfRGLTuyuXIgcrJG(5fipajeKViPW3YswSzJzpawK8CmfxSuni48KfEcrnAQ0PId7rdXbJRZ8KkwOUInxwJ8sifBQBlHM4z8C8QCfXYl8KlNQ3gtRXT0DmElZTXlYxajeuACvn0nyjiuTS6uFWTePSPrIngvJtD2rTVzPgVAIq70dNBWKPIBVC1Iue1U7WaHq1jIzzkjPOOzTCmfAmHqxSnFrynH3M9sxDAN6(7qNBvy(uvRKNx7S7G0BiwLHe10u0eGB8eBYh9HP9NVIDbBjZM8f4W(ONhtChx1AkCb7wXuNJ482fmI9G0wU54vqQIySA0EM3MOHQM62TVPVgSNc17cBEx1xFsS8)sCf4pvKIftlRFQr55Mmcwl8PgIVOi3PSRP(PIjQvqIF8SvuumeoSrzoMPXWQ(V)7)DFQd(Rx8rx0URBAbeIBJomsw0I2Jt75vEbEXYcgz2eT)d7pCElCNWsoNT8cw0u0VJkHeGGv2shPV(GZ9yxYIoZxaX1pEn8OYVpNYXv3gsIyeBzFerHcQBpFdHD2laWzjcANNyvdrGgfeBK5qnD8csC66S5nqQ9Kn2ntLQiBYCZqk9a51fX1vB0imdMo2XG37UHNGnkYuMc7gEVUJQJqx4BGB5bT1LC7y9hmeByYBPNZwVYS4xf2EiwI2LgQwC2o4jv35WOQ4jMah2qmEnre7Db96QM(qlRTnul97lS8vbrzbyRxOU4ABIXSki9(ivT6UNlFD6ct0bJNQpILBnrQ6eusg7wZoprxqcrnDdHfS7JcsIQcyfy1X5ygCChQUZydgzOm5shDWiXogIQNmxYrqm5njj2SHxOzjwGomT1BahxdHVgoWSfuQOIhicyDNXHtrQziAsD616QlS60h5Xu3EtDcnP8hzHeDNRCIJnzIt0xmnrzS1p8cZrMv4HC(KPYMSV4lOOjIOBK1GzhjotUKXImOfUBgBC3RWTgPv8ffo79adqbhdPi(NUnyWnadvxPlKsasZczeGJtbme9Mq2vQQeYrbdt0pwxz0I2sHuXg3aJTVEWkK66ET0hznNjRl0bSuk6cPI6unu6bVXoQTBwK2o7oVlFTxzhmofWEH97CKS)9d5TSHQaue4Hsq53ciqbIOzZeWKiWReu55gaKbf40uQhC1eUs6mhcUHzanqhmGQWuOUQgR6DU2n1Qm4ndN52G3eL6RBTR9kvvD2Da)EnLEJyAAi4g()HgaVfkyww4TcpeAg92GhwaE7iOZJ0qaj8oArQi8hGAY5SLccVtb4DjaVB4rVCeXbp2kLUbZjaVhBHxWFiwMf8hXcporOZ77aW7hEclzsWhGu0hSP0OpxtPkmeZLXsrMJS2Gx9PArGYsyPtnEgBBLnbF41HCi4pbj3bMh(iUHpk8)hEkk4pLf(ZeGpgrwb8XHpb8jPGp1Znb8PjCZjS5M91dgU2JfdVnZm8Nt4D9oXmXMqsYxwMrGpJaSa8xaFw4Ve(CnyjH)kHZ(AW2dxNbSfR8FWLnl(JxTzXf9SfXxJ4ONVP5ZcyEAKL7N79JbeRlsfEbbTQTvnBPOKvTNwn6LOI9XJsCvdRFNiPP3nrqo4v6JYuOHu2GezNbiMv73fwm0J8(XIKoYcvpEIudDStJ8z3psmL62rErxqJ3GF8gg2FPdVJEOlgHvWd2EtYr0BesctW)PRob3b4h(sec5xUvap8vyV8i7WIxguB4PTOZWxB5uP(HN55(Ioji(MCYdgl3mteOwrSEJVXvV1))62RLWE9FnCZ3EZVSDZFNR4byF53MJsf045mAz3ZiL4jbYemHL7A)DU1RX9TFJR03(J5BsHHf1g4m5KARV91nKG6IYoIn2QDexryUAycaWT(v6RsH073IU8Pr62RXcNzxi90WVl8MRR5DJHWkljkE3yVyDWRLEx)hr9J8p7((wf9U(8F4Ed6uV7yxJO3Dz6Aq(vGb9xru4CXRE9BcN65MKOnDmBTP5du94DNkIM6iHxtTPuRBLP)9xbvM6qQk3LNu1n6uQ63QHuvolPQdpDs9HglEQJxm2vzPQDuR2QVW)u1xqN3GiGe7QiA1)oDFES1BnlJfVqJPlpP62SfLMv0Okr9nz1)kcjAV2skwC)wVz1cgn8uq9UwHT5nQuBmmVfzmI1LXO(AwJoPHVaebrdq0df2YOgx2EI4uIuB2YNM9vlUKCMBblZcj8Yga(Wia4c41xrzsewyjoYJD8xWcxQz)a09haUz2OACIfzxnW6umQCitSzPvNc1tOrIrTkCYS0g8YSZBmnY5LALeNINnV19SGx21b8(VdEMbSDmKSmGTK2Lt4EVh8ek9fRxjUysx2W9bAU5PnwcroRgIaQVpBqTfbji(IpSBQptJgXWvgTCbJ5YjFYa4ks8K3hT1vhnA9XyTG1GHStYRjlMhYQhErLyKWZwNfyPMmrOzel8pqyTGLyHFY(c7fXyO2vtidEdO5mu0WtycNg8p6GZQbhd6v(mwlf(SUqCVbttW6aPi00UWIYFuS5aTNMuc2tE8UFG0HG)n6Xp38K9wptvjD(zRhYPU8rAYkjyiITtjjy4drPMLvk2gT8TXYDqaglE7JSqUboU(WtwuAOEMIOyblp6C1AWqaMSW3Xg)dFxBKp89wDyp89zHFal8dzHFel8VWc)ycY(rQTmZipPtRfJPOPvLeEYl4OWQA68QD1SGKvQOiH89s9v2SSHL1nWrzWtKsLKejb00z0MYkQkOitIUutRlVjI1LBL6ABRlpFZzrFk50xPPM9wnUyIQ(MS4yITZuZ7yEXckYwrV52Vb4gp3MS12SubffPIktlNDArvE2fR)tCOrfIIBeR10(PSM2VdAFHOJgKMMCPNOHc6pmJpFbd5JCLMHoqp(8XqhI2xqnu)KwwcjnZ2yHLTqP1FeMHsm8GTQR5ctYZRgbVvRgmyeUqDLpiBu3brZZ(2V66WivsqpwHkHftMkvCMXJMoxU0dbN5vAj0hXRnNEv7WSVK1FgxXoGl2)SqZa6yxs9OoyhN0X5rRzWDv)xyvfUGZD81NTmBf(nwIS9MFiTUpHESE5WEY)lXYrq)l6zuuQqKVpBDkeBd1a)C1DwVq8Ud0NOoMjaPmcB)3XTHEy80ESKJyd9wwj7AfLGq)ilfDYaGbCiqfIhzyxN9oGFfgk9TB43Y)nl8RfGFtRaMp8Tq3ByVr951NFeIXxiemjKpFKR0KR9qalHPd6ThME82RpuD93Rx8JOjvJMgxbAeklu4GOMeQ3EcrkPx6qE9JaGbcJV0lPZSEsWOOB9tkOx43UAWptQBOvKNjf1vwWMj1gCcXmPCzsTrktQnr6ptQxgRj1nc3Lj1MVeakP0hESPdutrD6KoakMuUjWetQT0eG8FysT1RsObQ1em8e094pmISfcHh61Fu6E9teBema5AiY1WyriE7LGkcCPs9UNNDPYsktNqJ)0v5LluZYkjRGJIFWIiL(hvYokTSZIlIKmnzeNHxAE8phKKHh7Ab891dV5CLR3KbioM6pGLHoKkvpkJrX)qGu1SKuQGmsYjiwyszEDDxKNmOi6(TtErw7CNW16WTCjkKFkzKrQbNOtWT)ZxaHB7THHFNNFgvrlBGYjwbz7hTVdhWP1FSWdGdR6H9Dy8YCRW0Xwty69Gee5ZBy0v)E9tUEzaenPoCD0Nj1RZKYlIk4ZKI2KQNDzs5hrFcqmdoKL57OL0GOYcjysfgDFVO)FpB3K61)IbazkeaH4JjjhUMuMO1XcW8bwbSz(MvAZv)Glh(eUYe5Ipit8b1prNGp)xxvGpMuhbgZK6(wgIXK6n0ks5ZSMiLjyWAUqIVchouV4RH9sUsSakOFIcnFxpPcctYnPIT6KztQ(28rhB5KxdEr5(MoM3atwTtK3FXvbLrEJI81C69nCgydpHZDOoljBv8KtJtUqlEtGtsk8Uo7SmswOLJtTfxiuqoFjWzyWRPEBTwmQ(Yt6zOKzZMm1rD(We8sEIOvrrRXdVdhwZZxrrwSGNSCf0eljwGVrLCmsIfZt6uEgkElB2EeMJgpNNKdn0WPItCNbri2YxLavTCGHrxLRa)nF56bZcidFRwrolUZi5VwG8wwpZWjjwwgcQHC6cNALKTVd5Vrth70SsDsEwIFwVbxZIik29dYPlSNrBDXI1K5QiwGSvki)VIQROzaENRSMOv(pTLzX3IvoVpM(yKeRiASf8wXmi(oHZJCqb96LnsWva5wEEMi9LC4S514kkwv)H2kYZR540kyPl)H2DDmOZOqerIxZqF(svLKSIOgBDpRqoeJ8H6gLUmCEdbtTWKybGhFcTXIxjCKADWwP6KhSPU(9TUCY8srPZVydJzRQH9AevnDuUtIp9YL7usK(4NCQtxwyajyZMOLGvxWJjvQLj5bnUGNd6rdNNUPRAq2ILf0LelYNxXWqPc880O(GqmBJmPZUT5iPmlgAUKUHgho7Oiw8b7jFHQ6OoipPc1irBfqdg7cMXQGNVlFWWuKurIumBx1kEtDnd1CKD5b3TZwVBXV8Lq3lRJ3Yd8Ju3E9NLREXOrM1EzvVawsFt6n2lpZ3Baj7XFV9e8fmiPLv1bQNWNxVbpp70lhEQEImdj33rRnwSJ1z4z62dprWgcY0KsgEEtkLvhpAsPAsDA8SrZKsVjQZKYWjIZKQADOMjfALyACxzsnJjvnuNzsDg0K5n1raZDc)kQ2IxWrS4NvFZvv3vl5Mt9TpTR7f(87RhV1dspjj2AjlEyxZ42)1Be(ItSVGEBKBhOAHAcU(Fiw1T7OlTsVtw1D3A6E2y0CFDa8EO1Tr89yhkIvf7UEaBLA4x28K8uKKsZSRPpA4V6b83BrsK(q1d1mjsW)w)uKpGIXTm(z8Ov1KfLlNf58KOHfmn2G0Q8fKsevl1QatfActZ8shyAtC0pR199Vx8((d)B4D5V1D4h1OZUDgKe2ctgfN82wWSY8Y8AIfYkOmDAz2LA5NlOt(ddpxXAKmXI4MukUk8B2yEypmKFANeO7jM9245PEky65GeAx3QDrcfvzzfnECIyImjINDjKMlPS17UfCyB6snCAd)esCbXJFlwP5Svsuysw1DGVNh)r24S6xUCceX49yV5ixoCcpElbzOnBvbjKeebZegcSuy0QAd2ctQ3Q6(Bp3qeTcCY82)XRplgb9WrtvP)rgnx3j7mJWXFPbJGdVz3ldDaA6WlHSzVGaVUfaEjla8qI64CI(sr3)fbOXxN09VEqnpCDL1wcjFClKXSSRqH9a5AfQS2copkhsXHM1p0TWltp4iNSSiYJTccDgVW8so8YHyOd7luq81W9As9EnPEFVKcFiVTwXhhynXhi)8XU5xvZwwYGfYkwB6H8nv5oJnY(shLQ2yJtY4lCOW49eleoAoOR(ixPz6jqiV(6mAXHyjtQh)6h01t1E9uya35LvmCSxQi5pw61BT4g6YMLactw8Irivg9Afeq2EuazBqflGy3Yt5NNESYksD3zGyURRaIRTxRtrmVZgUu3(NNuDBX0uMUONyn(eVXyORiEU67AnpxhZ2zIg5SXQ4dXbGFald(BqNJTPZRHInr1to6KI0toDNDED4g4MXUgg38entBi7VWFY3N9yrZMB4uTKysTspHh4cnJKKJV5usCe(eWylHB)4dfpw)rsLm2A2rMuFQwBB0eXJWSIKIQE0GAtdwc3G2)Y6ql1ILovIHZgFfTXVJV222ogzsNo3kAf5t3iu7Ftztoy8uXIVYLIWK3cDBNyzIelzIXUuAQ62YgR)0PhC8K4pBEMHZKRdn)IzBVMGoOF6O(8s7L2FVHJgiqOEy8hWFpHz6XhnT)vj2oxb2HwxFZRReK8lC9SnLEivmsb6(pD((hDSol9yKRlKE0i6sMudnF)PzsEY0PYfzqydNrDV1dOqS(WXuOIQKyPA2jT2T1YZWrdQpLkIYKix38upG8qKoPssCLXFtrnJ1d5jwQ3ZxvtUTpOuvTAl7b9XJ8xb1JIslBe0VY0sEuk5jhp(RyUrOJURn6i2rMuJEtxUboYK6eUSZDytQtIV8aRmerMuNsWo6qMuVXMXfYK6bHx(MmPghqR2SBXKIBFm9zsLhDxbbtkeMH3KQejcpMuLDeAND4mrcT2nfDtkXLhvhQRib1jPM0G9DCUH11zWgfVgIsolIT9HnPE7MuNfHXEKZB5uD9riE50K6pyZhvfdHpN12bzs9onPExOA)UxQfaLj1JTSD0XKAou1EpRZnUXk5c8ANGbomHXL12wAlqclSX3s5RAyOiN26B)DDBgCK1BGKvBABlEVoTpyCyTt5KG9OE80HZmPUkweYZSMIq(siricerirEblSYxuKytQVrDYAYD2wY65BvwWvt6Qj138koXenlD4OY3YMigS8ufY6FKr6wJRZeXV81WeXehQTeXfCiZ(6DkiAk2gkOupXP9llk5NUCNPGFLRHPGX)NAlfC(M6wVENaIMHTHaos5rRvmYatNPV(6mb8REnmbCQJTweqSnqxVtarZW2qa7(Ot0JAGEoAWc16mbCXRHjG79T1EcytBvVENaIMHTHawZ)PhmF0(8NuU7otaF6RHjG7sQ9wY0QpfxdteBS3)n8KT90r0eT(gJzs9XyBLCwXyGA(1dXNotQoto)AxfiNypsJ2x6rtH9f15huVMO8K8gEWpYzwhoQOeHCziW7jHIMo3K8YwvYrgggxMVsT6DHZ0rmbpNMN0vnAjZkXBcTNbX)iDkNdbsLhfFQxoCgNFLxw9o(K)RTjViYb0B(kMdO05sNznDbL9kPlOl544kCQmTX3ZIxzYOWeJMpKsW(Igy08REez(8VSnGpwmMv0GVcjPdM6TJxZWC2WtQERTjHdsIQz3w5sJnVpA9Drs6hy3hSWEIIVVzGA(CMu)Knp15A2ZMu)0L3fMu)RSyg0F2YA275F)sRzp3LuZs(rV0A2h)IQzWbP5KRTcPCSW9V31JqQ19wTHJhu3lpEqjtnY4dWpnVKwTXT5EZmsMXRNJdjz46BIOthOpDY26)JxtHxFNRccVUJlrDrVQ7VT6IqczAJ0TlEvsRxI1dBtSAjyYXwzWKrd3w3H0HsnXmNqxoCMZW1zcX39QJrbREi)X5k1tQzFy(Uxg)4V)oYs)Zt7J2l(eSZsfqmoDdpzRwOap(8OdUDK2ZfAKnsjlY2HtAGwmj4keZc66UBQe)IGJH2Iqvmk9Gz9xUpMmt0zc137fDoMNDE8MlgtsrMxN1sH5hpAGqHXFXU(6bFjq0a(d7hNF50HJgKeLE0Tbixds(ckrvRNaHxqLxdFWsGpR8MLRuj(cgisk(RzbTCEECEjkkZNXQoSVW8PrDTvwQVoemVPVqtoCMY6cXQm4WduzQodC((VO)rAIOh)k2gzcMF6a9As9)As9BRtXn3Wn8cevU1a0D9lbp3acDpkF6j5ZouNj4)Gx0j4FDheCedV)G2071GyF5NQnRrun7ifj5fnfjKMU3zgnr(ascDMI8dBqrs(cNRAZRRYPnj5BBAxeQdzyzFAmqEwJZJv1T3YVXIHra(FJqtnYooR7q0mSIvR8M3s9Q6oXAEXFd0IA8KZcYCKt5Xg5sFDcj50HWXzfTDy7MnpNwZJOvRJFu)noesxuyrYWZ67EEmKJvdSByplGprzrTBC0)Tzyz2p(G7)sMNDERJSHbJNiN9jlwn26Nwz)nxS96FRZtF0fS6zMKhT)C4J(NVa(mgL8g(IutrWI1pliSokKPrZP1aDUN1j688KLTgNqYWJcZjyHkI1KcyD6JGp2V0SxrDUAFIl94xohHwRlwKNXAI7aQIylOwG8A6NCypFe4PzIjXZjJqUwV(6Na1hSPnuyl(eLlhLt7udN8UB(R7olb8sAMJmm7hHfhH5X(LegJJSWOPR5vBGahCcVNgX5y)6flwKxMjv8rIZaFwtQVOZpDx4ZVIdj3LNGhByly2TpfMkrssLUQ0vXUkE2xvRN6mqi4xAsH8L)zWSG2hjm4JdMV9MVg)Wg8Mw5jaJr4IzdMUBVdNT)2CcW0LotphoWH921uB8n))n
 ```
