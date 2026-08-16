@@ -308,11 +308,11 @@ local RIM_TEX  = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth_B
 -- and the whole point of naming them is that the seven copies cannot drift apart:
 -- change them in all seven or in none. (The v8 pass learnt this the expensive way —
 -- seven packs given an intent instead of dimensions produced seven different HUDs.)
-local GLOBE_MAIN = 116   -- life and power globes
-local GLOBE_TGT  = 76    -- target globe
-local RIM_PAD    = 6     -- a rim is its globe's size + 6, at frameStrata 2
-local GLOBE_X    = 300   -- life at x = -300, power at x = +300, target at x = 0
-local GLOBE_Y      = -280  -- ABSOLUTE screen y for all three vessels
+local GLOBE_MAIN = 72   -- life and power globes
+local GLOBE_TGT  = 44    -- target globe
+local RIM_PAD    = 4     -- a rim is its globe's size + 6, at frameStrata 2
+local GLOBE_X    = 150   -- life at x = -300, power at x = +300, target at x = 0
+local GLOBE_Y      = -262  -- ABSOLUTE screen y for all three vessels
 
 -- THE ABSOLUTE-POSITION RULE, written as arithmetic instead of as a comment.
 -- A child anchored anchorFrameType = "SCREEN" inside a group anchors to THAT GROUP's
