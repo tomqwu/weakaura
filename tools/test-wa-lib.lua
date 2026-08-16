@@ -19,12 +19,25 @@ for _, aura in ipairs(malformed.c) do
     groups[#groups + 1] = aura
   end
 end
-local child
-for _, aura in ipairs(malformed.c) do
-  if aura.parent == groups[1].id and not aura.controlledChildren then child = aura; break end
+-- Find ANY group that owns a leaf child, and any OTHER group to move it to. This used to
+-- assume groups[1] specifically had one, which was true only because the paladin pack's
+-- Resources group happened to hold the Swing Timer as a direct leaf. v19 removed that bar and
+-- the negative test started failing on its own fixture rather than on the behaviour it exists
+-- to check — a test that breaks when unrelated content moves is testing the content.
+local child, newParent
+for _, group in ipairs(groups) do
+  for _, aura in ipairs(malformed.c) do
+    if aura.parent == group.id and not aura.controlledChildren then
+      for _, other in ipairs(groups) do
+        if other.id ~= group.id then child, newParent = aura, other; break end
+      end
+    end
+    if child then break end
+  end
+  if child then break end
 end
-assert(child and groups[2], "test fixture has no movable child")
-child.parent = groups[2].id
+assert(child and newParent, "test fixture has no leaf child in any group with a second group")
+child.parent = newParent.id
 local badStructure = W.encode(malformed)
 local accepted = pcall(W.verify, malformed, badStructure)
 assert(not accepted, "W.verify accepted contradictory parent/controlledChildren wiring")
