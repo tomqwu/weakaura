@@ -1,4 +1,4 @@
--- generate.lua — Priest TBC All-Specs HUD (v9).
+-- generate.lua — Priest TBC All-Specs HUD (v10).
 -- Run: lua5.1 tbc/priest/generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import -> paste).
 --
@@ -208,6 +208,39 @@
 --     Desperate Prayer danger tier at 40%, the zero-total guards, buffs, alerts, the
 --     cooldown row, procs and the whole PvP layer. No aura added or removed, no uid()
 --     call added or reordered: all 44 uids are exactly v8's, so this is an Update.
+--
+-- v10 (the globes move BESIDE the character, and the glass catches light):
+--   * POSITION. v9 parked all three vessels on one band at absolute screen y = -262,
+--     directly under the cooldown row, which reads as a second bar bolted under the
+--     HUD rather than as part of your character. They now FLANK the character:
+--     life at (-190, 40), power at (+190, 40), target at (0, 110) — absolute screen
+--     coordinates, identical in all seven packs. The x was scanned against every
+--     element in every pack: +-170 collides with the Alerts column (x = -150) and the
+--     PvP column (x = +150), +-210 collides with the PvP-layer elements at (200, -44),
+--     so 190 is the tightest collision-free arrangement, not a taste call.
+--     The target globe rises to its own y (110), which is why GLOBE_TGT_Y exists:
+--     the three vessels no longer share one band. Both numbers are ABSOLUTE, so both
+--     local offsets stay DERIVED (GLOBE_Y - TOP_Y - RES_Y), exactly as in v9.
+--     Nothing else moved: no group, no icon row, no prompt, no PvP element.
+--   * LOOK. Every vessel gains ONE new sub-region, a soft specular highlight: a
+--     Circle_Smooth disc at 28% white, 0.46 x 0.34 of the globe, offset up and to the
+--     left (-0.17, +0.21 of the globe). A flat disc of colour reads as a sticker; an
+--     off-centre bright spot is what the eye parses as a CURVED surface catching
+--     light, which is the whole difference between a filled shape and liquid in glass.
+--   * BLEND MODE "ADD", not "BLEND", and that is load-bearing rather than cosmetic.
+--     Sub-regions draw in order and the percentage now sits INSIDE the glass (v9), so
+--     an appended BLEND overlay would wash grey over the number. ADD can only
+--     brighten, so the text stays readable — which is why the recipe is a highlight
+--     and not the more obvious dark edge vignette (a vignette must be BLEND to
+--     darken, and would have had to be inserted BEFORE the text to be legal).
+--   * APPENDED, never inserted. Conditions address sub-regions positionally as
+--     sub.N, so inserting ahead of a referenced index silently retargets it. The
+--     highlight is the LAST sub-region on each globe: life [3], power [3] (both after
+--     their breakpoint mark), target [2]. No pre-existing sub.N reference in this pack
+--     changes meaning.
+--   * Sizes, colours, triggers, load gates, conditions, spell ids and region types are
+--     all unchanged, and no aura is added or removed: all 44 uids are exactly v9's, so
+--     this is an Update.
 
 math.randomseed(20260815)  -- FIXED pack seed; the uid() call order below is append-only forever
 
@@ -310,20 +343,27 @@ local RIM_TEX  = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth_B
 -- seven packs given an intent instead of dimensions produced seven different HUDs.)
 local GLOBE_MAIN = 72   -- life and power globes
 local GLOBE_TGT  = 44    -- target globe
-local RIM_PAD    = 4     -- a rim is its globe's size + 6, at frameStrata 2
-local GLOBE_X    = 150   -- life at x = -300, power at x = +300, target at x = 0
-local GLOBE_Y      = -262  -- ABSOLUTE screen y for all three vessels
+local RIM_PAD    = 4     -- a rim is its globe's size + 4, at frameStrata 2
+local GLOBE_X    = 270   -- life at x = -190, power at x = +190, target at x = 0
+-- v10: the vessels FLANK the character instead of sitting on one band beneath it, so
+-- the target no longer shares the main pair's height and there are now two absolute
+-- y values. Neither is a taste call: x = +-170 would collide with the Alerts column
+-- (x = -150) and the PvP column (x = +150), x = +-210 with the PvP-layer elements at
+-- (200, -44); 190 is the tightest arrangement that is collision-free in all seven packs.
+local GLOBE_Y      = 40    -- ABSOLUTE screen y for the life and power vessels
+local GLOBE_TGT_Y  = 110   -- ABSOLUTE screen y for the target vessel, above the pair
 
 -- THE ABSOLUTE-POSITION RULE, written as arithmetic instead of as a comment.
 -- A child anchored anchorFrameType = "SCREEN" inside a group anchors to THAT GROUP's
 -- frame (GetAnchorFrame returns the parent region for "SCREEN"), so offsets ADD all
 -- the way down the parent chain. GLOBE_Y is the ABSOLUTE number, so the local one is
--- DERIVED — type -150 straight into a child of these two groups and the globe lands at
--- -234, which is how a "one canonical layout" pass ends up with seven different HUDs.
+-- DERIVED — type 40 straight into a child of these two groups and the globe lands at
+-- -44, which is how a "one canonical layout" pass ends up with seven different HUDs.
 --   top (0, TOP_Y) + Resources (0, RES_Y) + globe (x, GLOBE_LOCAL_Y) = (x, GLOBE_Y)
 local TOP_Y = -140       -- the top-level group, unchanged since v1
 local RES_Y = 56         -- the Resources group inside it, unchanged since v1
-local GLOBE_LOCAL_Y = GLOBE_Y - (TOP_Y + RES_Y)   -- = -66
+local GLOBE_LOCAL_Y     = GLOBE_Y     - (TOP_Y + RES_Y)   -- = 124  -> absolute  40
+local GLOBE_TGT_LOCAL_Y = GLOBE_TGT_Y - (TOP_Y + RES_Y)   -- = 194  -> absolute 110
 
 -- Percentage read-outs, also shared across the seven packs. Both main numbers sit
 -- INSIDE the glass at dead centre — which is the whole dividend of dropping the
@@ -496,18 +536,53 @@ local function mark(percent)
   }
 end
 
+-- v10 — THE SPECULAR HIGHLIGHT: the one sub-region that turns a flat disc of colour
+-- into a curved surface. A soft bright spot up and to the LEFT of centre is what the
+-- eye reads as glass catching a light source; a globe without one is a sticker.
+-- Sized and offset in fractions of its own globe (0.46 x 0.34, at -0.17, +0.21), so
+-- the life/power pair and the smaller target vessel catch the light identically.
+--
+-- textureBlendMode = "ADD" is LOAD-BEARING, not a taste call. Since v9 the percentage
+-- lives INSIDE the glass, and sub-regions draw in the order they are listed, so this
+-- overlay is painted over the number. "BLEND" at 28% white would wash grey across the
+-- text; ADD can only brighten, so the number stays readable. That constraint is also
+-- why this is a highlight and not the more obvious dark edge vignette — a vignette has
+-- to darken, so it has to be BLEND, so it would have had to be INSERTED before the
+-- text sub-region, and inserting silently retargets every later sub.N condition.
+--
+-- Appended LAST on every globe for the same reason (life [3], power [3], target [2]).
+-- textureRotate is the gate that makes textureRotation do anything; the art is a
+-- radially symmetric disc, so both stay off.
+local function highlight(size)
+  return {
+    type = "subtexture",
+    textureTexture = FILL_TEX,
+    textureColor = { 1, 1, 1, 0.28 },
+    textureBlendMode = "ADD",
+    textureVisible = true,
+    textureDesaturate = false, textureMirror = false,
+    textureRotate = false, textureRotation = 0,
+    width  = size * 0.46,
+    height = size * 0.34,
+    xOffset = -size * 0.17,
+    yOffset =  size * 0.21,
+    anchor_mode = "point", anchor_point = "CENTER", self_point = "CENTER",
+    mirror = false, rotate = false, scale = 1,
+  }
+end
+
 -- ===== top-level group, anchored below the character =====
 local top = F.group(TOP, 0, TOP_Y, nil)
 top.uid = W.uid()
 
 -- =====================================================================
--- Resources (0,56): since v9 this group holds THREE GLOBES — life at
--- x = -300, power at x = +300 and the target between them at x = 0, every
--- one of them at absolute screen y = -150. The life and power globes are
--- built here (they are the v6 health and mana auras, converted in place so
--- they keep their uids); the target globe, the three rims and the threat
--- rim's adoption happen at the bottom of this script, after every
--- pre-existing W.uid() call, and are re-parented here.
+-- Resources (0,56): since v9 this group holds THREE GLOBES, and since v10 they
+-- FLANK the character instead of sitting on a band below it — life at absolute
+-- (-190, 40), power at (+190, 40), target between and above them at (0, 110).
+-- The life and power globes are built here (they are the v6 health and mana
+-- auras, converted in place so they keep their uids); the target globe, the
+-- three rims and the threat rim's adoption happen at the bottom of this script,
+-- after every pre-existing W.uid() call, and are re-parented here.
 --
 -- Threat stays with the TARGET, as it has since v7: it is your threat ON
 -- THAT TARGET. It no longer costs a vessel of its own — it IS the target
@@ -516,13 +591,14 @@ top.uid = W.uid()
 local gRes = reg(F.group("Priest - Resources", 0, RES_Y, nil))
 adopt(top, gRes)
 
--- LIFE GLOBE (x = -300). Trigger 1 is the progress source; trigger 2 (Unit
+-- LIFE GLOBE (absolute x = -190, y = 40). Trigger 1 is the progress source; trigger 2 (Unit
 -- Characteristics) feeds the inCombat fade, exactly as the v6 bar did.
 -- Conditions apply in order and a later match wins, so the alpha guard is LAST.
 local health = reg(globe("Priest - Health", GLOBE_MAIN, COL.life, -GLOBE_X, GLOBE_LOCAL_Y))
 health.triggers = F.triggers({ F.healthTrigger(nil), F.unitCharTrigger() })
 health.subRegions[1] = pct("percenthealth", PCT_MAIN, COL.hpText)
 health.subRegions[2] = mark(40)   -- the Desperate Prayer line, across the glass
+health.subRegions[#health.subRegions + 1] = highlight(GLOBE_MAIN)  -- v10, appended last
 health.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   -- brighter red below 40%: the same number the Desperate Prayer prompt fires at,
@@ -537,12 +613,13 @@ health.conditions = {
 }
 adopt(gRes, health)
 
--- POWER GLOBE (x = +300). Priest is mana in every spec and every form, so this
+-- POWER GLOBE (absolute x = +190, y = 40). Priest is mana in every spec and every form, so this
 -- globe is blue with no recolouring condition — a druid's is what needs one.
 local mana = reg(globe("Priest - Mana", GLOBE_MAIN, COL.mana, GLOBE_X, GLOBE_LOCAL_Y))
 mana.triggers = F.triggers({ F.powerTrigger(0), F.unitCharTrigger() })
 mana.subRegions[1] = pct("percentpower", PCT_MAIN, COL.mpText)
 mana.subRegions[2] = mark(50)     -- the Shadowfiend window, across the glass
+mana.subRegions[#mana.subRegions + 1] = highlight(GLOBE_MAIN)      -- v10, appended last
 mana.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
 adopt(gRes, mana)
 
@@ -555,7 +632,7 @@ adopt(gRes, mana)
 -- It is adopted at the very BOTTOM of this script rather than here: adoption order
 -- is draw order within a frame strata (+4 frame levels per child), and this rim has
 -- to sit above the brass one it replaces the colour of.
-local threat = reg(rim("Priest - Threat", GLOBE_TGT + RIM_PAD, 0, GLOBE_LOCAL_Y, COL.threat))
+local threat = reg(rim("Priest - Threat", GLOBE_TGT + RIM_PAD, 0, GLOBE_TGT_LOCAL_Y, COL.threat))
 threat.triggers = F.triggers({ threatTrigger("target", nil) })
 threat.subRegions[1] = pct("threatpct", PCT_THREAT, COL.thText)
 threat.conditions = {
@@ -1200,8 +1277,9 @@ adopt(gPvP, emana)
 local tHealthTrigger = F.healthTrigger(nil)
 tHealthTrigger.unit = "target"
 local tHealth = reg(globe("Priest - Target Health", GLOBE_TGT, COL.life,
-  0, GLOBE_LOCAL_Y, tHealthTrigger))
+  0, GLOBE_TGT_LOCAL_Y, tHealthTrigger))
 tHealth.subRegions[1] = pct("percenthealth", PCT_TGT, COL.hpText)
+tHealth.subRegions[#tHealth.subRegions + 1] = highlight(GLOBE_TGT)  -- v10, appended last
 -- same zero-total guard as the life globe, and it matters more here: a target
 -- whose max health has not streamed yet would otherwise flash a full globe
 tHealth.conditions = { F.condition(1, "maxhealth", "<=", "0", "alpha", 0) }
@@ -1215,7 +1293,7 @@ adopt(gRes, tHealth)
 -- zero-total guard, so the pair hides as one object.
 local tRimTrigger = F.healthTrigger(nil)
 tRimTrigger.unit = "target"
-local tRim = reg(rim("Priest - Target Rim", GLOBE_TGT + RIM_PAD, 0, GLOBE_LOCAL_Y))
+local tRim = reg(rim("Priest - Target Rim", GLOBE_TGT + RIM_PAD, 0, GLOBE_TGT_LOCAL_Y))
 tRim.triggers = F.triggers({ tRimTrigger })
 tRim.conditions = { F.condition(1, "maxhealth", "<=", "0", "alpha", 0) }
 adopt(gRes, tRim)

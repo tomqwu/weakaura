@@ -1,4 +1,4 @@
--- generate.lua — Warlock TBC All-Specs HUD (v9).
+-- generate.lua — Warlock TBC All-Specs HUD (v10).
 -- Run: lua5.1 generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import).
 --
@@ -204,6 +204,51 @@
 --   * Lost, and named in the README: the two live portraits, and the target's
 --     mana ring (the spec ships one target vessel, and it reads health).
 --
+-- v10 (the globes FLANK the character, and the glass CATCHES LIGHT):
+--   * POSITION. v9 parked all three vessels on one band under the HUD
+--     (y = -262), which read as a separate bar bolted on rather than as part of
+--     the character. They now stand beside the character, at ABSOLUTE screen
+--     coordinates shared byte-for-byte with the other six packs:
+--         LIFE   (-190,  40)   POWER  (+190,  40)   TARGET  (0, 110)
+--     The two player vessels keep one shared line so the Life Tap read is still
+--     one glance; the target's sits above and between them, where the eye goes
+--     for a nameplate. Sizes are UNCHANGED — 72 px main, 44 px target, rim +4.
+--   * WHY NOT ±170 OR ±210. Both collide. x = ∓170 runs into the Alerts column
+--     (x = -150) and the PvP column (x = +150), which every pack carries; ±210
+--     runs into the PvP layer's elements at (200, -44). ±190 is the one width
+--     that clears both, so it is a fixed cross-pack contract, not a taste call.
+--   * TWO CLUSTER OFFSETS NOW, both still DERIVED from the absolute targets
+--     (see THE ABSOLUTE-POSITION RULE below): the player pair and the target
+--     vessel no longer share a line, so `Warlock - Target Globe` gets its own
+--     CLUSTER_TGT_Y. Nothing below the clusters changed — each globe still
+--     carries its own GLOBE_X and a local y of 0.
+--   * This also ends v9's honest note about the target globe sitting on top of
+--     the DoT row: the DoT icons are at y = -156 and the target vessel is now
+--     at +110, so the two no longer share screen space.
+--   * LOOK. Every one of the three vessels gets a SPECULAR HIGHLIGHT: a soft,
+--     off-centre bright spot in the upper left, which is what the eye reads as a
+--     curved glass surface catching light instead of a flat coloured sticker.
+--     It is a `subtexture` sub-region — Circle_Smooth again, white at 28%,
+--     0.46 x 0.34 of the globe, offset (-0.17, +0.21) of the globe.
+--   * BLEND MODE IS "ADD", AND THAT IS THE WHOLE REASON THE RECIPE IS A
+--     HIGHLIGHT RATHER THAN THE MORE OBVIOUS DARK EDGE VIGNETTE. The percentage
+--     lives INSIDE the glass and sub-regions draw in order, so an appended BLEND
+--     overlay would paint over the number and dim it. ADD only ever brightens,
+--     so the text stays readable underneath.
+--   * THE HIGHLIGHT IS APPENDED, NEVER INSERTED. Conditions address sub-regions
+--     POSITIONALLY as sub.N, so inserting ahead of a referenced index silently
+--     retargets it at a different sub-region with no error anywhere. Appending
+--     cannot: the percentage text stays subRegions[1] on all three vessels and
+--     the highlight lands at [2], last. (Nothing in this pack points a condition
+--     at a globe sub-region today — the sub.N conditions here are all on Alerts
+--     icons — but the rule is what keeps that true after the next edit.)
+--   * NO AURA WAS ADDED, REMOVED, RENAMED OR REORDERED and not one W.uid() call
+--     moved: a highlight is a sub-region of an aura that already exists, and a
+--     position is a group offset. All 44 v9 uids are byte-for-byte stable.
+--   * NOTHING ELSE CHANGED: not one trigger, load gate, condition, colour, spell
+--     id or region type. Buffs, alerts, the DoT row, the cooldown row, the procs
+--     and the whole PvP layer are untouched.
+--
 -- UID ORDER IS SACRED: the two v2 auras are built at the BOTTOM of this file so
 -- every pre-v1 uid() call keeps its position in the seeded stream. v3 is a
 -- load-gate-only change: no aura added, removed, renamed or reordered. v4's
@@ -274,7 +319,7 @@ local CD = {
 local SHADOW = { 0.7, 0.3, 1, 1 }  -- shared shadow-purple glow
 
 -- =====================================================================
--- CANONICAL GLOBE SPEC — BYTE-IDENTICAL IN ALL SEVEN CLASS PACKS (v9)
+-- CANONICAL GLOBE SPEC — BYTE-IDENTICAL IN ALL SEVEN CLASS PACKS (v10)
 --
 -- Declared as named constants so a later edit has to notice it is breaking a
 -- shared contract. Every one of these numbers is fixed repo-wide: v7 gave seven
@@ -290,32 +335,43 @@ local SHADOW = { 0.7, 0.3, 1, 1 }  -- shared shadow-purple glow
 local FILL_TEX = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth.tga"
 local RIM_TEX  = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth_Border.tga"
 
-local GLOBE_MAIN = 72   -- life and power globes
+local GLOBE_MAIN = 72    -- life and power globes
 local GLOBE_TGT  = 44    -- target globe
-local RIM_PAD    = 4     -- rim texture is its globe's size + 6, at frameStrata 2
-local GLOBE_X    = 150   -- life at -X, power at +X, target at 0
-local GLOBE_Y      = -262  -- ABSOLUTE screen y for all three (see the derivation below)
+local RIM_PAD    = 4     -- rim texture is its globe's size + RIM_PAD, at frameStrata 2
+local GLOBE_X    = 270   -- v10: life at -X, power at +X, target at 0
+local GLOBE_Y    = 40    -- v10: ABSOLUTE screen y of the two PLAYER vessels
+local GLOBE_TGT_Y = 110  -- v10: ABSOLUTE screen y of the TARGET vessel, above them
 local PCT_MAIN   = 13    -- percentage font inside a main globe, CENTER, yOffset 0
 local PCT_TGT    = 10    -- percentage font inside the target globe
 local PCT_THREAT = 11    -- threat percentage, ABOVE the target globe
 local PCT_THREAT_Y = 52
 
+-- v10: ±190 is a CONTRACT, not a taste call. ∓170 collides with the Alerts
+-- column (x = -150) and the PvP column (x = +150); ±210 collides with the PvP
+-- layer's elements at (200, -44). Both collisions exist in all seven packs.
+
 -- THE ABSOLUTE-POSITION RULE, and the trap it exists to close.
--- GLOBE_Y is an ABSOLUTE screen offset, not a local one. These clusters hang two
--- groups deep — `top` at (0, TOP_Y) and `Warlock - Resources` at (0, RES_Y) — and
--- WeakAuras ADDS every offset down the parent chain. Typing -150 onto the cluster
--- would put the globes at -140 + 56 - 150 = -234. So the cluster offset is
--- DERIVED from the absolute target and can never drift out of sync with it:
---   CLUSTER_Y = GLOBE_Y - TOP_Y - RES_Y = -150 + 140 - 56 = -66
--- The x chain is all zeroes above the globes, so each globe carries its own
--- GLOBE_X directly. Proven by decoding the shipped string and walking the chain.
+-- GLOBE_Y / GLOBE_TGT_Y are ABSOLUTE screen offsets, not local ones. These
+-- clusters hang two groups deep — `top` at (0, TOP_Y) and `Warlock - Resources`
+-- at (0, RES_Y) — and WeakAuras ADDS every offset down the parent chain. Typing
+-- 40 onto the cluster would put the player globes at -140 + 56 + 40 = -44. So
+-- each cluster offset is DERIVED from its absolute target and can never drift
+-- out of sync with it:
+--   CLUSTER_Y     = GLOBE_Y     - TOP_Y - RES_Y =  40 + 140 - 56 = 124
+--   CLUSTER_TGT_Y = GLOBE_TGT_Y - TOP_Y - RES_Y = 110 + 140 - 56 = 194
+-- v9 had one cluster line for all three vessels; v10 lifts the target above the
+-- player pair, so the target cluster gets its own derived offset. The x chain is
+-- all zeroes above the globes, so each globe carries its own GLOBE_X directly.
+-- Proven below by walking the assembled parent chain, and again by decoding the
+-- shipped string.
 local TOP_Y     = -140   -- top-level group, unchanged since v1
 local RES_Y     = 56     -- Resources group inside it, unchanged since v1
-local CLUSTER_Y = GLOBE_Y - TOP_Y - RES_Y
+local CLUSTER_Y     = GLOBE_Y     - TOP_Y - RES_Y
+local CLUSTER_TGT_Y = GLOBE_TGT_Y - TOP_Y - RES_Y
 
 -- The >=80% threat halo is DERIVED, not canonical: it keeps the same 12 px
--- stand-off it has had since v7, now measured from the rim instead of the outer
--- ring (104 -> 116 becomes 82 -> 94). It is a warning overlay, not a readout.
+-- stand-off it has had since v7, measured from the rim (48 -> 60) rather than
+-- from any outer ring. It is a warning overlay, not a readout.
 local FLASH_RING = GLOBE_TGT + RIM_PAD + 12
 
 -- Canonical colours. life/mana/rim/empty are the shared spec; the escalation and
@@ -365,11 +421,11 @@ local top = F.group(TOP, 0, TOP_Y, nil)
 --     backgroundOffset = 0 keeps the empty part exactly the same disc as the full
 --     part instead of a halo around it.
 --
--- LAYOUT (all three centred on the absolute line y = -150):
---   LIFE   x = -300, 116 px, red    — your health
---   POWER  x = +300, 116 px, blue   — your mana
---   TARGET x =    0,  76 px, red    — the target's health, half size so it reads
---                                     as secondary; vanishes with no target
+-- LAYOUT (v10 — beside the character, ABSOLUTE screen coordinates):
+--   LIFE   (-190,  40), 72 px, red    — your health
+--   POWER  (+190,  40), 72 px, blue   — your mana
+--   TARGET (   0, 110), 44 px, red    — the target's health, smaller so it reads
+--                                       as secondary; vanishes with no target
 -- Both player globes carry a real decision here and neither is decoration: Life
 -- Tap trades the left vessel for the right one, so the "can I tap?" question is
 -- literally "is the red one high and the blue one low" — two objects, one glance.
@@ -530,6 +586,53 @@ local function pct(sym, size, yOffset, color)
   return st
 end
 
+-- v10: THE SPECULAR HIGHLIGHT — what turns a flat disc into 3D glass.
+-- A soft, off-centre bright spot in the upper left. A real curved surface catches
+-- its light source in one place, not evenly, so the eye reads the offset blob as
+-- curvature; an evenly lit disc reads as a sticker no matter what colour it is.
+-- Every dimension is a FRACTION OF THE GLOBE'S OWN WIDTH, so the 72 px vessels
+-- and the 44 px one get the same highlight rather than the same pixel count.
+--
+--   BLEND MODE MUST BE "ADD", and this is why the recipe is a highlight instead
+--   of the more obvious dark edge vignette: the percentage sits INSIDE the glass
+--   and sub-regions draw in ORDER, so an appended BLEND overlay would draw on top
+--   of the number and dim it. ADD only brightens, so the text stays readable.
+--
+--   APPEND, NEVER INSERT. Conditions reach sub-regions positionally as sub.N, and
+--   inserting ahead of a referenced index silently retargets that condition at a
+--   different sub-region — no error, no editor warning. Appending is the only
+--   safe edit, so this always lands LAST.
+--
+--   textureRotate is the GATE for textureRotation (SubTexture.modify hands it
+--   through as canRotate and DoTexCoord only rotates when it is set); a radially
+--   symmetric disc has no orientation, so both stay off. xOffset / yOffset are
+--   NOT in the subtexture default() table but ARE read by modify -> AnchorSubRegion
+--   in "point" mode — omit them and the highlight stacks dead centre.
+local function highlight(globeSize)
+  return {
+    type = "subtexture",
+    textureTexture = FILL_TEX,
+    textureColor = { 1, 1, 1, 0.28 },
+    textureBlendMode = "ADD",
+    textureVisible = true,
+    textureDesaturate = false, textureMirror = false,
+    textureRotate = false, textureRotation = 0,
+    width  = globeSize * 0.46,
+    height = globeSize * 0.34,
+    xOffset = -globeSize * 0.17,
+    yOffset =  globeSize * 0.21,
+    anchor_mode = "point", anchor_point = "CENTER", self_point = "CENTER",
+    mirror = false, rotate = false, scale = 1,
+  }
+end
+
+-- Appends `sub` to a region and returns its 1-based index, so the sub.N contract
+-- above is enforced by construction rather than by counting table literals.
+local function addSub(region, sub)
+  region.subRegions[#region.subRegions + 1] = sub
+  return #region.subRegions
+end
+
 local gRes = reg(F.group("Warlock - Resources", 0, RES_Y, nil))
 adopt(top, gRes)
 
@@ -542,6 +645,7 @@ adopt(top, gRes)
 local pHealth = reg(globe("Warlock - Player Health", GLOBE_MAIN, -GLOBE_X, GCOL.life,
   { F.healthTrigger(), F.unitCharTrigger() }))
 pHealth.subRegions[1] = pct("percenthealth", PCT_MAIN, 0, GCOL.text)
+local pHealthLit = addSub(pHealth, highlight(GLOBE_MAIN))   -- v10 glass, appended last
 pHealth.conditions = {
   F.condition(1, "percenthealth", "<=", "60", "foregroundColor", GCOL.healthLow),
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
@@ -557,6 +661,7 @@ pHealth.conditions = {
 local pMana = reg(globe("Warlock - Player Mana", GLOBE_MAIN, GLOBE_X, GCOL.mana,
   { F.powerTrigger(0), F.unitCharTrigger() }))
 pMana.subRegions[1] = pct("percentpower", PCT_MAIN, 0, GCOL.text)
+local pManaLit = addSub(pMana, highlight(GLOBE_MAIN))       -- v10 glass, appended last
 pMana.conditions = {
   F.condition(1, "percentpower", "<", "30", "foregroundColor", GCOL.manaLow),
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
@@ -1161,7 +1266,10 @@ lifeRim.conditions = {
 }
 
 -- --- target cluster: one globe, its rims and the halo -------------------
-local gTarget = reg(F.group("Warlock - Target Globe", 0, CLUSTER_Y, nil))
+-- v10: its OWN derived line (CLUSTER_TGT_Y), above and between the player pair,
+-- instead of sharing the player cluster's. Everything inside it still sits at a
+-- local (0, 0) and inherits the whole position from this group.
+local gTarget = reg(F.group("Warlock - Target Globe", 0, CLUSTER_TGT_Y, nil))
 
 -- Target health. No low-health escalation: nothing in v6 signalled a target's
 -- health, and this pack does not invent rotation claims it cannot cite. The
@@ -1171,6 +1279,7 @@ local gTarget = reg(F.group("Warlock - Target Globe", 0, CLUSTER_Y, nil))
 local tHealth = reg(globe("Warlock - Target Health", GLOBE_TGT, 0, GCOL.life,
   { targetHealthTrigger(), F.unitCharTrigger() }))
 tHealth.subRegions[1] = pct("percenthealth", PCT_TGT, 0, GCOL.text)
+local tHealthLit = addSub(tHealth, highlight(GLOBE_TGT))    -- v10 glass, appended last
 tHealth.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "maxhealth", "<=", "0", "alpha", 0),
@@ -1214,6 +1323,68 @@ adopt(gTarget, flash)       -- the 80% halo, outside all of it
 local transmit = F.assemble(top, byId)
 local encoded = W.encode(transmit)
 W.verify(transmit, encoded)
+
+-- =====================================================================
+-- v10 PROOF, run against the DECODED string rather than the tables above, so
+-- what is asserted is what a player actually imports.
+--
+-- 1. ABSOLUTE POSITIONS. WeakAuras adds xOffset/yOffset all the way down the
+--    parent chain, and these vessels hang three groups deep (top -> Resources ->
+--    cluster -> globe). A locally correct number is therefore not evidence of
+--    anything; only the walked sum is. This is the check the derivation of
+--    CLUSTER_Y / CLUSTER_TGT_Y exists to satisfy, and it fails loudly if a later
+--    edit types a coordinate onto a group instead of deriving it.
+-- 2. SUB-REGION ORDER. The highlight must be LAST on each vessel and the
+--    percentage must still be subRegions[1], because sub.N conditions are
+--    positional.
+-- =====================================================================
+local back = W.decode(encoded)
+local nodes = { [back.d.id] = back.d }
+for _, ch in ipairs(back.c) do nodes[ch.id] = ch end
+
+local function absPos(id)
+  local n = assert(nodes[id], "no such aura: " .. id)
+  local x, y, guard = 0, 0, 0
+  while n do
+    x, y = x + (n.xOffset or 0), y + (n.yOffset or 0)
+    guard = guard + 1
+    assert(guard < 32, "parent chain loop at " .. id)
+    n = n.parent and nodes[n.parent] or nil
+  end
+  return x, y
+end
+
+local function assertAt(id, ax, ay)
+  local x, y = absPos(id)
+  assert(x == ax and y == ay,
+    ("%s sits at (%d, %d), expected (%d, %d)"):format(id, x, y, ax, ay))
+end
+
+-- the player pair, on one line beside the character
+assertAt("Warlock - Player Health",   -GLOBE_X, GLOBE_Y)
+assertAt("Warlock - Life Globe Rim",  -GLOBE_X, GLOBE_Y)
+assertAt("Warlock - Player Mana",      GLOBE_X, GLOBE_Y)
+assertAt("Warlock - Power Globe Rim",  GLOBE_X, GLOBE_Y)
+-- the target vessel and everything welded to it, above and between them
+assertAt("Warlock - Target Health",    0, GLOBE_TGT_Y)
+assertAt("Warlock - Target Rim",       0, GLOBE_TGT_Y)
+assertAt("Warlock - Threat",           0, GLOBE_TGT_Y)
+assertAt("Warlock - Threat Flash",     0, GLOBE_TGT_Y)
+
+for _, g in ipairs({
+  { id = "Warlock - Player Health", size = GLOBE_MAIN, index = pHealthLit },
+  { id = "Warlock - Player Mana",   size = GLOBE_MAIN, index = pManaLit },
+  { id = "Warlock - Target Health", size = GLOBE_TGT,  index = tHealthLit },
+}) do
+  local subs = assert(nodes[g.id]).subRegions
+  assert(subs[1].type == "subtext", g.id .. ": the percentage is no longer subRegions[1]")
+  assert(g.index == #subs, g.id .. ": the highlight is not the last sub-region")
+  local lit = subs[#subs]
+  assert(lit.type == "subtexture", g.id .. ": last sub-region is not the highlight")
+  assert(lit.textureBlendMode == "ADD", g.id .. ": highlight would dim the percentage")
+  assert(lit.width == g.size * 0.46 and lit.height == g.size * 0.34,
+    g.id .. ": highlight is not scaled to its own globe")
+end
 
 -- uid continuity vs the previous on-disk version (checked BEFORE overwriting,
 -- so re-running after any future edit compares against the shipped string)

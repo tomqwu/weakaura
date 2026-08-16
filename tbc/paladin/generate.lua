@@ -1,7 +1,47 @@
--- generate.lua — "Paladin TBC - All Specs" (v11)
+-- generate.lua — "Paladin TBC - All Specs" (v12)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code)
 -- except the globe region tables, which wa_factory has no builder for.
+--
+-- v12 — THE GLOBES FLANK THE CHARACTER, AND THE GLASS CATCHES LIGHT. Two changes, both
+-- applied identically in all seven packs, and NOTHING ELSE MOVED: not one trigger, load
+-- gate, condition, colour, spell id or region type changed, no aura was added or removed,
+-- every uid is byte-identical to v11 and no W.uid() call was inserted, reordered or dropped.
+--
+--   1) POSITION. v11 parked all three vessels on one band at absolute y = -262, under the
+--      cooldown row, which reads as a separate bar bolted under the HUD rather than as the
+--      character's own state. They now FLANK the character at eye height:
+--
+--        life   x = -190, y =  40      power  x = +190, y =  40      target  x = 0, y = 110
+--
+--      Sizes are unchanged (72 / 72 / 44, rim = globe + RIM_PAD). These three positions are
+--      canonical across all seven packs and were scanned against every element in every one
+--      of them; they are the tightest collision-free arrangement, so they are NOT a paladin
+--      tuning knob. The two obvious alternatives both collide: x = +-170 runs into the
+--      Alerts column (x = -150) and the PvP column (x = +150), and x = +-210 runs into the
+--      PvP-layer icons at (200, -44). Because the target vessel now sits 70px ABOVE the
+--      player pair rather than beside it, GLOBE_Y stopped being one number: the player
+--      cluster carries GLOBE_Y and the target cluster carries GLOBE_TGT_Y. Both are still
+--      ABSOLUTE screen offsets carried once by the cluster group, with every globe inside
+--      at y = 0 — see the proof in the assembly section.
+--
+--      The Swing Timer did NOT follow the life globe. Its x was written as -GLOBE_X, which
+--      would have dragged a non-globe element 40px sideways as a side effect of this pass;
+--      it now has its own G.swingX and stays exactly where v11 shipped it, at (-150, -76).
+--
+--   2) LOOK. The fills were flat colour, which reads as a sticker rather than liquid in a
+--      vessel. Every globe now carries a SPECULAR HIGHLIGHT: a soft off-centre bright spot
+--      in the upper left (see gloss() below), which is what reads as a curved glass surface
+--      catching light. Two rules make it safe:
+--        * APPENDED, never inserted. Conditions address sub-regions POSITIONALLY as sub.N,
+--          so inserting ahead of a referenced index silently retargets it. This pack's only
+--          sub.N conditions live on icons (sub.1.glow / sub.1.glowColor) and no globe
+--          carries one, but the discipline is repo-wide because the rogue energy globe's
+--          breakpoint marks ARE driven by sub.4 / sub.5.
+--        * BLEND MODE "ADD", not "BLEND". The percentage sits INSIDE the glass and
+--          sub-regions draw in order, so an appended BLEND overlay would dim the number.
+--          ADD only brightens, so the text stays readable — which is the whole reason the
+--          recipe is a highlight and not the more obvious dark edge vignette.
 --
 -- v11 — DIABLO GLOBES. The concentric rings of v9/v10 are gone. Health, mana and the
 -- target are now VESSELS that fill bottom-to-top like liquid: life on the LEFT, power on
@@ -418,12 +458,15 @@ local RIM_TEX  = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth_B
 
 local GLOBE_MAIN = 72   -- life and power globes
 local GLOBE_TGT  = 44    -- target globe
-local RIM_PAD    = 4     -- a rim is its globe's size + 6, drawn at frameStrata 2
-local GLOBE_X    = 150   -- life at x = -300, power at x = +300, target at x = 0
-local GLOBE_Y      = -262  -- ABSOLUTE screen y for all three. See the assembly section: the
-                         -- cluster groups carry it and every globe carries y = 0, so the
-                         -- parent chain sums to exactly -150 and not to -150 PLUS whatever
-                         -- this pack's own groups happen to be offset by.
+local RIM_PAD    = 4     -- a rim is its globe's size + RIM_PAD, drawn at frameStrata 2
+local GLOBE_X    = 270   -- life at x = -190, power at x = +190, target at x = 0
+-- v12 — ABSOLUTE screen y, and now TWO of them: the vessels flank the character instead of
+-- sharing one band under the HUD, and the target sits above the player pair rather than
+-- between them. See the assembly section: the cluster groups carry these verbatim and every
+-- globe inside carries y = 0, so the parent chain sums to exactly 40 / 110 and not to
+-- 40 / 110 PLUS whatever this pack's own groups happen to be offset by.
+local GLOBE_Y     =  40  -- life and power
+local GLOBE_TGT_Y = 110  -- target
 
 -- The numbers live INSIDE the glass, anchored CENTER with no offset — the whole dividend of
 -- dropping the portrait. Threat is the exception: it has no vessel of its own (it is the
@@ -448,13 +491,15 @@ local G = {
   -- band a drop of its own again and the cluster offsets stop being the canonical numbers,
   -- which is the drift the shared constants exist to end.
   bandY  = -TOP_Y,
-  -- The runway had to move: it sat at (-260, -170), which is inside the 122px life globe's
-  -- footprint now. It rides just ABOVE the life globe instead — 8.5px of clearance over the
-  -- rim's top edge at y = -89 — on the same x as the globe it belongs to, and clear of the
-  -- Alerts column (x = -150, 40px icons) and of the cooldown row (top edge y = -190). It is
-  -- a child of Resources, not of the player cluster, so it is measured from the band anchor
-  -- and not from GLOBE_Y. Size and everything else are untouched.
-  swingY = -76, swingW = 140, swingH = 9,
+  -- The runway. v11 wrote its x as -GLOBE_X, which was fine while the life globe sat on the
+  -- same band; v12 lifts the globes to y = 40 and widens them to x = +-190, and a bar that
+  -- inherited that would have slid 40px sideways as a SIDE EFFECT of a globe change. It is
+  -- not a globe, so it keeps the exact screen position v11 shipped — (-150, -76) — through
+  -- its own named offset. Clear of the Alerts column (x = -150, 40px icons, bottom edge
+  -- y = -64) by 7.5px, and far above the cooldown row (top edge y = -190). It is a child of
+  -- Resources, not of the player cluster, so it is measured from the band anchor and never
+  -- from GLOBE_Y at all. Size, trigger, gate, colour and twist window all untouched.
+  swingX = -150, swingY = -76, swingW = 140, swingH = 9,
 }
 
 -- Diablo's palette for the vessels, this pack's own palette for everything that escalates.
@@ -575,6 +620,49 @@ local function pct(sym, size, yOffset, color)
   return st
 end
 
+-- v12 — THE SPECULAR HIGHLIGHT that turns a flat disc into 3D glass. A soft bright spot in
+-- the UPPER LEFT of the vessel, offset from centre, which is what the eye reads as a curved
+-- surface catching a light source. Canonical in all seven packs; `globeSize` is that globe's
+-- own width, so the highlight scales with the vessel instead of being re-tuned per pack.
+--   BLEND MODE IS "ADD", DELIBERATELY. Sub-regions draw in order and this one is APPENDED,
+--   so it draws OVER the percentage sitting inside the glass. A "BLEND" overlay would dim
+--   that number; ADD can only brighten, so the text stays readable. That is the entire
+--   reason the recipe is a highlight rather than the more obvious dark edge vignette.
+--   APPENDED, NEVER INSERTED. Conditions address sub-regions positionally (sub.N), so
+--   inserting ahead of a referenced index silently retargets it — the failure mode the
+--   rogue pack's sub.4 / sub.5 energy breakpoints exist to warn about. No globe in this
+--   pack carries a sub.N condition, and appending keeps it that way by construction.
+--   Field names are verbatim from the repo's proven subtexture instances. textureRotate is
+--   the GATE for textureRotation (SubTexture.modify passes it as canRotate and DoTexCoord
+--   only rotates when it is set) — off here because a smooth disc has no orientation.
+--   xOffset / yOffset are NOT in the subtexture default() table but ARE read by
+--   modify -> AnchorSubRegion in "point" mode; omit them and the highlight sits dead centre,
+--   which looks like a bloom rather than a reflection.
+local function gloss(globeSize)
+  return {
+    type = "subtexture",
+    textureTexture = FILL_TEX,
+    textureColor = { 1, 1, 1, 0.28 },
+    textureBlendMode = "ADD",
+    textureVisible = true,
+    textureDesaturate = false, textureMirror = false,
+    textureRotate = false, textureRotation = 0,
+    width  = globeSize * 0.46,
+    height = globeSize * 0.34,
+    xOffset = -globeSize * 0.17,
+    yOffset =  globeSize * 0.21,
+    anchor_mode = "point", anchor_point = "CENTER", self_point = "CENTER",
+    mirror = false, rotate = false, scale = 1,
+  }
+end
+
+-- Append-only helper, so no call site can ever write a literal index and land on top of an
+-- existing sub-region.
+local function addSub(region, sub)
+  region.subRegions[#region.subRegions + 1] = sub
+  return #region.subRegions
+end
+
 -- uid order is sacred: one W.uid() per region, consumed by the constructor below,
 -- in exactly this creation order. Append new regions at the END in future versions.
 
@@ -589,7 +677,7 @@ top.frameStrata = 1
 local gRes = reg(F.group("Paladin - Resources", 0, G.bandY, TOP))
 adopt(top, gRes)
 
--- 3) LIFE GLOBE, LEFT (x = -300). Was the 172x14 health aurabar through v8 and the outer
+-- 3) LIFE GLOBE, LEFT (x = -GLOBE_X). Was the 172x14 health aurabar through v8 and the outer
 -- ring of the player orb in v9/v10; same aura id, SAME UID every time, so this updates in
 -- place rather than orphaning.
 -- Trigger 2 is the existing Unit Characteristics state feeder and drives the out-of-combat
@@ -599,6 +687,7 @@ adopt(top, gRes)
 local hp = reg(globe("Paladin - Health", GLOBE_MAIN, COL.life, -GLOBE_X,
   { F.healthTrigger(), F.unitCharTrigger() }))
 hp.subRegions[1] = pct("percenthealth", PCT_MAIN_SIZE, PCT_MAIN_Y, COL.pctText)
+addSub(hp, gloss(GLOBE_MAIN))   -- v12: sub 2, appended after the number. See gloss().
 hp.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   -- Same trigger, same 30% threshold, same property, same position in the order as v9/v10.
@@ -612,7 +701,7 @@ hp.conditions = {
 }
 -- adopted into the player cluster at the bottom of this script
 
--- 4) POWER GLOBE, RIGHT (x = +300). A paladin's power is MANA in all three specs and in
+-- 4) POWER GLOBE, RIGHT (x = +GLOBE_X). A paladin's power is MANA in all three specs and in
 -- every form there is, so this vessel is D2 mana blue and needs no recolour condition — the
 -- druid, whose power type changes with form, is the pack that recolours by condition. Red
 -- below 20%, carried across from the v8 bar with `barColor` renamed to `foregroundColor`
@@ -620,6 +709,7 @@ hp.conditions = {
 local mp = reg(globe("Paladin - Mana", GLOBE_MAIN, COL.mana, GLOBE_X,
   { F.powerTrigger(0), F.unitCharTrigger() }))
 mp.subRegions[1] = pct("percentpower", PCT_MAIN_SIZE, PCT_MAIN_Y, COL.pctText)
+addSub(mp, gloss(GLOBE_MAIN))   -- v12: sub 2, appended after the number. See gloss().
 mp.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "percentpower", "<", "20", "foregroundColor", COL.lowMana),
@@ -950,8 +1040,16 @@ end
 -- had to drop past y = -222 to clear both the rim and the cooldown row's left end in a full
 -- 14-icon PvP row. Nothing about the bar itself changed: same size, trigger, gate, colour
 -- and gold twist window.
+--
+-- v12 — IT DID NOT MOVE, and that took an edit. Its x was literally `-GLOBE_X`, so widening
+-- the globes to +-190 would have dragged the runway sideways too — a non-globe element
+-- displaced as a side effect of a globe change, which is exactly what this version is not
+-- allowed to do. It now reads G.swingX and stays at the absolute (-150, -76) v11 shipped,
+-- while the globes leave the band entirely. The v11 rationale above for WHY it sits beside
+-- the player's own vessel rather than in the vacated centre still holds; it is simply no
+-- longer welded to the globe's own x.
 local swing = reg(F.aurabar("Paladin - Swing Timer", CLASS, G.swingW, G.swingH,
-  -GLOBE_X, G.swingY, nil, { 0.55, 0.55, 0.62, 1 }))
+  G.swingX, G.swingY, nil, { 0.55, 0.55, 0.62, 1 }))
 swing.triggers = F.triggers({ swingTrigger() })
 swing.subRegions[2] = F.subborder("bar")
 swing.conditions = {
@@ -1287,24 +1385,28 @@ pvpCd("Hammer of Justice (PvP)", "Hammer of Justice", 853, GATE_HOLY)
 -- FixGroupChildrenOrder walks controlledChildren and adds +4 frame levels per child, so
 -- EARLIER = FURTHER BEHIND. Fills first, glass after them.
 --
--- ABSOLUTE POSITIONS — the whole point of GLOBE_Y being an absolute number. Walk the chain:
+-- ABSOLUTE POSITIONS — the whole point of GLOBE_Y / GLOBE_TGT_Y being absolute numbers.
+-- Walk the chain (v12):
 --   top ................. (   0, -140)
 --   + Resources ......... (   0, +140)  = (   0,    0)   bandY cancels the top group's drop
---   + cluster group ..... (   0, -150)  = (   0, -150)   GLOBE_Y, carried once
---   + life globe ........ (-300,    0)  = (-300, -150)
---   + power globe ....... (+300,    0)  = (+300, -150)
---   + target globe ...... (   0,    0)  = (   0, -150)
+--   + Player Globes ..... (   0,  +40)  = (   0,  +40)   GLOBE_Y, carried once
+--     + life globe ...... (-190,    0)  = (-190,  +40)
+--     + power globe ..... (+190,    0)  = (+190,  +40)
+--   + Target Globe ...... (   0, +110)  = (   0, +110)   GLOBE_TGT_Y, carried once
+--     + target globe .... (   0,    0)  = (   0, +110)
 -- Every rim repeats its globe's offset exactly, so the glass lands on its own fill. This is
 -- verified by decoding the shipped string and summing the parent chain, not by reading it
 -- off this comment.
 
 -- 44/45) the two clusters. Separate groups so the player's pair and the target's globe can
 -- be dragged independently, and so a player who wants only one side can disable one group.
--- Both carry (0, GLOBE_Y): the x offsets live on the globes because the player's two vessels
--- are 600px apart and belong to one draggable unit.
+-- v12: they no longer carry the same y. The player pair flanks the character at GLOBE_Y and
+-- the target rides 70px higher at GLOBE_TGT_Y, so the two are never one horizontal band that
+-- reads as a bar. The x offsets still live on the globes because the player's two vessels are
+-- 380px apart and belong to one draggable unit.
 local gPlayerOrb = reg(F.group("Paladin - Player Globes", 0, GLOBE_Y, gRes.id))
 adopt(gRes, gPlayerOrb)
-local gTargetOrb = reg(F.group("Paladin - Target Globe", 0, GLOBE_Y, gRes.id))
+local gTargetOrb = reg(F.group("Paladin - Target Globe", 0, GLOBE_TGT_Y, gRes.id))
 adopt(gRes, gTargetOrb)
 
 -- 46) TARGET GLOBE — smaller than yours (76 vs 116) so it reads as secondary, and centred
@@ -1321,6 +1423,7 @@ local tHealthTrigger = F.healthTrigger()
 tHealthTrigger.unit = "target"
 local tHp = reg(globe("Paladin - Target Health", GLOBE_TGT, COL.life, 0, { tHealthTrigger }))
 tHp.subRegions[1] = pct("percenthealth", PCT_TGT_SIZE, PCT_TGT_Y, COL.pctText)
+addSub(tHp, gloss(GLOBE_TGT))   -- v12: sub 2, appended after the number. See gloss().
 tHp.conditions = {
   F.condition(1, "percenthealth", "<", "20", "foregroundColor", COL.tgtLow),
   F.condition(1, "maxhealth", "<=", "0", "alpha", 0),   -- see the life globe's note
