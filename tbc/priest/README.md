@@ -1,9 +1,11 @@
-# Priest — All Specs HUD (v13)
+# Priest — All Specs HUD (v14)
 
 One pack for Discipline, Holy and Shadow on TBC Anniversary (2.4.3 client,
 WeakAuras internalVersion 45). Copy the whole string at the bottom of this file
 (or the contents of `all-specs.txt`) → `/wa` → Import → paste. 41 auras: a
-top-level group holding six draggable sub-groups. Spec-specific pieces load
+top-level group holding six draggable sub-groups. Since **v14** your health,
+mana and threat live in **The Sill** — a 102 × 31 instrument strip directly under
+your character where one pixel is exactly one percent. Spec-specific pieces load
 through `spellknown` / `not_spellknown` gates, so the HUD reshapes itself on
 respec with no user action, and mutually exclusive pieces share screen slots.
 Since v4 there is also a **PvP layer** that only exists inside an arena or a
@@ -17,6 +19,176 @@ threat, simulated clone slots, mutually exclusive auras (Shadow Word: Pain and
 Weakened Soul share a slot, Vampiric Touch and Renew share another) visible at
 once, and no real animation or condition behaviour. Judge this HUD in combat,
 not in the preview.
+
+## v14 — The Sill
+
+**The ring cluster is gone. Your health, mana and threat are now three 100px rails on a
+102 × 31 plate, sitting directly under your character at absolute screen `(0, -110)`,
+where one pixel is exactly one percent.** The numbers print *inside* their own rails.
+Every breakpoint is a full-height waterline instead of a mark on an arc. Nothing else in
+the pack moves, no aura is added or removed, and every uid is untouched.
+
+```
+                      v13                                    v14
+
+        (      THREAT   100      )
+         (    health   84    )                 +-------------------------------+
+          (   mana   62   )                    | ============================  |  threat
+           [   you 87%   ]                     | ####|####|###|######    87%   |  health
+                 62%                           | ##########|##|#####     62%   |  mana
+                                               +-------------------------------+
+      10,000 px2, at x = -270                     3,162 px2, dead centre, y = -110
+```
+
+| lane | region | size | local y | absolute y span |
+|---|---|---|---|---|
+| plate | `Priest - Sill Plate` (texture) | 102 × 31 | +3 | −91.5 … −122.5 |
+| 1 | `Priest - Threat` (progresstexture) | 100 × 4 | +15.5 | −92.5 … −96.5 |
+| 2 | `Priest - Health` (progresstexture) | 100 × 11 | +7 | −97.5 … −108.5 |
+| 3 | `Priest - Mana` (progresstexture) | 100 × 11 | −5 | −109.5 … −120.5 |
+
+The group `Priest - Player Sill` (renamed from `Priest - Resources`) carries the
+absolute position at its own offset `(0, +30)` under the unchanged top group `(0, -140)`;
+every rail carries only its lane offset. So the whole instrument drags as **one object**,
+which four leaves each carrying `(-270, 124)` never allowed.
+
+### Why 100 pixels
+
+A 0–100 quantity has exactly 100 distinguishable states. 100px is therefore the exact
+length at which the gauge is lossless: every pixel past it re-draws a state your eye
+cannot separate, every pixel short of it throws a state away. The v13 rings spent
+10,000 px² to carry 712px of arc — 243px of health arc for 100 readable states — plus
+1,936 px² of 3D portrait that decided nothing.
+
+It also turns every breakpoint from trigonometry into arithmetic:
+
+> **x(v) = (v / max − 0.5) × 100**, which for a 0–100 resource is simply **x = v − 50**
+
+against the ring era's `r = size/2 × 0.94; x = r·sin(2πf); y = r·cos(2πf)`, which put the
+40% health mark on `(23.206, −31.94)`. Priest is mana in every spec and every form, so
+`max` is always 100 here and both marks are one subtraction.
+
+### What each rail says
+
+**Threat (top, 4px).** Green fill = your share of the pull threshold, on your current
+target. **When the fill reaches the notch you are at 70** — the exact line where the rail
+turns orange and where the Fade prompt fires. Red = you have aggro. The rail does not
+exist at all when you are on nobody's threat table, which for a healer is most of the
+time, and it does not load in an arena.
+
+**Health (middle, 11px).** Fill = health, number at the right end = the exact percent.
+The waterline at `x = −10` is 40%: the Desperate Prayer line, where the rail itself turns
+red and where the prompt fires. The three faint hairlines at 25 / 50 / 75 turn the rail
+from "estimate a fraction" into "count quarters" for 33px of ink.
+
+**Mana (bottom, 11px).** Same recipe in blue. The waterline at `x = 0` is 50%, where the
+Shadowfiend prompt fires. (On this rail the 50% waterline and the ruler's own 50% tick
+land on the same pixel column — the ruler is deliberately identical on both rails so the
+sub-region indexes match, and the brighter mark simply wins.)
+
+Both numbers sit at `text_anchorXOffset = +32` inside their own rail at 11pt. Two digits
+at 11pt is ~14px wide (x +25 … +39); three digits ~21px (x +21.5 … +42.5), still well
+inside the rail's right edge. Out of combat the whole instrument fades to 50% alpha,
+exactly as the rings did.
+
+### What was lost
+
+Two things, and neither is an accident.
+
+**The live 3D portrait is gone.** `Priest - Player Portrait` keeps its uid and its
+triggers but is re-typed `model → texture`, renamed `Priest - Sill Plate` and resized
+44 × 44 → 102 × 31: it is now the dark bordered ground the whole instrument is drawn on.
+That plate is load-bearing rather than decorative — an 11px rail and an 11pt number
+survive snow, lava and Shattrath at noon only because something known-dark is behind
+them, and four lanes read as *one instrument* only because a single bordered plate
+encloses them. But v11 brought the portrait back on purpose ("two concentric arcs around
+a live 3D portrait read as *a unit* — you"), and this version reverses that judgement on
+density grounds. It is a taste call, and it is the most likely thing to dislike here.
+
+**The threat percentage is switched off.** `Priest - Threat` sub.1 keeps its index, its
+size and its colour and simply takes `text_visible = false`, so it is one checkbox away
+in `/wa`. The justification: `threatpct` is scaled so 100 = pulling aggro, i.e. an
+early-warning *ratio* rather than a quantity you act on, and reading "68" versus "72" is
+slower than watching a fill cross a notch. A 4px rail also has nowhere to print it. It is
+still information deliberately removed.
+
+Its **offset** did move, and that is a fix rather than a tidy-up. The ring era anchored
+that number at `y = +58` — the 100px threat ring's radius plus 8px of clearance, a label
+sitting just above the arc it named. Carried unchanged onto a 4px rail whose centre is
+absolute `-94.5`, the same `+58` resolves to absolute `(0, -36.5)`: **55px above the
+plate's top edge**, on bare terrain. Switched off it is invisible either way, so nothing
+in the drawn picture was wrong — but "one checkbox away" is a promise about what happens
+when you tick it, and at `+58` ticking it would have handed you the precise failure this
+version exists to end. It now sits at `y = 0`, on its own rail and therefore on the
+plate. It stays in the **centre** column rather than joining the other two at `x = +32`:
+the strip is packed solid, so a re-enabled 10pt number unavoidably overlaps the health
+rail below it, and the centre is the one place it cannot land on top of the health or
+mana *number*. The build asserts every label's anchor resolves inside the plate — hidden
+ones included — so an invisible region can never quietly keep a dead offset again.
+
+### What was *not* built, and why
+
+The design has a sixth region: an **alarm frame** that pulses the strip's outline red at
+`threatpct >= 80`. Every other pack in this repo re-purposes its `<Pack> - Threat Flash`
+region for it. **This pack has never had one** — decoding v13 for `alphaPulse` returns
+only `Priest - Holy Procs` — so building it would have cost a brand-new uid, and the only
+spare uid slots this pack has are the three *burned* v12 removals, which must never be
+handed to a new region: WeakAuras matches by uid, so any copy where the player never
+hand-deleted the v12 orphans would have seen a deleted target ring "Updated" into the
+alarm frame. So the priest Sill has three lanes and no alarm frame. The threat rail still
+escalates green → orange at 70 → red on aggro, the 70 notch is now visible before the
+escalation fires, and the Fade prompt is unchanged.
+
+### One field to check in game
+
+`orientation = "HORIZONTAL_INVERSE"` is the single value in this version that no
+committed string in this repo has ever rendered. On an **aurabar** `HORIZONTAL` is
+left-anchored and grows right; on a **progresstexture** that same key is WeakAuras'
+*"Right to Left"* and the left-to-right value is the `_INVERSE` one. The value is
+transcribed from `Private.orientation_with_circle_types`, and `VERTICAL` off that same
+table is live in a shipped string here, so the linear fill path itself is proven — but
+the direction is not. **30-second check: drop to about half health and confirm the empty
+half of the rail is on the RIGHT.** If it is reversed, the fix is a one-token swap to
+`"HORIZONTAL"` and nothing else in the design changes.
+
+### After updating
+
+**Leave the Arrangement category CHECKED** on the update dialog (it is checked by
+default). This version moves the group, re-orders its children and changes every child's
+offsets, and all of that travels in the Arrangement category — an import that preserves
+your existing arrangement will leave the rails scattered where the rings used to be. If
+you had dragged the pack, you will have to drag it again once.
+
+Nothing to delete. This is a clean Update over v13: `changed=0`, `retained=40`,
+`missing=0`, `parentSame=true`, same seed `20260815`, same 41 auras, **zero new `uid()`
+calls**. Two auras are *renamed* (`Priest - Resources` → `Priest - Player Sill`,
+`Priest - Player Portrait` → `Priest - Sill Plate`); WeakAuras matches by uid, so both are
+renamed in place rather than duplicated. (The three v12 target-cluster orphans named
+under **v12** are still yours to delete by hand if you never did.)
+
+### What changed in behaviour, honestly
+
+- **Everything you read mid-fight is now in one 102 × 31 box under your feet**, instead
+  of a 100px disc parked out at `x = -270`. One fixation instead of a glance across the
+  screen.
+- **Both numbers are always legible**, because they are printed on the pack's own dark
+  plate rather than on the terrain. That was the original complaint and this is the last
+  version that has to be about it.
+- **The 40% and 50% marks now cut the whole rail**, so "am I past the line" is a
+  yes/no read instead of an angle estimate, and the 40% mark sits exactly where the rail
+  changes colour.
+- **You lost your face and your threat number** (see above). The threat number is one
+  checkbox away and comes back *on the plate*, centred on its own rail — overlapping the
+  health rail beneath it, because the strip is packed solid — rather than on the terrain;
+  the portrait is not coming back in this version.
+- **Nothing else changed at all**: every trigger, every load gate, every condition and
+  every fill colour on all four regions is byte-identical to v13, and so is the entire
+  rest of the pack — buffs, alerts, the cooldown row, procs and the PvP layer. Proven by
+  decoding both strings and comparing field by field, not by reading the diff.
+- **No other row moved.** The build scans the 102 × 31 footprint against every region in
+  the pack with all four dynamic groups projected six children deep and requires zero
+  overlaps: the nearest neighbour is the buff row 13.5px below, and nothing at all sits
+  above the strip inside its x span.
 
 ## v13 — the health number moves into the middle
 
@@ -1050,47 +1222,51 @@ that is why.
 
 ## Groups
 
-**Resources** (`0, 56` — since v12, ONE **ring cluster**, on the geometry shared by all
-seven packs). The group's own offset plus the top group's is why the child offsets all
-read `124`: the cluster lands at absolute screen `(-270, 40)`, which the build script
-derives from the absolute number rather than hard-codes — and then asserts against the
-decoded parent chain before it will write the string. All four regions carry the same
-`x`, the same local `y` and `CENTER` anchors, which is what makes them concentric
-rather than merely nearby, and the build asserts that too:
+**Player Sill** (`0, +30` — since v14, ONE **instrument strip**, on the geometry shared
+by all seven packs; called `Priest - Resources` up to v13). The group's own offset plus
+the top group's `(0, -140)` is why every child offset is now a small local number: the
+strip lands at absolute screen `(0, -110)`, which the build script derives from the
+absolute number rather than hard-codes — and then asserts against the decoded parent
+chain before it will write the string. All four regions carry `x = 0` and `CENTER`
+anchors, which is what makes them one stacked instrument rather than four nearby bars,
+and the build asserts that too, along with the fact that no lane overlaps another and
+every lane sits inside the plate:
 
-| Ring | Diameter | Shows |
-|---|---|---|
-| outermost | **100** | **your threat** on your target |
-| outer | **84** | your health |
-| inner | **62** | your mana |
-| centre | **44** | your live 3D portrait, with your health % on it |
+| Lane | Size | Local y | Shows |
+|---|---|---|---|
+| plate | **102 × 31** | +3 | the dark bordered ground everything is read against |
+| 1 | **100 × 4** | +15.5 | **your threat** on your target, with a notch at 70 |
+| 2 | **100 × 11** | +7 | your health, with a waterline at 40% and a 25/50/75 ruler |
+| 3 | **100 × 11** | −5 | your mana, with a waterline at 50% and the same ruler |
 
-Since **v13** the portrait is the **first** child of the group and therefore the
-furthest back, with the three rings drawn over it — which is what lets a ring put its
-number in the middle of the cluster. It costs nothing visually because every ring is an
-annulus confined to its own stroke (radii 26.2–31, 35.4–42 and 42.2–50 against a 22px
-face), so the only thing that lands on the portrait is text.
+**One pixel is one percent**, so a breakpoint is `x = v − 50` and the number printed at
+the right end of a rail and the length of its fill are the same scale. The plate is the
+**first** child of the group and therefore the furthest back, with the three rails drawn
+over it; the build asserts that order in both `controlledChildren` and the transmit's own
+child array, because the two are read independently in game.
 
-**Health** is green, with the percentage **16px dead centre on your portrait** and a
-white pip on the ring at 40% — the Desperate Prayer line, where the ring itself turns
-red. **Mana** is blue, with its percentage 12px just under the outer ring and a pip at
-50% where the Shadowfiend prompt fires. Rings and portrait fade to 50% alpha out of
-combat (a second Unit Characteristics trigger feeds the `inCombat` condition). Priest is
-mana in every spec and every form, so the power ring never needs the recolouring
-condition a druid's does.
+**Health** is green, with the percentage **11pt inside the rail at `x = +32`** and a
+3 × 11 white waterline at 40% — the Desperate Prayer line, where the rail itself turns
+red. **Mana** is blue, with its percentage in the same place and a waterline at 50% where
+the Shadowfiend prompt fires. Rails and plate fade to 50% alpha out of combat (a second
+Unit Characteristics trigger feeds the `inCombat` condition). Priest is mana in every
+spec and every form, so the power rail never needs the recolouring condition a druid's
+does.
 
-The **threat ring** is the read-out you act on: green, orange at 70% of the tank's
-threat, red on aggro, with your threat percentage in 10px text just above the ring. It
-carries a bare threat trigger, so it exists only while you are on a hostile threat
-table and vanishes by itself the moment you are not — which means the everyday solo
-picture is still two rings and a face, and the third arc appears only when threat is
-real. It hides rather than sitting calmly green when your threat is genuinely zero (see
-**v7** for why that guard exists, and **v11** for why a `progresstexture` makes it
+The **threat rail** is the read-out you act on: green, orange at 70% of the tank's
+threat, red on aggro, with a 2 × 4 notch drawn permanently at the 70 line so you can see
+the escalation coming. It carries a bare threat trigger, so it exists only while you are
+on a hostile threat table and vanishes by itself the moment you are not — which means the
+everyday solo picture is a plate and two rails, and the top rail appears only when threat
+is real. It hides rather than sitting calmly green when your threat is genuinely zero
+(see **v7** for why that guard exists, and **v11** for why a `progresstexture` makes it
 mandatory). Since v5 it does not load inside an **arena** at all (there is no threat
 table there); it still loads in the open world, in dungeons, in every raid size and in
-battlegrounds. Since **v12** it is *your* outermost ring rather than a ring around your
-target — see that section for why the target cluster was deleted and what you have to
-remove by hand after updating.
+battlegrounds. Its own `%threatpct%%` label is still present at sub.1 but is **switched
+off** since v14 — re-tick "Display Text" on it in `/wa` and the number comes back at 10pt
+centred on the threat rail, on the plate, overlapping the health rail below it because
+the strip is packed solid. (v14 also re-aimed it: it carried the ring's `y = +58` offset,
+which on a 4px rail pointed 55px off the top of the instrument onto open terrain.)
 
 **Buffs** (`0, -16` — static row of 40×40 icon timers with time remaining
 underneath). Shadow Word: Pain (all 10 ranks) and Vampiric Touch (all 3 ranks)
@@ -1208,15 +1384,15 @@ Two PvE elements now carry an instance gate of their own, in the other direction
 
 | Element | Load gate | In practice |
 |---|---|---|
-| Threat ring | everywhere **except arena** (open world, party, all raid sizes, battleground) | arena has no threat table, so the ring could only ever be clutter there |
-| Fade prompt | same, **and** in combat, **and** knows 586 Fade | its trigger is the threat ring's, so it was already unreachable in an arena — now it does not even load |
+| Threat rail | everywhere **except arena** (open world, party, all raid sizes, battleground) | arena has no threat table, so the rail could only ever be clutter there |
+| Fade prompt | same, **and** in combat, **and** knows 586 Fade | its trigger is the threat rail's, so it was already unreachable in an arena — now it does not even load |
 
 `lua5.1 tools/spec-preview.lua priest` lists the un-`spellknown`-gated PvP
 elements in its UNGATED section: that tool models spec gates only and does not
 know about instance-type gates, so read those as "every spec, but only in arena or
 a battleground". The PvE ungated-by-spec set is eight elements since v7 (the seven
 cluster auras plus Inner Fire) covering the same three subjects the three bars did —
-and one of them, the threat ring, is gated by instance type instead.
+and one of them, the threat rail, is gated by instance type instead.
 
 Shadowform (15473) costs 31 Shadow points and Vampiric Touch (34914) costs 41, so
 neither can coexist with a "not Shadowform" gate: the two shared slots at `x=-66`
@@ -1226,12 +1402,12 @@ The four `not_spellknown` gates require **WeakAuras 5.4.0 or newer**. Older buil
 ignore the field, so those elements load for everyone — the pre-v2 behaviour.
 
 Ungated by spec (loaded for every priest, and the whole of the levelling HUD): the
-ring cluster — threat, health, mana and your portrait — and Inner Fire. Each is
-justified for all three specs — mana is the resource every priest plans around, Inner
-Fire is maintained by all three (Shadow applies it before entering form), the health
-ring is half of the Desperate Prayer danger state, and the threat ring exists only
+Sill — the threat, health and mana rails plus the plate they sit on — and Inner Fire.
+Each is justified for all three specs — mana is the resource every priest plans around,
+Inner Fire is maintained by all three (Shadow applies it before entering form), the
+health rail is half of the Desperate Prayer danger state, and the threat rail exists only
 while you are on a hostile threat table, which includes a healer who keeps the boss
-targeted for mouseover healing. Since v5 the threat ring carries one instance-type
+targeted for mouseover healing. Since v5 the threat rail carries one instance-type
 exclusion — it does not load in an arena, where no threat table exists. (v12 removed
 the three target-cluster regions that used to share this paragraph; they were the only
 ungated elements that showed something the default UI already showed.)
@@ -1245,8 +1421,8 @@ lua5.1 tbc/priest/generate.lua                        # rewrites all-specs.txt
 
 The build is fully deterministic: fixed seed `20260815`, no clock or randomness
 beyond it, so re-running produces a byte-identical `all-specs.txt`
-(sha256 `de65c224bd28339eb94491abb5ffdb07a44e50189126c1101c242461539142c5`,
-9778 characters, 41 auras). When editing, never remove or reorder existing
+(sha256 `f4397bcc6e0f563f55ab12b465eb1e707705e14337b34f43566bb7cc584f9dd0`,
+9617 characters, 41 auras). When editing, never remove or reorder existing
 `W.uid()` call sites — append new auras after all existing ones — so re-imports
 offer "Update" instead of duplicating the pack. (v2 does exactly that: Renew is
 built at the end of the script and re-parented into the Buffs row, so all 27
@@ -1304,7 +1480,24 @@ string, that the health label is at `y = 0` in 16px and the mana label at `y = -
 12px in **both** the live `text_anchorYOffset` spelling and the dead `anchorYOffset`
 one, that every label kept its `OUTLINE`, that the portrait is the **first** child of
 `Priest - Resources` with all three rings after it, that the transmit's own child array
-agrees with that list, and that no two of the four regions' radius bands overlap.) The
+agrees with that list, and that no two of the four regions' radius bands overlap.
+**v14 replaces the ring cluster with The Sill and consumes no `uid()` call at all**:
+`changed=0`, `stable=38`, `retained=40`, `missing=0`, `parentSame=true` — `stable` drops
+to 38 only because two auras are *renamed* (`Priest - Resources` → `Priest - Player Sill`
+and `Priest - Player Portrait` → `Priest - Sill Plate`), and a rename matches by uid, not
+by id. The ring canon the build has asserted since v11 was **rewritten, not deleted**: it
+now proves `orientation == "HORIZONTAL_INVERSE"` and `foregroundTexture == Square_White`
+on every rail, `width == 100` on every rail (one pixel is one percent), the exact
+sub-region count per lane, the plate's explicit dark colour and bordered texture, that
+`Priest - Player Sill` resolves through the real parent chain to absolute `(0, -110)`,
+that the lanes share one x centre-line and neither overlap each other nor hang off the
+plate, that the plate is child 1 in both `controlledChildren` and the transmit's `c`
+array, and that every waterline's threshold — recovered back out of its committed
+`xOffset` through the inverse of `x = (v/max − 0.5) × 100` — is the threshold it claims
+to mark and is full rail height. It also replaces v12's single Alerts-column clearance
+check with a **whole-pack rectangle scan**: the 102 × 31 footprint against every region
+in the pack, with all four dynamic groups projected six children deep, requiring zero
+overlaps.) The
 script prints a UID continuity report against the previous `all-specs.txt` before
 overwriting it; expect `changed=0`, and on the v11 → v12 step the three deliberate
 removals named above. On an update,
@@ -1320,8 +1513,8 @@ cooldown icon), and its UIDs do not match that draft. It therefore imports as a
 new group — delete the old "Priest TBC - All Specs" group first. v2 is a true
 update of v1 and imports over it.
 
-## Import string (v13)
+## Import string (v14)
 
 ```
-!WA:2!T31E0XXv59C9gNyV5bYk2oj25XgtSr2nwz3r7QDLjbyFjRvE1URMDLKLJpOD2DMDNXA2zgpZSsAnKawesvtHEabnhi9bubnTqPTGkeEtbbfkP02BfuyOpoNIlqdpAPX9VO9CA79XSVKwTwws2jMWFOzN5o37DUp(9977E)(U3RaJ2z(3FxZDVlNJl)K86QAHvLv1h0HdhPC4UBFADMxvXuxvwwGpSOKmVUGYGA3rkDjbdtxh1vkzUkc6UsPQBQZjzEXAVyaboztXLR98qCkC1FBgrDboZlKtvNxqpK9xwRJqYsN7CC68UYOQkBkPPptYcfmemb504qFytT9ANdzcfgLlbLLDLwtiVroAgjQxHg)ZUGUqrjvLmv0eylQRwwBbAmslDoHTVOKsbv9sCMOy4Cr6lO1Aaa4yzUYMIQ6j1WV2Wzou9VGurN6C5jb0lRHjNUPZCfKuKmeDgc9JPZzn1Lkwuq3iXH0TV9PczI)6CL15ywcF1qtqwwI3yFD6ouzuIYPrA7MLeEmEdNxWOCoHPqvZ0LluqAMfNiCW0zMiDMGSzQ9Qu6cOxXMov04XVyzdHOZGkxPP5qwwfUscgoxGxihkhWvE9bIgpv)JeF(Yk2flNlYlzCMYkOAZucmCYYA7IJCFg67hsLx4JCD2nxr5lkOTR0NTmQ13v)Lrn3JjkzkSe9T026DopNIeTXSx4E7FjbodH0MOERIMI3iC)HuuvewMhv)XXycCBIUHaQrL3ywCuXLsitOsCsk9d9GsaKb2d0l0h63BFLHmVHGCHuQskM5chnrMOShqIxRZAOkwbd1Y65fmUikgc6kCYJI(yOp7JSybDutdQyXzY54ICk5r9W9Jdc)5ZLomB0OjwWun)u04VJu7HPSe)IEvpdV3aEe7AAVSg55KfCSaQJGLGTmQcDIPGAfCSaUkjrXmHKv54DUi9ZqkUWaZ1ZILqnTYXmgb13NfEJWDWWPjjc35pTd4T8ZH9ddOtIWeZaGDwt(dUhuJQt4T7eEhoH35R)qW99uOgK7bEFWdWsae5OcAOGUxOlNZIGetuM8bELW7hEiNWxfSl4HD2y6GdQTBCzWvyromQwqxYWukVHDwaJVI0cpc8xb(aFKRBjnBH8tPQwkl8ypYs0YBbjzHy8W7Db6JACOsZ9sRStyyI6XbZQRAs6(bnemQAgYzorbPIIMJdJo684IEEzodJS5mrn1kM7LTuzelGtwsOhkNHKsrzHCPyJfnDg4y7fEQSHqcp53lCmNHmqs24BGGATDZAiC2Yck5fCaDc7dUBNWBZj8MfHhnuceMeERSKcdSJ7REPQSXWWD5S(Z6NdOZXpfQNuqe6gJVxjgT3lnQf(QDadF729UNdaFWBc(Aqime2f6Wo0kn0YOpZ3Vd2PL4nfhh(qWhg(Axm(Wf6Ql9XfgmAeOFyaToiXnIKbMbjgImtKLtwtKZbmYroeBErH8t2pCFBF2P40L4YjlmRKsy1s54mzNItUSa4aQAh4HFy98ICkffm23HGLOTxAisybDZkqPdbpdkhCaNC(sCZisryL60noHp0ddvWjbavHsn0FEUgRcvaZDSCOouDunJ(lQ7gH0xKJ)mLnmf4hIBMTv)bjLTzldOTBEbdotmDHawVaM8wHxCrdSSQWmOxiKTX40VkIPNghwdzoftWSck8bXaLhFVim6fq1PI6cggPjmdh5UUUTHBcjaIOJchjlCucQ5Khcoo8uuqf8ribDAYveQHfGbosoGHoYC3HwNMOIXegIC8QtFsB1tZtcdFrRJdIAcZJqV0wTdEqToAib1vZCbAOv5ZcfCKmj1UnsGifqQyc18JHbbHcIE8IKxGy(f4jbE(LPKlJBxawI8ECRPuHkWalqe4inyHsKmru4(1r8wKYhT4ttD1I)cKWYxvXVdA1PasXVwh9RlDoxdxMJhtD6ktgn31QRtq1Iortv4j4fYJuhG4b0r3Gjtbn1KvTe3ubPAGltcBAeT6y6CAZoM9nlxR8q0PLCKmXJLiQDdBtSSAh(su6iqfIwi2cYQQ60gUPqfuKCs26Fi8afUVLBUzs7GxImNgyUeLlLtqFUDtYneGDijDDvDryqh5kzF7TCYT3JNU7Z7cyaWeA0c)fTJpBv2YlyhWO2fpBnktGLZyjjQAii9ZCmbJhhU)fS7OrjtBx23ePM4Iy1S0wws7yXWAklWLx40b55tQyC6Xe4MmiE4kNEibEjUtBhtJtthgWeKra0TzroyHuBV3U91BplzNNnnYXaWDM6gy6PBgeRzMQr0U0AxFZrrPIl3y9wqK2VIEoesjapE8iSHIhnreyMpemYXOmtBhojugXbrzYOesu9LQnqETCtDpWshWlMbRZhIg)bXjOVuxV7U9WqV6aQEXc1iuivNA5fuRLeG5YJ4mNOco9E9SH1qO1bIJmOnBiHCuuBx5Qr)vTZY)6VZIfPRCcg3AZq6PAyqelqg(kHGequdTIrvaheEI1AKaRiEdDPgXa89jUYAMKIi8wVyvsz7o6zvrJ7cPkZW585Q2Nd)OKbnxxwWOKQQPyk7uMDbcBF)s6gMIlAN(8YsAIyDMvLKWKh4mtB3HJhCOuzsgkEWWNiyKiXYeBuebs9MyBr8lwpKAu14(wF(MnVAjn8xweR3(6HloibZ4dFnab)WeWbwtFHpK2UQdIS7qGplsnEs5HtxHpNwXPdOlPGhQPG48KQbUmMlwI0XIeDrv0OzvOv65dhpz4tmwS0rPWSzSHz7YPojzc8IZDmObaAsuUclVn4uvvKcNweotwyfriAehVbIUq4BCZR(d(Oa4JDXQ640uNwq)Ghe(MjQ0GNhol8TaFC4B98WNq2b8xf9HMd(RHqmpj8xhaFBdsBjXx97ZHd4Bh(BaFNO49oaADTwmRKVqdS2W3dCE47c(UH)MWNcL9V3SA3F7tknm4Vd8PVt4Vfq7bBFSxTYR52n83ftDJWYywBM(62Jx47h9P)9aWfYc)aWpi83h(mO64Fa8pue(HGFymTO3Ud41l8p65pfCNam7h95pckv)XIW)er4Fk8JcZ8OWi7BDWMb)Z2KKlWpUi8tGaGnotIpzJY(pBDzA2u4MbSC98KgeCtoOjr8LXdtV27YUXzgGFketa8td)moHFwuZXNda)8zHFbr4Forcg(fHFj4sa4x(5Fu4xHiYTDSihQrHiR5LGI6ZhvI7rH)febSaj8wqYVu0I5Ya)AIW)s4xh(CW)k43OMyd8VEtjWuajWqMHfEYgITx0zkwnepBLSmAtPLDwewZSsjoLSmMckzxWCAeIRsb0SUrZ1HCFwit2Mf22NTW2sh0KySeT8M1K00EGvbJRfPwGHBsWSCv5sT7RnzsnXMMeE9B3StuWtfGFhGMeiFNLBXOKQNTnji)07bjrIeHHz(61uSJNYrTOJ0y7NOY91ylumizOf9IV4bPSgUyTeXYver4cl5OrzONNVP4SinJjZbQLkZVYkQLOrHKfOLf88WrZ2vVOGjsi5cySv9xKflbnOwhuJL5kTKzzIAbIi1MwE6gSvHXq7nXx6Hko91TfNoRWqL8Lr(SXpvO1wC6EByc3WTDgT7SM1ystgVVl8G4DLItsr72R9Qr5kPjPlL3vg1Y5fBin1Er0s50rJZPMb)oQl8qDeue4DHMjNS2Tvl8ykkc6Uqdeq4cnyiifHPXMybZ)6eEt4z9Fl3ma1(8kGDSDCjVtQgRBJOHRjBSuTB6UG39(60DvImmVgUz)GzBbz2rHDdFWDUXrnicgups9IFOYOrJG5Fq9g4(oc(51UO2XDBgJpO3dpZXXkKc5eggnJFNWOoX8xZ9kxqkVQcDEU311HRA3ca)ILZRQkJ6juspTeIXEPQpInUN4QTV0ZqR7FygFb6JXxFEz6ZVBM(6JjeJ)E9Z6XnkuY1Eix9YY4Rhu44Rb0r5Asfzez29a)bTOvtFGGSd1)iX3ikmo2JCXjfe0cIn4Jjlwoqe3UTqDtbicdDSV9YfLvNUFDQHFQqX3HWHjUes464Y2tbxCECyPPM0dFBCI9k3ZI47RoBusCQnPghK3vDUG0zuJdH8fZikLFsf0OdDml5reb3Y5kBAQQKKo0usEfxcfLDr(EHOgSEUBJWXFGdQ1QXqbAAiuVnsPyvKUlflrIOStekzMmjhc(03nLtTaC)ZJkGuluUm9NjuTnwG9J5RBmc7qQopyBlBoHacIa7U6tyTEoGzgggDkKIqczfX21tQG63RosYhzvkfxOEK2XdDw7XvERHWGvKS5pdUZh46rGBVHt6(eI9oKNjhMTULicDovvYqH6z2QW2S1mE2psB3vdepm7isgyJDXNfR(SWWwG7KOr9Rv1WDyPnSuhs4ZwWCfHC7RkeSWxKJutbYfeMbXor4GZivcRdXtJ6qYcvXZ(UBpDJ7HxpdTdre9QDm3Re(cnkVcVyw4)1AlyEm2E82NhVKR9sU6h()UwsCW)VnMSMf46iIxwaarSYcSnQSKfWHOf46r)TDhwGBypwGBeyb2bPZYcGyB3VfWPf4MqpCZwGBXcCR7Yc8k2kW5wGoAeDBbqzCNOV9TrYplWUZAb2dSBlWERJrTa3(AJlTa3XoMlxv8icUqrJYaeAm0mN4mXCp60N9WmwG9Bx7Ulcq0cC31HG)ylW9CLdVzbUxegRNvGXSaUUsHT2hRhFmb69xIN2O4Px9ZUk80rrWjbJZjMwxKF8d3FBHt)KFbbovD8tH61FGa)sOuRGsADI1FQOAUADOxO5qXknxt7ZuhNr0Ig8ucXgz4z8n14NTTaTF6vbGMNREaTZHgSAGq(9WeGPx3mH842DVOrN2NppKRmOrN6ThpTBO8BAC4GBD4qJnmoefJN((OWWTku9TV(r1RhZjwhU(wrO1E9FQrzN8WdNtiqBrR)7xbqR77kLo0NJXtp9fQx3(9IV4dFPx8f)4lbWasg)KR077dp1jp(qxzy8qUY0g1VD9YC1VDzJWSahEDslsgo30JC8ydoYXhT0i(Alq7)4QaTiZMHw0DOIOjzFGrsb32tQT)vyQfS12CnuS0PJL44R(Lsck8UsPRwsZuB31Ez)C8cvd1vTqJiGu)GNtnki667IgJDvlgHd7kzcxdfvBF1ZQObzDnwq2i1kd1xMydfmDAxrIHx2sUsKCSgkaPJfpAIWrXHsmydwm7lreZOMOH1qJlVWTSzTrZIO5uwUKsACM5aBAf)5OZyMLtwQOcmGUHjhE9pHxvkylQu3Qw6013KqwILKc6ywupGD(GxmjWUH36s8vu4kjLNSuZGDS9qgQ6MqM5lQlr9x)nnl(wSzboaBewzPssM3e2sYXX3jEb0uHrFEfZ(5YBQQNJnyKyJKoNohVuzJh)MHp4oNNtpp1efp(ERIwRVA6cklOBASqHYYYHL0ZJMaFvlhXcW2iANYBcJtHKbI4ed)qJUqovAJmrnu8wCU7h(cG2ZjMO55v41FplJAgZlkyKwuD6KklBq(zijd8c7zDzOTvYKDK6mz2mvxpIK4MztjnJGCt8z1DwNhFeMneZxwkRhMCJsRTE4HEIQtdGs3qyJwGS0LiRWMSRAkb1n5bHtYcCk8kWJSYDqD7AVQ6(0f)SXPjd8ZEXsy)dwWgBjZx7IgbD33jhX4eDPC8wqKjwfAybcUMmzOkzoSJmfmH(0XRaVKLnr95waHfnKL4fYPAAQwA2QRypguwtWcTGWBUoMNSQ4iM7YaV2WkkAsmQg6BKVSbkFYrIqfCjebNSafObmdjalGyNEGsaYs)IeE2oRWVZoNbmpz9mHZ3zRMV4V(YO7vmKXlTf0R02v13LPAWOIgXbv1IxwsEtYTSu(yN2uPxAamwP(pSQMwT90KJcvj8JQ6D(ql1y4hWNBKk5LXGzINVBY7IzHFZM9Lg8B1G)ZMBxSOsD(jdHx(pA7cN4Ickc6s5PIlzxUPhxKk9WkWXxH4VocUjbxjHD8eNhUFwYJ2l3V7mSTzYCv195U6ISMrpmDwiicqvDbSt0rKuczxgblKtxn7wSb9hlxZMF43q8pbU8tRnZB3WNFYSA3g(Eb8AtTXOF5ljBbY2OyCDhi3JphB5IXwaUvl(IAmxH4RfiNwxRhPwClgvSD8aYbc4PpUXNPu7fBd1oXwKikreIkTAbkIKFSasRT0Pf4mwGjXjergwQUmOfqPj5plGAvbplGMf4S48YcOBbmiFltulr5nK4ZxTQ4ZY1DTLwEel53hn(wKaWpml87Da)UrajToR7LWQcxy)(ni8FRb)DrKtSavSaNZc8gqfR3Of4rXWFlWJ9bVFCn9nrX8wG3Sf48OimBi8qCSap(kqRwG3k6TpXwaO0HTdPjoLCZGjFk43ULovUrKkgJIGLO6kXjZWVtwOvw43nl8Fil8Fml8FI4h5MGQhT1q1sCfLYpHmIlqaVyuWg(xs2ScfVgMV)Ze7KZe0BkpThVg(xuXRWp2b86U2AHcHurGhmWjEwk1CtRSSSA7T5fcyDTdRdC7o6ntlbUADSYHHFLeft9)lzaVxDiwr16wqSEOwJwfvLRmbsXfQnL6cCcmn9qjc6R05kMwMV9W0ixZatxh2AapU6Pi40ggUmgsmOwhHrZnH3v4ABzhmYD9zjGlfb3LCWZBv2e4(wN2eyC66Xzn4mRBmGdHiizX7EiUgigP4h18bhWDQPtgmZmTh)eTg(z8xIIFE66RYf7nSfzJ1uku6mJKOrlkSIEtO6fR7YYMxXRwGNcwAzC6NyOOHhiyIyHBBgzbEpnN2qylc0usWvp)uMMwLGLXjO1FSlrk1dNmr)JKo6QsJ36lyPwxgztMmZQsvpKpxR)s2gSy1nfbiFfMwwXsfmCS(hFJKuToshEGKjJprm8(DIDKuzUej)YsF3ZuZrn94TxlWR3cmXLWm5RTAS745APAS57xGt31yC68xPvF5LUS024QVgNQ(crPCjD0hQYwLCXc8UxXqUU)2OetyM8Q65LmSNqVFTEtnAkMOXo1zApfu)VKNc6YBKw18CtVEXoSHXnRxFE7jalJ)E90hoaMq(81xFSO78h4syo81gt(yt3sm5IdXHMdmEduHnt0gbvEzO5SQ05vAfN396xX56fLJA(wBu(Ay5ko98CkcO5xyyWtAGPa9E8eYD5Xp7qdenv7b6h)xab62(QjuyodZQyz6SjAch)vBaSUCqY(n21iKf1egoIWT6PLKXBOXQy2QJ8dJzXa7hBhp0BAZJAxFwz5LWWwuJWAdBpsBnDJujnnrodbdrPcM2u0CrJptroHO(nBpYDGRzqUUTaVUfgijBStLmrMGXHB7PRTqBdhb7UgjfExHKrOvT7UXWBCj9grGZuS2A6THxtS7vZPZ2lsQfCne6DskfBoD2lHx18LnQ5pjA6WMnf96cLXRJDT7QP3XjP4kDznYMYb)2904BJJnl80Oo2MdU2yrQ5RPh46BWztwGy7CZ6PjlWGuhmHf6IJVm0Q9PKfiHOT7KSajR7ijlqkyhB3cmmKXcWEtwG0hGfn51mO7gbbxg1cmMf4KexczbgVUVGAytWx1wVgwGhzL(bcSL4giVsCJuG74rk13ayoW1JVXxHg6fWgVoO80CvmQQP(E)TBPM6fQdfBRI6nTtX3egGw8YEGMbxNlNSv57OVa2vt2hogzP0tSf5Jen6uIM5hPD(22c8jq0tIe6PGBzo3EWAtwzbvLQiVvSlmi(4g0WSA(kRWj3RBNGV2rrKKf11lFPWKkTAuJFXAJA8n0AdY1zd8FhJsaE5ak362xLBiW7)PJV5lcawlWs2av)rsiYmI78JNzY2duF2Raa1t1m(BZbq)yWshWxJBLyXgIWnEPrW34wacUfSQxG6sWAIH2OzS7aBbA2c8wUQXOUbxMrBzWYv5eVgGLJh6SJhiZH9Pomx7HLFYRaWYlJvH2gdt0aR2592AwTDTQrN9sbnTTAQZBiERNATCPwxzPRISgDU2DGBLwtOIHy0XIexOFZdhO9qLp1vuvTBbmyxfuX2sW4xRkySV3xRnmtdtf4LnStO2I1wPzXXt53tOKCQ8ThY9PV2KDQgG4vfVLaIl08uaFzdMa1CSMyIZYX11H9PmSV(hV9yIpZ14yIZ)SRHJXx5C)FzdS48p7AdlMrtRpZr0ngw5CThw8zV2gwe5OT2pt1m5ZlxqdOgI1emeHzktJ(mpEUbhO9GHp314CeRHxhTal8YgsbBFr2sCqUyd07OYUv7QuK2Jd(8V4IdWwKMLn2XhidCB7RHt3HbuLRGx1Q5nQzXwpxPmyBO4r7ptBTzB2TsB2w)8EGu)AH5A)N3smxRYzozGq8jsgrO)17Yl6zigOnSSQIGrwAJ5ry7Php(8W2Jx)(8UHwS(Ve0LP35603tb3y7)ilW3X2gdvgFmwZX1CFQt2EPW)(AUqALsHeFdktDHeUtg74hTfilS9uLLneOUlI4PipySQI9VQzjEbsKHGGlNTvsVnK30ygaL9Dwb05mVWLLlLi7lPZuZJlh1vgDjLjfmDfj5yj0oq9JYfjzzS5gmffqt1t3aFWUqJt9J7LOkcLQundAGqyKGUuvWN8ZvAWNhdvHSHKk3yePza(yNUL7RieZXTSLXCyboXvpEJLQZBmvQwWAWV1SzF6B4Y5mc0)mHngD9qB8PUHTHpkXMvYuOezxie7pb32Hvydhu7oAXoqigkMhU(sRLQwFjY(rWopqupHW3x3m5pRf453rSpq9C2c8Jwzwyb(XzXa6FYks2uV9nwYEYnuYExp)glz)OlRKbpcdNsLvt3M9Q1auw3lbZMCe)pKslwjoF(qdCcTHdj0EAX)LRado5YCf3U2Ja9EEDTEwQ7Uv0CBGvB0vT(Y17YRavHBxVArTkEpExNRRKtD423R(9EXVxfVE)hu3(e4FFSEzy6JHkakY4HXn(OsNSrOCHx5oUsxoFEb8Xyk8Eqv8fRTzOIXNTvRONxKN7W6s0CVTShS3Pl5pilZi8HAFp4fEjqpOf47MT2jJKBpUdGU61TxYvFlQjOJpk9WhWQZYvOGqEtCVh8vCb821usrif99zxRdOKRPw68R3HZgBZaoozHEmhUyxfNuy62VCO(xRnw2yVybo(21bhpzOaEyyWx8Ip46ceGC815gVXKd4NPx3(WNgdEihyiEqJh7NBb(VjNddOMalW)ZMcFCnYHSWMcvmyFmXM2ZKPDF2eThv89VcIkCVGHgN(KKDC)EiieuzZ(qqK8MANM0A7QPNjh40ZIkpI1vlu10qltWaA7gZ2JpxbL0fi(Kid54VDn3rVvbgKdLXgoB9TxAyZMJZ()5m1pdoPhUQ4z9cexIu(Oh2GJJMtXX2lC)lIpqSrPBc0FZTxc4a(3C5In(BB8euEr6zhi1UlV3Sqy1Zjz4FhykcEP6rhi9KBNb9LBdc6UVCqqxGudRDgVZemse8XNkgsr7gRFYlIf0XNUP62naiqtJTpNempPr2qcVrp)wB8z)0a)XIK8FaY)DsEy9Qhq9HLf4uqGx6xV6XYEdBgy8WeKukgIt)0Je7O1F6OPjWnsYAqy4hGKraKZC1xW(F1hYrIfxQs5sUlOJKlSlfs88ckSjIoAuw4Zzb(4Wipz9ZL(tclXgHDKyrw9(cXl50T3Tx8gdzB3utjj3aJq()Ntt78fuK71pX(l9q3tRTiHHgk4XJUQK51d9qKfdGB1NtpvW4bJelXQsyF92WHcEpTiLWt1C9YHJwvBspqWHc2CUto329s2)pb83QI0ybzXhV6RQi5Jun85HuK6BfP0cmnS0byUK)FeaLgmP0xMCaYJ3mrDwQt(o5N7EA(4Yf2h8NrwxYFblW3btMAFM1IpVA)g74L2NxTWBA1hrTLZWOhq6488tpzloIA70GTNU91T7oN66F0))
+!WA:2!T3xF0XXv5DNXBm2EZhyP4psC(AJtSX2n2z3v7kTYjHW(LKw7v7UA2vYwoMOz2DMDNXA2zgpZSsAnT0A1qQoPLcv0MtjqlubeOqGdvTKY7B)culqHtB5bbegkLYb1ZPn8pTGPVVTuAl9EVZS7SR0Q1sYwooUKZjJM9o37DUF8753ZZ95(mxtnsNfE)hAM7FX8SfgNttrnQIKI2jC5YvgxEpwq1olOiBOPijXZfvquItJx(eQ3rgnrEDdph1twrjjpzKyn4Vu90YjOXZA487b4zLmewS(VhKvMDP8kAC8ArSFPQ7mIK4fUaRgNNCkksgIQAtLUyrDEdQ8QSO3PH6ESlFUirr1ry0RnRkFb98wvKGwvR8)4ZPXxsuroxvvE6sAkvuNZkhzfVa)wNxuUOIwzwduoCpV1dS6WuuuUwKTIHGIwAv8J1DNh11lkwYTgBbscDtRBWQz4oFrrzrDb3rq)XW90gAILkXRPN6GA23(CrmWVD2kAS(xaFvxLxssKtFFD6nsfuHYRkXwLxBAs6j40DVKEL88tG6MzRuSO4uZpw0WzZnw2CHPZv)rz04rpIoBM4jtEPk68XNc1UYAvdm0YSL51DphhFEunG78AdepzM(go5SvKTBwUNNtu)CvKr9Mj49ZkjP2bl5(CwpFqfo(x8MShUIZvIxTJSNVcA03tFvqd3Nsq0GFbRNAnwVJzzLfTgm7g2tFlWZQZN1anBvYqyBWDhrwrMFrou)hNJXWJjA68Obvo9PXzf3kb)rkZkk3h4dvaWp0feacI(7ExEkZQZlvmJIOSr(OXtLlo9(f5u3vDmvgYakboEjuE41KzLgb96qV4NC(IAObhudJ1G11LyLlGMJ7dNeUbKpBu64XtnNHsHjSY)2ZSB)ve5MpGY54ceYNWHMmaTEbwjExZHMkOjOl9AGNeYOXbxZH7uIwOMiskSCUN361qAWqOzEayhuWTTnOpieSB0yLByVUH70nCxp1bH99CO(59bpaSFAY8CEl5fus3p4X90Oz6XWygg4bHhcoOB4nahcoS7glh0V6UggLfprfyXGvEnrDdXc62vbKyzLfoc8Zap8lEtWXFsOhiec0OZAGNM4fMwtXGmDrbrCNxGxSKGXtKNKiVaeFKzXnNcsS66m5nqJjYg7HUCfKaRBAsQhmVUOCjj(8zOtepBoyO9a5yIGW5f2dmK7i6iHq8nxYGFk0BK)uASQyyN6UIMm8GzYLosYWrpz4yXsKlXiXZxwuttrtaUDn78pBE0RKdxc6ijJNkgCg1WjWt3fzlWF2WCCPL1p7P4zhpmwQ7SdYZjYE2CwLv)SwO5Xia5XIqM)oMrjwWn0lSl3WBenZJqvGl4oCtZkPkW6IEsrodH)A6c14iYCZEpwGGWtmFYHkEOdPnk)jIhtTdKCvbnEuL6m69OUaVyHILdS7(Yd1Hyh5G0fe4lmEFW(260tWQjYI63tlkhvPCEwd6jyLQWtTFf19)4pUwbbw5s8677GqrcJ90Qi(uEnJQacBvavdUaUzlZoLGfQQyNEXf8XECOeUiuGa8uqhUHhdE8zoEE0SR2yvPS(7uuiu78SCNRIUbp3GStTfNFikVf42YCZ(cESGyqT6UCWqyoDmXRmNW86yPmRHFMgZtFkiwAR8qRlXkBqnnAEnmg5807bblxc1jkHMY0ZQurRa)rUNBAlyKkzMkErindrSaJMeGmyafqFqilyJ3GHjjnc66e0i1hgvz8RoHkZ0iUFJQLzLz8BWlZmNXKi8B1IigqeyMCpd4NbdfssHWaWt5cICKzUt1oXOVX0fy5uM802QLMLKg(YchWGOWtTGXboG6oBiVoAwuF46zFmlfqJvVqJXXxaXIknMQg6gmde1swvsngViHhoxA17GKisfLcMYTWPWiZiHr)8swvR4u8CKeV4IwKpJA3uxG8C8eNyXQiXDlPz80sKuPtfx9bAtBZkH8PQuopVgC3AigqCgThsSEp1gsMJKMLOcwoPNG4R9gedld5Aw7xasv(o7tt8cEgQclhMs2tUCnncxRzVijTjrIPywIPpL9nlwVEiA5spCUKjqDID2qdYM1TPgzTAv9aTP3sqKefv0fLuu0CExyRh29In3FTgxNanLHKofMzxlAtsnOnRvyxWOcWTrnhEICmvRgvnMp6AmflzNWiw1dJTMJXkJj5ifQwkiUlw)HtMeU75SNgqftTd7BI5qIxRkTL8up(gJIKWno2wxWU2CmmenRgkiSJbEtD9ti)hm4owWUnA3lHucl2yhLxWAcc97i1yWHZIkhe74oSu1NiGI7Vhcn1B0MM6eeRr7gFXNlq4sfRZFqAv1RcA2sOKHIUSihTlmUy9IB1(8BDfvfWhVEHM369syvBj)y(cik1XQs4(9THP1v3jIZkSnbkHpvqTJ81jlTNcGpCJgimhXItcVifr)eCxPAuZ)CwnDSYFK6yTs8giT8lH5gDEad2eG(v3PLz5itKmQqqEeBcwMbbJkS8wPOms97LQrhBphoTcYwjKfx6UHNeolXexh8SEzffdHm2LGzoc)EFIA6gcZBxUcsIQcyvoWPGtRUtNbbBjRl5Ks0g18gm40fukRIRxbSM6Bg(4eMg)wCm4lD5cR6DSVOAhoyeNH2Ny(ZZpy5G5KoFYZertugBYhVWSKMigtMprQSjIfFEfKDLYwDi1ohinDIZKovUWjhlrQrItNnUfGykBarhU1ivapNWmhhohfmowXjiTfOmsj5RNy0hAuuHbqD6ZtbAevCGEZA1gbPvR96YC3SMPZmZDcVfk4NvDNhaXdwa1ETuXFGdaVvIsh4xaUimn8lcp9fH3gf8mO30Vemdc68ld)kHH3owu2f8RcVdvVRGsSPkSfkOG3jf8CuWVgml8UGFD43ar2E4ltL4WTc)MW7HbE37fE(WTGnU5szLi8SZSl496WOc)wO(YVnf8(yG3p87aZbFauV6dcFib4fqtYJTn4JuBbSHq0uFMhSgn1EHFxc3e8rfGpgC21vL6YUsXeiOA99sDfxDVY7adtUAulDTIAbNqnQ1TcCaIyJQrorIPIyUT6SGl20apIboaMiSZhZk)VcxtuMGyRnK8tEfYrc)EcW8ntbc)(1y(EQMxZdmWQT(MLLVtCzxheAO(tJO5G)pW)xcJg8hrb)XmWFIa8NwNMc(ZOGpZRmf8zjmpB1M5XhXgNqe9k(dzZ9alqOAslnu2QC5vlnzi4Vqa(CWNh(cWFj8fRtBaFPwryC2BAZMX4s1imuvMKxBnZxyXaBzzNfZbMd4DsPEOvtiMu)nl53aLbIfq9HAFrRj(BZw8iTp3RKNA9sB8kV9RwIKVwGFyFRb(HnFr6xYruLodEEelUolzgfJzOAsYDrSTn1FgZ1ob(xhwGhnO43YdawRSPz59qPcuuShX4LYNB1L3VFGQUZvHTCo17YXvQKv)4bVohpzyfLv3B9hncBzvrnXcEYPuPGqdLP(dIxoVgY((6Ej9OEWM4ZlZZ5bTeAPg8yBczzEnpi7X4xQEA0OmojSny7yaNB4wGBfHTUvk0a0Rh25wXT8oTyiUdcJstEWQM9O3dCV7RtV1g5Xte4H(dW0Ir)JchdEKDSXruigq0uItZpsfKzJycs0SbEYJGTEI5v73RrcUWbo8u9JLxI4gI6cI5gI7gtWoZdoNybfzlhmCp3eURHeNqpyXckksOzc5StkIGylu7NypIkSsV39cw99pQ)GH61FWEd4V3E86V3E9hXFpD3dTpVOujx7ICnaT)GDHshFnKgQwtllvLbnQ9PAXOM2aHPhSVHtUrq4h)jV0488QHXUEZGgBjRarZXjfGih)LxSKKYK9PXF(k8YfQAzcDeCAclGeW6xY23fcZItlRLZpX3MK4B3Dpp((AROMKN6lo0f5z1wISLhdWPqEJ5eelmUmY6Dxtt(jseEX8vmmuKtBTWasDLueLLoiVplN0jmZDq0BT)dOE5vv5yxl2i16QBwirQuXPhls6C5spi8UVx45Pq6Fkc39SOgOLVCx06pJPyV8E7Fw33FUS30IAl5NX2hWJXJqgWXQ9lSxPCbdoeeFcKcAYIXi(5FCz00Dnf2dVc12Z5KPT)yN3w99ThbJrrIKFhyhp8nJW0bIM27jf6EqFJpeWq6PrUGIszYkFMUgsLPURm)MQ7QwI4fbftuh7jrogS5aJnKj12jE7crwzjlIfWWcAi5nBzXLLYExrky5TyhPUHHlXpfIqISWPCILXlN2xJwjYacyFxCmFhdp7Uwu)G4EEuxZ8GW3Trruyjg4Fy1LfpoDxb61xaY1Ujx7b(NxnHm4FzJjEbF)gfOGFGLqeCjb4hka)RUG)F7g()tb)BwOX)DKKa8JG)dxWpg(pH)RoG)7RgyA4N0iq2K6Mmr1Jj1wivNjLlgtQBgoMj1wDGJMuVUvhcAsTTTpt(Aqpe6Wc4jrHaErM6KNlH3rM88h2VnWZKYnb2zsDloaU)wtQBDZdDzsDBievxldrzsD7BwiP9r7lO)qD)trpRr0ZJ(sRa9Cue4Hx)ccz1e4g9W91oWZ36geWtnZHI0DpHc9tboiGJANy1GYkgRuv4snNkw33QUAwhufrzy4ZWNy4HMk4eJE(2bR(7UgaR8DTdwDbKLMHI0Jp)H83Tx)r851B3itl7nOpYv)itld0LV2zh(viQ7exjOo9noQle8UFalu3vjm8Ex7y41IRwCaNVne2S7EoZi0JF4HYZhQDyZV9Ma2CFBwAd)s(91vVr62BpbWxcIV0n(sp4lHWWp)9qUADFV4v54li6QF)(ix93gfPh6)DPiDp24jtQ9UgP8iMHn5W9N4ed3)iLhoy7Gv)9xdO88FLq55nsj0QF3)WzGT8SQ39Y8bc23EEgmr2Sjs1)kFOiVmNNmAkLvnAiaG6JLJVwQEQNAmEKMf8EIIsIeGq25OJ65iAupPt5zW4Q7ZPQIhM2ZPcthREB4oDIDTWzZ6jwcCqy5jv6t1qdiBIKXtfnoovINuWcvFwIqLLVtO1vzlWFBxPopzE0YrRuwolUYCrcGN8wRPLMvsSKmest3Gfhnx4a4b7Qdh3nPzfTw8mex8e210Oza765wfioL52xGRQmBzXcKaNd25wJOROza(NTKMOvSfCltJVfVW99thJwsSSOXTGJfJK47ewcTyv0Rx2Op2cgkA5PdhlXWzZRXYjwr)PVv4r2XSSAfSCIWtVNAOvNifmSeVMH(CfRijfvuRaAj21CPtskSZB2H0vGxJqYaXCJHFidhKYKvpxCD5aLM5HGVlv7zat186bc0txlIggliWRNvqzY0YlQt(ZGI64yFAn5bSM5ToIdVfME6hYa)y6mItXl5WE5Sxd(cs4XUedMDdXKryXwl8optnd4TOxiSpZrcNlsufXScJ5D8cbHdYKAaCaeIdDXeO5z13GtufG)T(zjgXzheh2)bljJ9P4tmVEyV9E6H1p5HK7FLexc1GcMupYQYCH6J5XB9lVbeudh)GPRyGMJnPYoVUKihFEfddLYtxlEd9JQAYCFli4MzNZsIOpIdO0n0yXH5gXnxO3rHk6O6jpjdvXTqe8XKkNvctrsWKAKo9bpffjA4iPZ0zvUD05uuZsIBmC9oDT6f)2xeDVSoomzXpsTJAplxTKrnnIRTRNpgsDtQngl(x32uNxEalwL9)yn9OQ7UP9irHWhQO15JTqJPV)GErkC)6yWljcaAAJvyGxUzVWdFJg88(mDqJA1fgpco0Ku7ax4s8Y8AIfSepywSPFoVL0cnplxvIN(jWMuSL53(ZCr4UPj)0oQgVRO2oVYtTWjWZHir86HTwqbIWtrJhhubisjEMfrWcPS1QU5BqFXI19ch(jKiIa3(T6nZApWxyCg17aFppoYABm7RhjxtQu1fBD2XSUc66QOyRjv6vkUIg9wM4Qjvg1dTwKsXdrwIPJgskuiF9Yo6uLBRyQ32jMIejjImwsNMudJKxmPo1QlnAsDAtQrXf8mMupPJmNj1zBsEZK6nxtqZK6PmPgdxxMuOUpl5DLhDxHnK4YNVM4YIobpJAbeP4FaYAveG)LyGxC)94fbCu70jEXQjmHJtP(H)WgIOgICHjvjtkKDrIOM15mPghd3nPK(GpeUNw2cJBsjBsPGYGAeSjmMuAldDAsPJEQXghe6YEhRSIDQneg85aJwgNLnImXyseme15iXDjuHbMGbMKbMIbQYaxGeALnbnpARHMLzljwymjKWopocDW(AxuYOQf(mkxFNlXPNkCGm(Al(03nQ4t4lV)aERh8diKjcSGbkjySOEBkkoyu3tZHtJd7)AaNU9UZ1sGQ6oxUz1BcOwRy5Iy36MnXjQB2cIZd2A0PGIu1XqAIqdIwrrhbwMDWuHdw(cLYkX1wyP)xZalxdEgaBx8eeCzdM7IHa9RUZOO1wW5jA9VDimsDTSU9vLaRng)EvAj8pWACj8JAfb6RcLOZA3piI)Jg)TlX2aVNfCrPq4b8MzY0HZnvBHlDvhUm61PWLN3jkAT)qXiFvpfJKn3WPAkiCx2SOWLC2hWMJHxtQNgkUiU8Jny8OdeovIOTTImPEMMlBe8c4xraa3JfJsRkWI4c06x2LPKArtNQVHZgFfLjGtOV362iD605wrP6I86A9BY2)cRCOie5T4VLDSmHJMOVr3ifvDNzJoq604qEnxCA6HZK7Yu81L6SxO(oK0vGUnPsAsn4LXJ1RUwQ78l1sTuZ2hpRMNtXQXTjPDkG131Wgr70OwANquix2Dud17QrMysn9YSG6HAJok(PkOOvqu3E939O2DMrY4pEIZCU2s5e46EkN1NHt130KUdG3Re)EPdemqxHO93t3(6fNG)ibd2BV0O76j0LX30Rog8TozlXGZpilAjRXeXtlBeu4ArXyDHWnl9I37AxV4AfuJgUwDq9Q4xjwTcSY8OvhORZrgqTW1D5lI3kJE(bhiEM2IRdEdiU2EFsIeLv3Og01ATanbB)8nGnxmm5Bz2ZWKabcJ(qWuTSIs8YfQV4ZA2XHHOyCS02FSF(nmi9Y5dKRFrPOo9QJspsB9RIyzvvbwDEDbXIg2eWSXtovjw(49y0wGA3VMbO61K6yZ58XXaB55Rh(PrJH3RerzoprKqGt17TX0BmqxJXZAiupsxB4XeFs1C5S3chLIEge9mr5snxo7aBvPqf96BMJv5W(We94IvWXeU6900ZyfL9KTIk5Bkc)0D34ttI9r7KO51MtUULf13ONh(MByNEmP6zhxPBZJjvix2FE2MuhhF5rx5g6ys9yc27LJj1J7SloMuVryNB1K6ja06nFt3Ijv49thZKkc6UOiyp624Mu9r2pgtQ(D2ig1oD2wmBhVQBsLy5Bcd1vL9GjGi7Wfz7pw5Ehat5Tw2g6LP)DoSNKdlnjBv9A6HV)3Bl1dpNduSTQHVc3)51V3GfwxMngEngfwRyJBEr8(8yFWAWyrhrxIlw84tiyuy42SrYMuFaeDKaHok8vTDs(e1xQXCkY1qAl7J2KbeGt2WssMFzBO8AEdNx9SiqQchTUxoiOCRmb8tu3eW3sRDwwNnq3DCl(U1dg8Q3h506bR(9D9TUMIpnP(K24YEILsW)WElmAUXBlU8dUjGlptZ4TRi84xgkU)Gn(f0j0qg22LhWUTRca2wWzUK1UVvxOZg8I35TwaEnPo)1i(Y1C86CvdeUITlRbq4Oro)OHYD4GkdX2wq4hAtaeUoIERngeOboRlgO1CwDSctTEvuT5kxL76Mv65wTnVApmwXFvJBJ12WdlRk0qxi(PILKVpJdhQTqJxytvV5vo)01a9LTe79PQH96991AxM0Gz83WY9G67RUcWsJMPhFrsZQW1wa2h(1MCp1N)FdjB58)snVATByHaOU)Qcbopl7HoCq5Hc23OTfc8rEnoe4IV0QS)YlFv53WIcU4lT6OGPuv71yyn9HKVqBrb)UV2gfe7OTE7BQ77LBuN8rD8vDUpM)jm071O)8NyG2o3)rFnodWQS3DMuVZByf5T3qVwoTNpXaDpIKxLdvowBN2)yV6oTJD8lnDI(hihSL91WrlWaksvXrQzb96og13MLFrJKmEF5ARRrzUA6AuNdBas)RfEf9BFvXROYN70HIWLkDm((wRHGZlq8dAujfzEDgRbZJq3vx(c6JURa9emWgiG0VUyFhVR14o6eEJ9j1ys95SxSF1rpfTXOQEpZPBRq3FE9nMz5cDKny7mwBmdEofVDkp1CKy3otfjDERnHHS)l(WqZZA)33mdzVvgXpbWwGPvcRnu3w5meQ67SkvNt9dwxBud5tT5C13hJJ6jNMO848gEIL(uPu3VZXgc(aDgTUFdbE0IW00XhIiw5X5OfjUmF5Q1QGgK)hoShfz8rZC1g2jHbRs(gBQ0ygTQa85aDl)uzqef32vnIctQEV2rtSGdnXezAbjb3vNVFLEhQsE9q9nvu9rwlSeF6x3wWNZotlAWxMeO9j(e4XoS6yOF17SfbzFcuopSt0LAP0Ebsi3BxhiMMi47D8g9lzs9YBpXhWPMnP(glVkmPmzWa6V5Yk2eV9nwXE2nuXExVYgRyFV1vXGJ4NvU6Yzxz28m)ynhvInTB2FnlwWQj5kezGtQoue(2Yc(3Sjy6X6mMtxDZjVV3uRxq5UAfR26oGC2eN6wRHKaQd2UjXsQvd0)HUWHspXHB7K4x(v)jrCaT3VM9bG)(Od43FV(TeVgXVp)EXhP5KVKhp4GBXt2kfkWJppsH7d1VNV(xZtcoMwf0lxJT7Fnj4TNwoH19KL7jmT)H5I02jm46GjmtQVat9ZxhV(8gcDnG3aKRbNxLxdFyZIpevNMTyr(cg4jl41Ve(RluuMpJ1ZzwTJcJRRdn81QPOjUsWcNUyxgdv6qLgNFY2gGqFL62HM4vlSWl7GfE2iH853p(sa8bCwOqKJ5mV4Vt2q94VBVbXhfa(iNnf(q2s9pzs9kKdba0iGj137kaoC96x4)veg4e96pXK(gpR3ZNQTyGf3eXaENtxLvBCYN79Uj4b8)2vyD04rEs9J6z1oA63Kd17lIApcou81CrZxNmJRUlmZn(yNtuJN4O)CKtXXv9ZlTgmGCu9zFsSrMHScnQPZZA)pFloNc0whnJO1LEsHfinpRJIUrrg)F89a3984dRAuXgd9)ZShcYa(kRxGXInEqMoV1jlNL)qEpmWxfFCLsym(Autqql1oy5SoJ09JEZTb)CVRh8ZsKEy9JuD)HJfdFEBIbuwZIoNlFyPA8zEPM9aacZ044ZPPMLmgRlI)iexyJVmLgilMNu)dq(hrKhhodDujEwzeQ169w70PVHVqvSUEr5sry1o7WjoQZVoAwcoJuSgKc(QiHdY)sBm2pGaHFI5LILiPy1kL9wudjqy)(f544LPtfFK40WxWKAoi2Z6CqgtdfPJrpCIyR8ZBia5mJ3BaY33WpQPIKFGHj)BqttFahOm3DpexJ0L1NCzlkyKbd3F8vuSa(So)YXi3w960Yeoz4yjsTIc2B3nCO82vlkjSSpBdxUAvVj7aHhmCZ1U1)sNq(mwc1tRAsNkmDY0rp5kAsbjDJG(inPExwjnP4HI73FJXftlpD(rLbZg9zih874VjMol3jxNCZCFnF6Pc9cFhs84(IMuFomjQ9ryk(4l9VA7xFF8Lc3YkpXsRKZVwiX(54MC8wCIL2PoDxhl4X825e38p3)Zp
 ```

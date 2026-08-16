@@ -23,25 +23,48 @@ use GitHub's copy button on the block to grab the whole string in one click.
 
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
-| Rogue — All Specs | Combat · Assassination · Subtlety | v53 | 58 | [string](tbc/rogue/README.md#import-string-v53) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v15 | 45 | [string](tbc/paladin/README.md#import-string-v15) · [raw](tbc/paladin/all-specs.txt) |
-| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v14 | 45 | [string](tbc/druid/README.md#import-string-v14) · [raw](tbc/druid/all-specs.txt) |
-| Warlock — All Specs | Affliction · Demonology · Destruction | v13 | 40 | [string](tbc/warlock/README.md#import-string-v13) · [raw](tbc/warlock/all-specs.txt) |
-| Hunter — BM & Survival | Beast Mastery · Survival | v14 | 49 | [string](tbc/hunter/README.md#import-string-v14) · [raw](tbc/hunter/all-specs.txt) |
-| Priest — All Specs | Shadow · Holy · Discipline | v13 | 41 | [string](tbc/priest/README.md#import-string-v13) · [raw](tbc/priest/all-specs.txt) |
-| Mage — Arcane & Frost | Arcane · Frost | v13 | 44 | [string](tbc/mage/README.md#import-string-v13) · [raw](tbc/mage/all-specs.txt) |
+| Rogue — All Specs | Combat · Assassination · Subtlety | v54 | 58 | [string](tbc/rogue/README.md#import-string-v54) · [raw](tbc/rogue/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v16 | 45 | [string](tbc/paladin/README.md#import-string-v16) · [raw](tbc/paladin/all-specs.txt) |
+| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v15 | 45 | [string](tbc/druid/README.md#import-string-v15) · [raw](tbc/druid/all-specs.txt) |
+| Warlock — All Specs | Affliction · Demonology · Destruction | v14 | 40 | [string](tbc/warlock/README.md#import-string-v14) · [raw](tbc/warlock/all-specs.txt) |
+| Hunter — BM & Survival | Beast Mastery · Survival | v15 | 49 | [string](tbc/hunter/README.md#import-string-v15) · [raw](tbc/hunter/all-specs.txt) |
+| Priest — All Specs | Shadow · Holy · Discipline | v14 | 41 | [string](tbc/priest/README.md#import-string-v14) · [raw](tbc/priest/all-specs.txt) |
+| Mage — Arcane & Frost | Arcane · Frost | v14 | 44 | [string](tbc/mage/README.md#import-string-v14) · [raw](tbc/mage/all-specs.txt) |
 
 Every pack is class-gated and auto-adapts across the **supported builds listed in the table**
 through Spell Known gates. The current product scope is primarily level-70 single-target
 raid/dungeon play plus the explicitly documented PvP layer; AoE, levelling and omitted specs
 are named in each pack README rather than implied by the `all-specs.txt` filename. Druid v7
-also adds an active-form state gate so Cat never receives the Bear rotation, v8 replaced the
-centre bar stack with unit orbs, v9 put those orbs on one shared size, v10/v11 turned them
-into Diablo-style globes and v12 brought the rings and the portraits back — and **Druid v13
-deletes the target cluster and brings threat home**, at the geometry every pack now shares: one
-cluster at `(-270, 40)` of a 100px **threat** ring, an 84px health ring and a 62px form-adaptive
-power ring around a 44px **live 3D portrait**, with the percentages just outside the arcs because
-a `model` region cannot carry text.
+also adds an active-form state gate so Cat never receives the Bear rotation.
+
+### The Sill — the vitals geometry every pack now shares
+
+The health/power/threat display has been through five shapes: a centre bar stack, unit orbs,
+one shared orb size, Diablo-style globes, and concentric rings around a live 3D portrait. All
+seven packs now ship **the Sill** — a **102×31 instrument strip** (102×37 where the class has a
+discrete resource) sitting at absolute **(0, −110)**, directly under your character:
+
+| lane | size | reading rule |
+|---|---|---|
+| alarm rim | plate +3px per side | pulses red at ≥80% threat; drawn **first**, so only the rim shows |
+| plate | 102×31 | a near-black ground, so 11px rails survive snow, lava and Shattrath at noon |
+| threat | 100×4 | green → orange at 70 → red on aggro; **absent** when you are on no threat table |
+| health | 100×11 | fill, exact % inside the rail, colour flips inside your defensive window |
+| power | 100×11 | fill, exact % or raw value, with ability costs drawn as waterlines |
+| resource | 5×(16×6) | rogue combo pips / mage arcane stacks; omitted where a class has none |
+
+**Each rail is exactly 100px, so one pixel is one percent.** That is the lever the whole design
+turns on: every breakpoint becomes `x = value − 50` instead of the trigonometry a ring needs —
+the rogue's 35-energy mark moves from `(23.575, −17.128)` to `x = −15`. It also cuts the
+footprint from 10,000 px² to 3,774 (12,408 → 3,774 on the rogue, whose pip row was separate),
+deletes the 3D portrait — 1,936 px² carrying no decision — and puts every number on a dark bed
+instead of on a moving model.
+
+Two facts the build pins by assertion, because both are invisible in a screenshot when wrong:
+`Square_White_Border.tga` is a **filled** square (64,516 of 65,536 pixels fully opaque), so the
+threat alarm must be *larger than the plate and drawn underneath it* or it washes red over every
+readout at exactly the moment you need to read them; and draw order is `controlledChildren`
+order at +4 frame levels per child, so the flat transmit list must stay depth-first to match.
 
 Every pack also carries a **PvP layer**: elements that exist only inside an
 arena or battleground (CC-on-you with the break decision, trinket availability, enemy trinket
@@ -55,27 +78,16 @@ acceptance note instead of presenting static serialization as an in-game test.
 
 ## Packs
 
-- **tbc/rogue/all-specs.txt** — full HUD, v53 of a 53-iteration build: since **v52 a single
-  ring cluster**: the target cluster is deleted (its health duplicated the target frame and the
-  nameplate for the whole game, and its ring track existed only to keep a spare UID alive) and
-  **threat comes home as your own outermost arc**. Three concentric rings around a **live 3D
-  portrait** of you at `(-270, 40)` — a 100px **threat** ring, an 84px health ring, a 62px
-  energy ring and a 44px portrait — where `-270` is the tightest position the vertically-growing
-  Alerts column cannot climb into at any stack depth (the cluster spans `x -320..-220` against
-  the column's `-170..-130`). The energy ring keeps its **35/40 breakpoint marks on the
-  circumference** (dim where the breakpoint is, lit the moment you can afford Eviscerate or
-  Sinister Strike); threat is green, orange at 70%, red on aggro, with the percentage above the
-  ring and the 80% halo resized onto it, party/raid-gated and never in an arena, so the common
-  solo case is still two rings and a face. **v53 puts the health percentage in the middle of the
-  cluster at 16pt, over your own face** — which needed the portrait moved to the *front* of the
-  child list so the rings, and their text, draw above it; a ring paints only its own band
-  (`r 42.19..50`, `35.44..42`, `26.16..31` against a portrait at `r 0..22`), so nothing of the
-  face is covered. Raw energy takes health's old slot at 12pt, threat stays above the outer ring.
-  62 auras become 58 at v52 with all 57 survivors keeping their UIDs, and 58 stay 58 through v53;
-  the leftover `Rogue - Target Cluster` group must be deleted by hand once after updating. On
-  the v47/v48 **unit orbs** the
-  design returns to (they in turn replaced the centre bar stack), combo pips (always-visible sockets, green→orange
-  gradient, and a brief scale/brightness pop whenever a point is gained),
+- **tbc/rogue/all-specs.txt** — full HUD, v54 of a 54-iteration build: since **v54 the Sill**
+  (see the shared geometry above), the widest version of it at **102×37**, because the rogue is
+  the one pack whose strip carries a fourth lane. The **five combo pips move into the strip**,
+  16×6 on their own row 1px under the energy rail, so "do I have the points" and "can I afford
+  the finisher" collapse into a single fixation instead of two reads 233px apart. Energy stays a
+  **raw number, not a percent** — 35 and 40 are absolute costs — and its two breakpoints are
+  waterlines the fill crosses at `x −15` and `x −10`, dim where the breakpoint is and lit the
+  moment you can afford Eviscerate or Sinister Strike. The alarm rim is 108×43. 58 auras in, 58
+  out, every UID stable. Also: combo pips keep their green→orange gradient and the brief
+  scale/brightness pop on gain,
   spec-adaptive cooldown row
   (16 spells, talent-gated, tooltips + keybind labels), animated alert flow (SnD missing,
   Riposte window, Feint-at-70%-threat, Evasion-below-50%-HP), weapon enchant proc tracker
@@ -85,50 +97,29 @@ acceptance note instead of presenting static serialization as an in-game test.
   Locale-independent (pure spell-ID matching, built on a
   zhCN client). Combat / Mutilate / Subtlety auto-adapt via spell-known gates.
 - **tbc/paladin/all-specs.txt** — seal uptime + missing alarm, own Judgement debuff, Holy
-  Shield uptime, and since **v14 a single ring cluster**: the target cluster is deleted (its
-  health duplicated the target frame and the nameplate for the whole game) and **threat comes
-  home as your own outermost arc**. Three concentric rings around a **live 3D portrait** of you
-  at `(-270, 40)` — a 100px **threat** ring, an 84px health ring, a 62px mana ring and a 44px
-  portrait — where `-270` is the tightest position that the vertically-growing Alerts column
-  cannot climb into at any stack depth (the cluster spans `x -320..-220` against the column's
-  `-170..-130`). Threat is green, orange at 70%, red on aggro, with the percentage above the
-  ring, party/raid-gated and never in an arena, so the common solo case is still two rings and
-  a face. Since **v15 the health percentage prints in the middle of the cluster**, 16pt on your
-  own portrait, which needed the portrait moved to the *front* of the child list so the rings —
-  and their text — draw over it; a ring is an annulus, so the face stays visible and only the
-  number lands on it. Mana moves up into the slot health left, at 12pt.
-  48 auras become 45 with all 44 survivors keeping their UIDs; the leftover
-  `Paladin - Target Rings` group must be deleted by hand once after updating from v13 or
-  earlier (v15 removes nothing). Plus the seal-twisting swing
-  runway and a 14-icon cooldown row that shows only what is
+  Shield uptime, and since **v16 the Sill** (see the shared geometry above) at 102×31. This is
+  the pack where the mana rail earns its pixels most: a Holy paladin has **no low-mana alert
+  anywhere in the pack** — verified by decode, there is no `percentpower` trigger — so the rail
+  and its **20% waterline** are the only mana signal there is. **v16 also gives the seal-twisting
+  runway a mark you can see coming**: the twist window is an absolute 0.4s but the runway's
+  length is your weapon speed, so the mark is placed by `subtick` at
+  `tick_placement_mode = "AtValue"` — re-read against the live `maxValue` every update, correct
+  at any weapon speed and under any haste — with the exact time left printed at one decimal
+  beside it. The bar still turns gold inside the window as the fallback cue. 45 auras in, 45
+  out, every UID stable. Plus a 14-icon cooldown row that shows only what is
   unavailable (rotational buttons stay visible and glow when ready); Holy / Protection /
   Retribution adapt via Holy Shock, Holy Shield and Crusader Strike gates, and the row is
   spec-selective — a healing Holy paladin is not shown Consecration or Avenging Wrath. PvP
   layer: CC-on-me, HAMMER NOW, target immunity, trinket and Forbearance clocks, Cleanse.
-- **tbc/druid/all-specs.txt** — since **v14 your health percentage sits in the middle of the
-  cluster**, 16pt across your own portrait, which is the only opaque backdrop the HUD owns; that
-  needed the portrait moved to the *front* of its group's `controlledChildren` (first = furthest
-  behind) so the rings' text draws over the face instead of under it, and it hides nothing because
-  an annulus's band starts at radius 26.16 while the face ends at 22. Power moves up into the slot
-  health left, at 12pt; threat stays above its arc. Since **v13 a single ring cluster**: the target cluster is deleted
-  (its health duplicated the target frame and the nameplate for the whole game, and its ring track
-  existed only to keep the pair looking matched) and **threat comes home as your own outermost
-  arc**. Three concentric rings around a **live 3D portrait** of you at `(-270, 40)` — a 100px
-  **threat** ring, an 84px health ring, a 62px power ring and a 44px portrait — where `-270` is
-  the tightest position the vertically-growing Alerts column cannot climb into at any stack depth
-  (the cluster spans `x -320..-220` against the column's `-170..-130`). The power ring is
-  **form-adaptive**: one arc follows mana, rage or energy as you shapeshift and is always coloured
-  for what it is actually reading, with the bear's 20/70 rage breakpoints as pips on its
-  circumference at 72° and 252°. Threat keeps both spec gates (bear ring tank-inverted, caster
-  ring green → orange at 70% → red on the flip), the not-in-arena gate and the
-  `threatvalue <= 0 → alpha 0` guard, with `%threatpct` above the ring — this pack gates threat by
-  spec rather than by party/raid, and the guard plus the target-less trigger is what keeps the
-  common case to two rings and a face. The percentages are sub-regions of the *rings*, since a
-  `model` region cannot carry text — but v14 puts the health one over the portrait anyway, because
-  the number only has to land on the face's pixels, not live on its region. 48 auras become 45
-  with all 44 survivors keeping their UIDs; the leftover `Druid - Target Health Ring`,
-  `Druid - Target Ring Track` and `Druid - Target Portrait` must be deleted by hand once after
-  updating from v12 or earlier (v14 removes nothing). Lacerate stacks and Mangle debuff,
+- **tbc/druid/all-specs.txt** — since **v15 the Sill** (see the shared geometry above) at
+  102×31. The power rail is **form-adaptive**: a single region whose Power trigger deliberately
+  omits `use_powertype`, so it follows mana, rage or energy as you shapeshift and recolours for
+  whichever it is actually reading, with the bear's **20 and 70 rage breakpoints as waterlines**
+  at `x −30` and `x +20` instead of pips at 72° and 252° on a circumference. Threat keeps both
+  spec gates (bear rail tank-inverted, caster rail green → orange at 70% → red on the flip) and
+  the `threatvalue <= 0 → alpha 0` guard — this pack gates threat by spec rather than by
+  party/raid, and it has no alarm rim, because it never had a threat flash to carry across.
+  45 auras in, 45 out, every UID stable. Lacerate stacks and Mangle debuff,
   Demoralizing Roar, Lifebloom/Rejuvenation/Regrowth
   timers, Moonfire and Insect Swarm, Omen of Clarity proc, and an 8-icon cooldown row showing
   only what is down (Mangle keeps its ready glow); Bear / Restoration / Balance gate on
@@ -137,54 +128,33 @@ acceptance note instead of presenting static serialization as an in-game test.
   target immunity, trinket clocks, own Cyclone/Roots per opponent.
 - **tbc/warlock/all-specs.txt** — the five own-DoT timers (Corruption, Curse of Agony,
   Immolate, Unstable Affliction, Siphon Life), Demonic Sacrifice and Fel Armor upkeep,
-  Nightfall and Backlash proc alerts, Life Tap and Soulshatter prompts, and — **v12 —
-  ONE ring cluster**, at absolute `(-270, 40)`: three concentric arcs around a 44px **live
-  3D portrait** — **your threat** on a 100px outermost ring (green → orange at 70% → red on
-  aggro, percentage above the cluster, pulsing halo at 80% on the same radius, party/raid
-  only and never in an arena), health on the 84px ring (green, amber at 60%) and mana on the
-  62px one (blue, violet at 30%) — the two halves of the Life Tap decision on one object.
-  **v12 deletes the v11 target cluster** (its health duplicated the target frame and the
-  nameplate) and moves threat onto your own rings rather than losing it; 44 auras → 40, every
-  surviving UID byte-identical, and the README names the one leftover group to delete by hand
-  after updating from v11 or earlier (v13 removes nothing). Since **v13 the health percentage
-  prints in the middle of the cluster**, 16pt on your own portrait, which needed the portrait
-  moved to the *front* of the child list so the rings — and their text — draw over it; a ring
-  is an annulus, so the face stays visible and only the number lands on it. Mana moves up into
-  the slot health left, at 12pt. Plus a 7-icon cooldown row showing only what is down. PvP
+  Nightfall and Backlash proc alerts, Life Tap and Soulshatter prompts, and — since **v14 —
+  the Sill** (see the shared geometry above) at 102×31, which puts the two halves of the Life
+  Tap decision on one object and one horizontal scale: health green with amber at 60%, mana
+  blue with violet at 30%, one directly above the other so the trade is a single glance rather
+  than a comparison between two arcs of different radius. 40 auras in, 40 out, every UID
+  stable. Plus a 7-icon cooldown row showing only what is down. PvP
   layer: CC-on-me, target immunity, trinket clocks, per-opponent enemy mana for the drain
   decision.
 - **tbc/hunter/all-specs.txt** — Serpent Sting and Hunter's Mark timers, Bestial Wrath and
   Rapid Fire windows, aspect-missing and back-to-Hawk alarms, Kill Command reactive prompt,
-  pet health prompts, Misdirection/Feign Death threat pairing, proc tracker, and — **v13 —
-  ONE ring cluster**, at absolute `(-270, 40)`: three concentric arcs around a 44px **live 3D
-  portrait** — **your threat** on a 100px outermost ring (green → orange at 70% → red at 90% →
-  deep red on aggro, percentage above the cluster, pulsing halo at 80% on the same radius,
-  party/raid only and never in an arena), health on the 84px ring (green, red below 30%) and
-  mana on the 62px one (blue, red at the 20% Go-Viper threshold, with both aspect-swap
-  breakpoints marked on the arc's own circumference by trigonometry from the ring radius).
-  **v13 deletes the v12 target cluster** (its health duplicated the target frame and the
-  nameplate, and it still carried the old target-mana satellite as a track ring) and moves
-  threat onto your own rings rather than losing it; 54 auras → 49, every surviving UID
-  byte-identical, and the README names the one leftover group to delete by hand after updating.
-  The percentages sit just outside the arcs, because a model region cannot carry text. Plus an
+  pet health prompts, Misdirection/Feign Death threat pairing, proc tracker, and — since **v15 —
+  the Sill** (see the shared geometry above) at 102×31. Both **aspect-swap breakpoints are now
+  waterlines** at `x −30` and `x +30` — the 20% Go-Viper and 80% back-to-Hawk thresholds — placed
+  by `x = value − 50` rather than by trigonometry from a ring radius, and as standalone textures
+  rather than sub-regions they can finally carry their own load gates, which a sub-region cannot.
+  49 auras in, 49 out, every UID stable. Plus an
   11-icon cooldown row showing only what is down (Multi-Shot and Arcane Shot keep their ready
   glow); BM and Survival only. PvP layer: CC-on-me, SILENCE NOW, trinket clocks, enemy mana.
 - **tbc/priest/all-specs.txt** — Shadow Word: Pain and Vampiric Touch timers, Vampiric Embrace
   and Inner Fire uptime, Shadowform-missing alarm, Weakened Soul shield-timing on the heal target,
-  Fade and Shadowfiend prompts, and — since **v12** — **one ring cluster around a live
-  portrait of you** at `(-270, 40)`: **threat on a 100px outermost ring** (green, orange at
-  70%, red on aggro, hidden at zero threat and out of arena), health on the 84px ring, mana on
-  the 62px one and your face at 44px, all four concentric. The v11 target cluster at
-  `(+270, 110)` is **deleted** — target health was already on the target frame and the
-  nameplate, so it duplicated the default UI — and threat moved to your own body because it is
-  the one thing that cluster showed that nothing else does. Updating leaves three orphan auras
-  to delete by hand (`Priest - Target Health`, `Priest - Target Track`,
-  `Priest - Target Portrait`). Since **v13** the **health percentage sits dead centre on your
-  portrait at 16px** with mana at 12px just under the outer ring: a model region cannot carry
-  text, so every number is still owned by a *ring*, but the portrait was moved to the back of
-  the cluster's draw order so a ring's text can land on the face (an annulus hides nothing —
-  the bands are 26.2–31, 35.4–42 and 42.2–50 around a 22px face). The 40% health and 50% mana
-  breakpoint marks are pips on their own ring at the angle the threshold implies. Plus the arena/BG-only
+  Fade and Shadowfiend prompts, and — since **v14 — the Sill** (see the shared geometry above)
+  at 102×31. The **40% health and 50% mana breakpoints become full-height waterlines** rather
+  than pips at whatever angle the threshold implied on a circumference. This pack also gains a
+  proper cluster group in the process: its vitals used to carry their screen offset smeared
+  across four leaf regions, so the display could not be dragged or disabled as one object.
+  41 auras in, 41 out, every UID stable, and it has no alarm rim because it never had a threat
+  flash to carry across. Plus the arena/BG-only
   PvP layer
   (CC-on-me colour-coded by CC category, Fear Ward and Mass
   Dispel prompts, trinket clocks, UA-on-ally warning, and a per-opponent enemy mana bar for
@@ -192,27 +162,14 @@ acceptance note instead of presenting static serialization as an in-game test.
 - **tbc/mage/all-specs.txt** — Arcane Blast stacks (the Arcane rotation driver), Arcane Power
   and Icy Veins burn-window timers, Ice Barrier uptime and missing alarm, Clearcasting proc,
   mana thresholds with Evocation/mana-gem prompts, Ice Lance shatter window, and a 10-icon
-  cooldown row showing only what is down; Arcane and Frost only. v7 replaced the centre
-  health/mana/threat bar stack with two unit orbs, v8 put them on the shared ring geometry,
-  v9/v10 turned them into Diablo-style globes and v11 brought the rings and live portraits back
-  — and **v12 deletes the target cluster**, leaving **one ring cluster around a live portrait of
-  you** at `(-270, 40)`: **threat on a 100px outermost ring** (green, orange at 70%, red on
-  aggro, a flare pulsing on it above 80%, the percentage 10pt above the cluster, hidden at zero
-  threat and never loaded in an arena), health on the 84px ring, mana on the 62px one and your
-  face at 44px, all five regions concentric. The v11 target cluster at `(+270, 110)` is gone —
-  its health duplicated the target frame and the nameplate all game, and its outer track existed
-  only to hold a UID — while threat moved onto your own body because it is the one thing that
-  cluster showed that nothing else does. 48 auras → 44, every surviving UID unchanged, and
-  updating leaves one group to delete by hand (`Mage - Target Cluster`, with its three
-  children). **v13 makes the percentages readable**: health moves to the dead centre of the
-  cluster at 16pt, drawn **on your portrait** instead of floating 54px below it on bare screen,
-  and mana takes the vacated slot at 12pt (threat is unchanged at 10pt above the cluster). That
-  required reordering the cluster so the **portrait draws first (furthest back)** rather than
-  last — otherwise the face covers the health ring's own text and the move is invisible — which
-  hides nothing, because no ring paints inside radius 26.16 and the face ends at 22.00. No aura
-  added or removed and every UID stable. The Arcane conserve breakpoint is a bead on the mana
-  ring's circumference at the angle its 30% threshold implies.
-  PvP layer: CC-on-me
+  cooldown row showing only what is down; Arcane and Frost only. Since **v14 — the Sill** (see
+  the shared geometry above) at **102×37**, the wider variant, because the mage is the second
+  pack with a fourth lane: the **Arcane Blast stack counter moves off the buff row and into the
+  strip** as a 100×6 lane fed by the debuff itself, so the lane's *length* is how long you have
+  before the stack falls off while its three pips show how many you are holding — two facts in
+  600 px² where the icon spent 1,600. The 30% conserve breakpoint becomes a waterline at
+  `x −20` instead of a bead at the angle its threshold implied. 44 auras in, 44 out, every UID
+  stable. PvP layer: CC-on-me
   colour-coded by category, COUNTERSPELL NOW plus its lockout bar, target immunity, trinket
   clocks, own Polymorph per opponent, enemy mana.
 

@@ -1,4 +1,4 @@
--- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v14).
+-- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v15).
 -- Run: lua5.1 generate.lua   (toolkit libs live in ../../tools/tbc-weakaura-creator/scripts/,
 -- fetch them once with that directory's setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (copy whole -> /wa -> Import).
@@ -396,6 +396,74 @@
 --   * NOTHING ELSE CHANGED: no trigger, load gate, condition, colour, size, position, text
 --     token or text colour anywhere in the pack. The threat number keeps its 10pt / +58.
 --
+-- v15 (THE SILL — the ring cluster becomes a 102x31 instrument strip under your feet) — see
+-- README "## v15 — The Sill". NO aura is added, removed or re-uid'd: 45 tables before, 45
+-- after, every uid byte-identical, so the import dialog still offers Update. What changes is
+-- geometry, region type and draw order — all of which travel in the dialog's ARRANGEMENT
+-- category, which must be left ticked.
+--
+--   THE THESIS. A ring buys gauge length with area squared and spends most of it re-drawing
+--   states the eye cannot separate on a curve. A 0-100 quantity has exactly 100 distinguishable
+--   states, so the lossless gauge for it is 100 PIXELS LONG: one pixel is one percent, and
+--   every breakpoint becomes arithmetic instead of trigonometry —
+--       x(v) = (v / maxpower - 0.5) * RAIL_LEN,  which for a 100-max resource is x = v - 50.
+--   Compare v14's ring, which needed r = size/2 * 0.94; x = r*sin(2*pi*f); y = r*cos(2*pi*f)
+--   and landed 20 rage on (28, 9). The cluster was 100x100 = 10,000 px2, of which the 44px
+--   model was 1,936 px2 (19.4%) carrying zero decisions. The Sill is 102x31 = 3,162 px2 and
+--   carries strictly more: three gauges, two numbers, three ruler ticks per rail, a 70-threat
+--   notch and two rage waterlines.
+--
+--   THE STRIP, four stacked lanes, all offsets LOCAL to `Druid - Player Sill` which resolves to
+--   ABSOLUTE (0, -110) — under the character, not on the waist:
+--       plate        texture         102 x 31  at (0,  +3)
+--       threat rail  progresstexture 100 x  4  at (0, +15.5)
+--       health rail  progresstexture 100 x 11  at (0,  +7)
+--       power rail   progresstexture 100 x 11  at (0,  -5)
+--       (lane 4, the discrete-class-resource pip row, does not exist for a druid)
+--   Lane stack arithmetic: 4 + 1 + 11 + 1 + 11 = 28 of content spanning local +17.5..-10.5,
+--   plus a 1px margin all round and the 1px border art -> 102 x 31 centred on local (0, +3).
+--
+--   WHY (0, -110) AND NOT THE WAIST. A 102x37 rectangle scan of all seven packs (dynamic groups
+--   projected six clones deep) is clean at y -21, -100 and -110 and dirty everywhere between.
+--   -110 has the best margins by a wide margin: 11.5px to paladin's and hunter's buff rows at
+--   y -80..-40 and 7.5px to the other five packs' buff rows at y -176..-136. This pack's own
+--   strip is only 31 tall, so its clearance to `Druid - Buffs` (y -176..-136) is 13.5px. The
+--   scan is re-run from the ASSEMBLED tables at the bottom of this file and fails the build on
+--   a single overlapping pixel.
+--
+--   MIGRATION — every uid is recycled in place, none is drawn or discarded:
+--       uid 2   Druid - Rings              -> Druid - Player Sill    (group, renamed + re-laid)
+--       uid 6   Druid - Player Health Ring -> Druid - Health Rail    (84x84 ring -> 100x11 rail)
+--       uid 7   Druid - Player Power Ring  -> Druid - Power Rail     (62x62 ring -> 100x11 rail)
+--       uid 10  Druid - Threat (Bear)      -> same id, 100x4 rail
+--       uid 11  Druid - Threat (Caster)    -> same id, 100x4 rail
+--       uid 33-36 Rage Mark x4             -> power-rail WATERLINES at x -30 / +20
+--       last-2  Druid - Player Portrait    -> Druid - Sill Plate     (model -> texture)
+--   Re-parenting, renaming, re-typing and resizing are all free; only the uid() CALL ORDER is
+--   sacred, and not one call moves.
+--
+--   WHAT IS LOST, said plainly:
+--   * THE LIVE 3D PORTRAIT IS GONE. Its uid becomes the plate: a 102x31 Square_White_Border
+--     quad in black at 45% alpha, drawn FIRST so every rail and every number sits on something
+--     opaque. v14 put the health number on the face because the face was the only opaque
+--     backdrop the HUD owned; the plate is that backdrop, at 1/62nd of the ink and none of the
+--     decoration. The face itself never changed a druid's next button press.
+--   * THE THREAT PERCENTAGE IS SWITCHED OFF, not deleted. sub.1 keeps its index (a user can
+--     re-tick it in /wa) with text_visible = false. threatpct is SCALED so 100 = pulling aggro,
+--     which makes it an early-warning ratio rather than a quantity you act on; a full-height
+--     notch at the 70 line answers "am I close" faster than reading 68 vs 72.
+--   * THERE IS NO ALARM FRAME IN THIS PACK. The Sill design gives the 80%-threat pulse to the
+--     `<Pack> - Threat Flash` aura. This pack has never had one — v13's notes already record
+--     that decoding v12 for `alphaPulse` returns zero hits — and inventing one would consume a
+--     NEW uid for a region that has never existed here. The 70 notch and the aggro-red rail are
+--     the escalation this pack ships, exactly as they were.
+--
+--   WHAT IS UNCHANGED, and asserted below field by field: every trigger (including the power
+--   trigger that still omits use_powertype so it follows the current form), every load gate
+--   (both spec gates, the not-in-arena size gate, the Bear form trigger), every condition
+--   (threat escalations, health 50/25, powertype 1 rage / 3 energy, the alpha guards, the
+--   out-of-combat fade) and every colour.
+--
 -- The three auras v13 deleted, declared for the verifier (tools/verify-packs.lua reads these
 -- lines). They were the LICENCE for three disappearing uids, and that licence has now EXPIRED
 -- BY ITSELF: the tag carries the version, verify-packs.lua honours only tags matching the
@@ -427,82 +495,97 @@ local W = F.W
 local CLASS = "DRUID"
 local TOP = "Druid TBC - Bear, Restoration & Balance"
 
--- ===== CANONICAL RING CLUSTER GEOMETRY (v13) — SHARED BY ALL SEVEN CLASS PACKS =====
+-- ===== CANONICAL SILL GEOMETRY (v15) — SHARED BY ALL SEVEN CLASS PACKS =====
 -- These numbers are the contract. They are identical in every tbc/*/generate.lua and MUST NOT
 -- be edited in one pack alone: v9 exists only because seven packs each picked their own
 -- diameters and the HUD read as uneven. Derive from them; never hand-write a size, a colour or
 -- an offset anywhere below.
 --
--- CLUSTER ASSIGNMENT (v13) — ONE cluster, three concentric arcs around a live portrait, all of
--- it about YOU. The target cluster is gone: the target's health was already on the target frame
--- and on its nameplate, so it duplicated the default UI for the whole game.
---   PLAYER cluster at (CLUSTER_X, CLUSTER_Y)
---     outermost THREAT_RING = YOUR threat   (spec-gated, self-hiding — see the threat rings)
---     outer     OUTER       = health
---     inner     INNER       = primary power (mana / rage / energy, form-adaptive)
---     centre    PORTRAIT    = live player face
--- 44/84 is the portrait-to-outer ratio the layout is tuned around — a face any smaller is not
--- recognisable at a glance, any larger and the arcs stop reading as concentric. THREAT_RING sits
--- one band further out: Ring_20px paints diameter * 20/256, so the 84 ring's annulus runs from
--- radius 35.4 to 42 and the 100 ring's from 42.2 to 50 — adjacent, never overlapping.
-local RING_TEX    = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_20px.tga"
-local THREAT_RING = 100  -- outermost ring: YOUR threat (v13)
-local OUTER       = 84   -- health ring
-local INNER       = 62   -- primary power ring
-local PORTRAIT    = 44   -- live unit portrait
--- x = -270 is unchanged from v12 and is not a taste call. The Alerts column occupies x
--- -170..-130 and is a DYNAMIC GROUP that grows vertically, so a cluster level with it collides
--- as soon as a second prompt stacks. The threat ring now spans 50 either side of the centre:
--- at x = -270 the cluster occupies -320..-220 and its inner edge is still 50px clear of the
--- alert column at ANY stack depth (grow UP with stagger 0 and align CENTER cannot move a clone
--- sideways). Asserted from the assembled tables at the bottom of this file, six clones deep.
-local CLUSTER_X = -270  -- ABSOLUTE screen x of the (only) cluster
-local CLUSTER_Y =   40  -- ABSOLUTE screen y of the (only) cluster (see localY below)
+-- THE RAIL IS 100 PX LONG ON PURPOSE. A 0-100 quantity has exactly 100 distinguishable states,
+-- so 100px is the exact length at which the gauge is lossless: every pixel beyond it is
+-- redundant, every pixel below it discards a state. ONE PIXEL IS ONE PERCENT, which is what
+-- turns every breakpoint from trigonometry into arithmetic (see waterX below).
+--
+-- LANE ASSIGNMENT — four stacked rails, top to bottom, in ascending decision frequency order
+-- reading downward from the character:
+--   1  threat   100 x  4   thin, because it is a warning and not a quantity
+--   2  health   100 x 11
+--   3  power    100 x 11
+--   4  class resource — DOES NOT EXIST FOR A DRUID. Rage, energy and mana are all continuous
+--      pools already carried by lane 3, so the strip is 31 tall instead of 37 and the plate and
+--      its lanes sit at local y +3 rather than 0. Every rail keeps the same local offset as in
+--      the four-lane packs, so the three gauges land in identical places in all seven.
+local RAIL_TEX  = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Square_White.tga"
+local PLATE_TEX = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Square_White_Border.tga"
+local RAIL_LEN  = 100  -- one pixel is one percent
+local THREAT_H  =   4
+local HEALTH_H  =  11
+local POWER_H   =  11
+local PLATE_W   = 102  -- 100 of content + a 1px margin each side
+local PLATE_H   =  31  -- 4 + 1 + 11 + 1 + 11 of content, + 1px margin top and bottom
 
--- Numbers, all anchored CENTER on the ring that owns them, so each appears and vanishes with its
--- readout. A `model` region still cannot carry a text sub-region — but v14 is the version that
--- noticed the number does not have to live on the PORTRAIT's region, only on the portrait's
--- PIXELS. Every one of these is a sub-region of a RING, and a ring can put its text anywhere.
---   HEALTH sits at y = 0: dead centre of the cluster, ON the face, at 16pt. It is the
---     most-read number in the pack and the face is the only opaque backdrop the HUD owns, so
---     this is the one place it is legible over a bright game background. Requires the portrait
---     to be the FIRST child of the group (see the adopt() calls) or the face covers it.
---   POWER takes the slot health vacates, y = -54, at 12pt — just under the 84px health band
---     (radius 42), where it reads as a caption to the cluster rather than a second centre.
---   THREAT is unchanged at y = +58, the one number ABOVE its arc (clear of the 100px annulus at
---     radius 50), so it can never collide with either number below.
-local PCT_HP     = { size = 16, y =   0 }  -- dead centre, over the portrait (v14: 13pt/-54 -> 16pt/0)
-local PCT_POWER  = { size = 12, y = -54 }  -- under the health ring (v14: 10pt/-70 -> 12pt/-54)
-local PCT_THREAT = { size = 10, y =  58 }  -- above the outermost threat ring (v13: 54 -> 58)
+-- ABSOLUTE screen centre of the strip. (0, -110) is UNDER the character, not on its waist:
+-- a 102x37 rectangle scan of all seven packs (dynamic groups projected six clones deep) is
+-- clean here with 11.5px to paladin's and hunter's buff rows above and 7.5px to the other five
+-- packs' buff rows below — the widest margins of any y the scan clears. Re-scanned against
+-- THIS pack's assembled tables at the bottom of this file.
+local SILL_X =    0
+local SILL_Y = -110
 
--- ABSOLUTE -> LOCAL. CLUSTER_X/CLUSTER_Y are screen coordinates, but these regions are
--- nested two groups deep and WeakAuras anchors a child to its group (anchorFrameType "SCREEN"
--- resolves to the parent frame for a grouped aura), so the on-screen position is the SUM of every
--- offset down the chain. The two group offsets are therefore constants, and the conversion
--- happens exactly once, here — never at a call site. The assembled string is re-walked and
--- asserted at the bottom of this file, so a future edit to either group offset fails the build
--- instead of quietly sliding the cluster somewhere else.
-local TOP_X,  TOP_Y  = 0, -140   -- the pack's draggable top-level group
-local ORBG_X, ORBG_Y = 0,  30    -- the ring layer inside it
-local function localX(absX) return absX - (TOP_X + ORBG_X) end
-local function localY(absY) return absY - (TOP_Y + ORBG_Y) end
+-- Lane offsets, LOCAL to the sill group. Identical in all seven packs.
+local LANE_PLATE  = { x = 0, y =   3 }
+local LANE_THREAT = { x = 0, y =  15.5 }
+local LANE_HEALTH = { x = 0, y =   7 }
+local LANE_POWER  = { x = 0, y =  -5 }
 
--- RESOURCE BREAKPOINT MARKS. A threshold on a RING is a point on the circumference, so it takes
--- trigonometry (a vessel only needed a horizontal line). The canonical placement, measured from
--- the centre of the ring the mark belongs to:
---   r = INNER/2 * 0.94 ;  x = r * sin(2*pi*f) ;  y = r * cos(2*pi*f)      (f = threshold/max)
--- sin on x and cos on y put f = 0 at 12 o'clock and advance CLOCKWISE, which is the direction the
--- ring fills — so a mark sits exactly where the arc reaches that value. 0.94 lands the pip in the
--- middle of the drawn band: Ring_20px paints diameter * 20/256, so at INNER = 62 the annulus runs
--- from radius 26.2 to 31 and 0.94 * 31 = 29.1.
-local MARK_R = INNER / 2 * 0.94
-local function markX(fraction) return math.floor(MARK_R * math.sin(2 * math.pi * fraction) + 0.5) end
-local function markY(fraction) return math.floor(MARK_R * math.cos(2 * math.pi * fraction) + 0.5) end
--- Pip diameters come from the stroke too, so they sit IN the band instead of across it; the lit
--- twin is 2px fatter, which is how the crossing reads at a glance.
-local RING_STROKE = INNER * 20 / 256
-local PIP_DIM = math.floor(RING_STROKE + 0.5)
-local PIP_LIT = PIP_DIM + 2
+-- Numbers, printed INSIDE the rail that owns them so each appears and vanishes with its readout
+-- and neither of them ever prints onto open screen again. anchorXOffset +32 puts the digits at
+-- the right-hand end of a 100px rail (which spans -50..+50 about its own centre): two digits at
+-- 11pt are ~14px wide and span +25..+39, three digits ~21px and span +21.5..+42.5 — still 7.5px
+-- inside the rail. text_anchorPoint stays CENTER, which is the only anchor proven on a
+-- progresstexture in this repo; INNER_RIGHT is proven on aurabars and icons only.
+--   THREAT is the exception: it is SWITCHED OFF (text_visible = false), not deleted, because
+--   threatpct is scaled so 100 = pulling aggro and is therefore a ratio rather than a quantity.
+--   It keeps sub.1 so /wa can re-tick it, and it is parked at the LEFT end (-32) so re-enabling
+--   it does not drop a second number on top of the health percentage at +32.
+local PCT_HP     = { size = 11, x =  32, y = 0 }
+local PCT_POWER  = { size = 11, x =  32, y = 0 }
+local PCT_THREAT = { size = 10, x = -32, y = 0, visible = false }
+
+-- ABSOLUTE -> LOCAL. SILL_X/SILL_Y are screen coordinates, but these regions are nested two
+-- groups deep and WeakAuras anchors a child to its group (anchorFrameType "SCREEN" resolves to
+-- the parent frame for a grouped aura), so the on-screen position is the SUM of every offset
+-- down the chain. The two group offsets are therefore constants, and the conversion happens
+-- exactly once, here — never at a call site. TOP + SILLG already summed to (0, -110) in v14
+-- (top -140 + the layer's +30), which is exactly where the Sill wants to be, so NEITHER GROUP
+-- OFFSET MOVES: the whole change is that the leaves stop carrying a local (-270, +150) and
+-- carry the lane table instead. The assembled string is re-walked and asserted at the bottom of
+-- this file, so a future edit to either group offset fails the build instead of quietly sliding
+-- the strip somewhere else.
+local TOP_X,   TOP_Y   = 0, -140  -- the pack's draggable top-level group
+local SILLG_X, SILLG_Y = 0,   30  -- the sill layer inside it: -140 + 30 = -110
+local function localX(absX) return absX - (TOP_X + SILLG_X) end
+local function localY(absY) return absY - (TOP_Y + SILLG_Y) end
+
+-- RESOURCE BREAKPOINT WATERLINES. On a ring a threshold was a point on the circumference and
+-- needed trigonometry. On a 100px rail it is one subtraction:
+--   x(v) = (v / maxpower - 0.5) * RAIL_LEN     and for a 100-max pool simply  x = v - 50
+-- measured from the centre of the rail the mark belongs to. The general form is written out
+-- rather than the shortcut because a cap-raising talent (a rogue's Vigor, 100 -> 110) changes
+-- maxpower and must move the mark; see gotchas.md.
+-- Written as (v*len)/max - len/2 rather than (v/max - 0.5)*len: they are the same number in
+-- exact arithmetic, but the second form routes an integer answer through 0.7 - 0.5 and lands on
+-- 19.999999999999996 for 70 rage. The build asserts EXACT pixel positions, so the algebra has to
+-- be arranged to stay on integers wherever the inputs are integers.
+local function waterX(value, maxValue) return value * RAIL_LEN / maxValue - RAIL_LEN / 2 end
+-- Waterline widths. A breakpoint is a FULL-HEIGHT line across the rail, not a dot beside it:
+-- the dim line is the permanent "this is where 20 rage is", the lit twin is 2px fatter and pops
+-- in when you cross it, which is how the crossing reads at a glance.
+local WATER_DIM = 3
+local WATER_LIT = 5
+-- The ruler: three hairlines at 25 / 50 / 75 percent, 1px wide, at 18% white. 33px of ink and
+-- zero footprint, and it converts a rail from "estimate a fraction" into "count quarters".
+local RULER_AT = { waterX(25, 100), waterX(50, 100), waterX(75, 100) }
 
 local byId = {}
 local function reg(t) byId[t.id] = t; return t end
@@ -576,12 +659,14 @@ local CD_INNERVATE = 29166
 
 -- ===== groups (uid order is sacred: top, 4 sub-groups, then R / B / A / C) =====
 local top     = F.group(TOP, TOP_X, TOP_Y, nil)
--- uid slot 2. v7 called this "Druid - Resources" at (0,56) and parked a 172x14 bar stack in
--- the middle of the screen; v8-v9 made it the ring-orb layer and v10-v11 the globe layer. Same
--- table, same uid: it holds the two ring clusters again. Its own offset is ORBG_X/ORBG_Y and is
--- part of the absolute-position sum — see localX/localY above; nothing below writes a screen
--- coordinate directly onto a child.
-local gRes    = reg(F.group("Druid - Rings", ORBG_X, ORBG_Y, nil))
+-- uid slot 2, RENAMED for the fifth time and re-uid'd for the zeroth. v7 called this
+-- "Druid - Resources" at (0,56) and parked a 172x14 bar stack in the middle of the screen;
+-- v8-v9 made it the ring-orb layer, v10-v11 the globe layer, v12-v14 "Druid - Rings". v15 makes
+-- it `Druid - Player Sill` — the same table, the same uid, the same (0,30) offset — because
+-- (0,30) under a top group at (0,-140) already resolves to the Sill's canonical ABSOLUTE
+-- (0,-110). Nothing about the group moves; its nine children stop carrying a local (-270,+150)
+-- and carry the lane table instead. WA matches by uid, so the rename is invisible to an Update.
+local gRes    = reg(F.group("Druid - Player Sill", SILLG_X, SILLG_Y, nil))
 local gBuffs  = reg(F.group("Druid - Buffs", 0, -16, nil))
 local gAlerts = reg(F.dynGroup("Druid - Alerts", -150, 96, nil, "UP", "BOTTOM", 6))
 local gCDs    = reg(F.dynGroup("Druid - Cooldowns", 0, -66, nil, "HORIZONTAL", "CENTER", 4))
@@ -590,35 +675,38 @@ adopt(top, gBuffs)
 adopt(top, gAlerts)
 adopt(top, gCDs)
 
--- ================= v12 ring clusters — state drawn AT the unit =================
--- Two clusters inside the group that used to hold the centre bar stack, then the v8-v9 rings,
--- then the v10-v11 globes: the player's at (-270, 40) and the target's at (+270, 110), each two
--- concentric arcs around a live portrait. The middle of the screen stays empty, which is what
--- v8 bought and no version since has spent.
+-- ================= v15 The Sill — state drawn as an instrument under your feet ==============
+-- One strip inside the group that used to hold the centre bar stack, then the v8-v9 rings, the
+-- v10-v11 globes and the v12-v14 clusters: three 100px rails, two numbers printed inside them,
+-- a ruler on each rail and two rage waterlines, all on one dark plate at absolute (0, -110).
+-- The middle of the screen stays empty, which is what v8 bought and no version since has spent.
 --
--- Every READOUT keeps the trigger, gate and escalation it had as a vessel; what changes is the
--- shape, the fill path and where the number sits. Threat comes off the target rim and becomes
--- the target cluster's OUTER RING, and the plain rim's uid becomes the track that ring runs in.
+-- Every READOUT keeps the trigger, gate and escalation it had as a ring; what changes is the
+-- shape, the fill path and where the number sits.
 local COL = {
-  -- Canonical ring palette, identical in all seven packs.
-  health = { 0.15, 0.82, 0.28, 1 },     -- the health arc, both clusters
-  mana   = { 0.20, 0.45, 0.95, 1 },     -- caster/tree/moonkin power ring
+  -- Canonical palette, identical in all seven packs — not one value changes in v15.
+  health = { 0.15, 0.82, 0.28, 1 },     -- the health rail
+  mana   = { 0.20, 0.45, 0.95, 1 },     -- caster/tree/moonkin power rail
   rage   = { 0.75, 0.15, 0.15, 1 },     -- bear
   energy = { 0.90, 0.80, 0.20, 1 },     -- cat
-  track  = { 0, 0, 0, 0.55 },           -- the UNFILLED arc behind every ring, and the target's
-                                        -- stand-alone outer groove
-  -- Pack escalations, carried across from v7-v11 unchanged.
+  track  = { 0, 0, 0, 0.55 },           -- the UNFILLED part of every rail
+  -- Pack escalations, carried across from v7-v14 unchanged.
   threat = { 0.25, 0.80, 0.30, 1 },  -- v7's threat-bar green
   warn   = { 1.00, 0.60, 0.10, 1 },  -- threat >= 70%
   hurt   = { 1.00, 0.65, 0.10, 1 },  -- health < 50%
   danger = { 0.90, 0.12, 0.12, 1 },  -- aggro lost / gained, health < 25%
   text   = { 1, 1, 1, 1 },
+  -- v15 additions: the plate the whole instrument is drawn on, and the ruler ink.
+  plate  = { 0, 0, 0, 0.45 },        -- black at 45%: opaque enough to survive snow and lava
+  ruler  = { 1, 1, 1, 0.18 },        -- the 25/50/75 hairlines
+  notch  = { 1, 1, 1, 0.85 },        -- the 70-threat notch on the threat rail
 }
 
--- Ring_20px.tga is a true ANNULUS and ships inside WeakAuras (Private.texture_types, "Shapes");
--- the number is the stroke weight of the source art, so the drawn band is diameter * 20/256.
--- The globes' Circle_Smooth.tga is a SOLID DISC and would fill as a pie wedge on the circular
--- path — the texture and the orientation change together or not at all.
+-- Square_White.tga is a flat white quad and ships inside WeakAuras (Private.texture_types),
+-- as does Square_White_Border.tga, the same quad with a 1px inset outline; wa_factory names
+-- both as F.TEX_SQUARE / F.TEX_SQUARE_BORDER and the other packs' pips already use the border
+-- variant. The v10-v14 Ring_20px annulus is gone from this file: an annulus can only be filled
+-- on the CIRCULAR path, and the texture and the orientation change together or not at all.
 local IV, TOC = 45, 20501
 
 -- wa_factory has no progresstexture builder, so that region table is written out in full below
@@ -678,42 +766,55 @@ end
 -- IV-45 data is at best ignored. The wrapper is gone and the factory trigger is used unchanged —
 -- it reads the target with the same default it always had.
 
--- THE RING. Same progresstexture region the globes used, back on the radial path — and the
--- fields that are traps, in the order they bite:
---   orientation CLOCKWISE  -> the only radial values are CLOCKWISE / ANTICLOCKWISE; every other
---     key in orientation_with_circle_types is linear, which is where the globes lived. The keys
---     lie about direction in the usual WA way, so this is worth stating: CLOCKWISE starts the
---     arc at startAngle and grows the way a clock's hand moves.
---   startAngle 0 / endAngle 360 -> a full circle, and LIVE again (they were ignored on the
---     linear path). WA normalises 0/360 -> 0/0 and then corrects endAngle back up by 360, so
---     this is a handled case, not a degenerate one.
---   backgroundColor = COL.track -> the UNFILLED arc. backgroundOffset 0 keeps it the same
---     annulus as the fill; the default 2 fattens it into a halo around the ring.
---   crop_x / crop_y = 0.41 -> the IDENTITY value, NOT "no crop". The circular path expands the
---     texture by sqrt(2) so rotated quadrants never run off it, and 1 + 0.41 cancels that
---     exactly. Setting 0 blows the ring up 1.41x and clips it.
---   compress / slanted / slant / slantMode -> LIVE on a vessel, INERT here. Untouched.
+-- THE RAIL. The SAME progresstexture region the rings and the globes used, moved onto the LINEAR
+-- path — and the fields that are traps, in the order they bite:
+--   orientation HORIZONTAL_INVERSE -> "Left to Right". Private.orientation_with_circle_types is
+--     transcribed verbatim in poc/diablo-globes/generate.lua:
+--       HORIZONTAL_INVERSE = "Left to Right"   HORIZONTAL = "Right to Left"
+--       VERTICAL = "Bottom to Top"             VERTICAL_INVERSE = "Top to Bottom"
+--     The key lies about the direction in the usual WA way, and it lies DIFFERENTLY from the
+--     aurabar, where HORIZONTAL is left-anchored and grows right (gotchas.md). On a
+--     progresstexture, left-to-right is HORIZONTAL_INVERSE. VERTICAL from that same table is
+--     live in the shipped poc/diablo-globes string, so the linear path itself is proven here;
+--     HORIZONTAL_INVERSE is the one field in v15 that no committed string in this repo has
+--     rendered. 30-second in-game check: at full resource the rail is solid; drop to ~50% and
+--     the EMPTY half must be on the RIGHT. If it is reversed the fix is one token, HORIZONTAL.
+--   startAngle 0 / endAngle 360 -> IGNORED on the linear path. Emitted for the schema.
+--   backgroundColor = COL.track -> the UNFILLED part of the rail. backgroundOffset 0 keeps it
+--     exactly the same quad as the fill; the default 2 fattens it into a halo around the rail.
+--   crop_x / crop_y = 0.41 -> on the CIRCULAR path this was the identity that cancels a sqrt(2)
+--     expansion; on the linear path it is simply the texcoord scale, and with a UNIFORM
+--     Square_White.tga it cannot alter the art at all. Kept at 0.41 so the value never has to
+--     mean two things in one repo.
+--   compress / slanted / slant / slantMode -> INERT on a ring, LIVE here. compress false and
+--     slanted false is a straight, uncompressed bar, which is the whole point of a ruler.
 --   auraRotation = 0 -> absent from the 3.5.0 default table but read unconditionally by
 --     current code as data.auraRotation / 180 * math.pi, so it must be emitted.
 --   adjustedMin/Max are STRINGS, because SetAdjustedMin does adjustedMin:find(...).
 --   progressSource is rewritten to {-1, ""} (Automatic) by Modernize < 71 whatever is
---     emitted, which is why each ring has exactly ONE progress-supplying trigger and it is
+--     emitted, which is why each rail has exactly ONE progress-supplying trigger and it is
 --     trigger 1: activeTriggerMode -10 is first_active, and Automatic reads that trigger's
---     value/total. A second trigger can only feed conditions, never the fill — which is also
---     why health and power cannot share a region, and that constraint is what makes the
---     concentric look possible in the first place.
--- absX/absY are ABSOLUTE screen coordinates; localX/localY do the one conversion (see the
--- constants block), because the two clusters sit at different heights.
-local function ring(id, size, absX, absY, color, triggerList, gate)
+--     value/total. A second trigger can only feed conditions, never the fill — which is why
+--     health and power cannot share a region, and therefore why the strip is stacked lanes.
+--   foregroundColor is the conditionable tint on a progresstexture. It is `barColor` on an
+--     aurabar and `color` on a plain texture, and Conditions.lua skips an unknown property
+--     SILENTLY — which is also the decisive reason these rails are not aurabars. The other
+--     reason is structural: an aurabar requires subRegions[1] = {type = "aurabar_bar"}, which
+--     would shift every existing sub.N index by one and silently retarget every condition that
+--     addresses one.
+-- `lane` is one of the LANE_* tables at the top of the file: a local offset inside the sill
+-- group, never a screen coordinate written at a call site.
+local function rail(id, height, lane, color, triggerList, gate)
   return reg(stub{
     regionType = "progresstexture", id = id, uid = W.uid(), parent = nil,
-    width = size, height = size,
+    width = RAIL_LEN, height = height,
     selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
-    xOffset = localX(absX), yOffset = localY(absY), frameStrata = 1, alpha = 1,
-    orientation = "CLOCKWISE", startAngle = 0, endAngle = 360,
+    xOffset = localX(SILL_X) + lane.x, yOffset = localY(SILL_Y) + lane.y,
+    frameStrata = 1, alpha = 1,
+    orientation = "HORIZONTAL_INVERSE", startAngle = 0, endAngle = 360,
     inverse = false, mirror = false,
     compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
-    foregroundTexture = RING_TEX, backgroundTexture = RING_TEX, sameTexture = true,
+    foregroundTexture = RAIL_TEX, backgroundTexture = RAIL_TEX, sameTexture = true,
     desaturateForeground = false, desaturateBackground = false,
     foregroundColor = color, backgroundColor = COL.track,
     backgroundOffset = 0,
@@ -730,6 +831,31 @@ local function ring(id, size, absX, absY, color, triggerList, gate)
   })
 end
 
+-- A SUBTEXTURE on a progresstexture — the ruler hairlines and the threat notch. Field set taken
+-- verbatim from the shipped `Hunter - Mana` sub.2/sub.3 and `Rogue - Energy Ring` sub.2-5, which
+-- is the only form of this sub-region proven in this repo. anchor_mode "point" with self_point
+-- and anchor_point CENTER makes xOffset/yOffset a plain offset from the rail's centre, which is
+-- exactly the coordinate system waterX() speaks.
+local function subtex(w, h, x, y, color)
+  return {
+    type = "subtexture",
+    anchor_area = "ALL", anchor_mode = "point", anchor_point = "CENTER", self_point = "CENTER",
+    width = w, height = h, xOffset = x, yOffset = y,
+    scale = 1, mirror = false, rotate = false,
+    textureBlendMode = "BLEND", textureColor = color,
+    textureDesaturate = false, textureMirror = false, textureRotate = false, textureRotation = 0,
+    textureTexture = RAIL_TEX, textureVisible = true,
+  }
+end
+-- The ruler, APPENDED after everything the rail already carries. Sub-region indexes are
+-- positional and conditions address them by index, so this may only ever append.
+local function ruler(region)
+  for _, x in ipairs(RULER_AT) do
+    region.subRegions[#region.subRegions + 1] = subtex(1, region.height, x, 0, COL.ruler)
+  end
+  return region
+end
+
 -- v13 retires the TRACK RING helper along with the region it built. It existed only to give the
 -- TARGET cluster a base groove under its threat arc, so that a resto druid — who loads neither
 -- threat aura — still saw two arcs on the target where the player side had two. With the target
@@ -740,54 +866,54 @@ end
 -- conditionable tint is `color`; on a progresstexture it is `foregroundColor` and on an aurabar
 -- `barColor`, and Conditions.lua skips an unknown property silently.)
 
--- THE LIVE PORTRAIT — a real 3D portrait of whoever is there, not a static image and not a class
--- icon, which is what lets the target side work without ever knowing the target's class: it
--- renders NPCs and mobs too. frameStrata 2 is WA's BACKGROUND — the LOWEST strata, below the
--- inherited one the rings use, not above it. v12-v13 carried a comment here claiming the
--- opposite ("nothing ever draws over the face") and ordered the group to match the claim; v14
--- keeps the field exactly as it is and fixes the order instead, so strata and frame level agree
--- that the face is the cluster's backdrop. That is what makes a number legible on it.
---   modelIsUnit = true + model_fileId = "<unit>" -> PlayerModel:SetUnit(unit)
---   portraitZoom = true                          -> SetPortraitZoom(1), Blizzard head framing
--- CRITICAL: current code reads the unit from `model_fileId`. WA 3.5.0 read `model_path`, and the
--- migration that bridges the two (Modernize < 72) is guarded by WeakAuras.IsClassicEra(), which
--- is a DISTINCT predicate from IsTBC() — so on a 2.5.x client that migration DOES NOT RUN and
--- emitting only model_path is a silent no-op. Both are emitted; model_fileId does the work.
--- The portrait carries its cluster's health trigger, so it self-hides exactly when its rings do.
-local function portrait(id, unit, absX, absY, triggerList)
+-- THE SILL PLATE, and this is where the 3D portrait's uid goes (v15). A `model` region is
+-- re-typed to a `texture` region — free, exactly as v10 re-typed globe rims and v12 re-typed
+-- them back, because WA matches by uid and the region type is just data. What was a 44x44 live
+-- face becomes a 102x31 dark quad with a 1px border, drawn FIRST in the group so every rail,
+-- every number and every waterline sits on something opaque.
+--   WHY IT EARNS ITS PIXELS. The field complaint the ring versions kept chasing was legibility:
+--   "a bright floor or a fire washed it out". v14's answer was to print the health number on the
+--   portrait, because the face was the only opaque thing the HUD owned. The plate is that same
+--   answer without the 1,936 px2 of decoration — and it is also what makes four separate bars
+--   read as ONE instrument instead of four floating things.
+--   COLOUR IS EXPLICIT, ALWAYS. On a `texture` region the tint field is `color`; leaving it
+--   empty draws in WeakAuras' default rather than the intended shade (the sibling rogue pack
+--   has shipped exactly that bug on its Threat Flash). COL.plate is black at 45%.
+--   frameStrata 2 is WA's BACKGROUND — the LOWEST strata, below the inherited 1 the rails use.
+--   The plate inherits that field from the portrait unchanged, and it is finally telling the
+--   truth: this region IS the backdrop, and it is also first in controlledChildren, so strata
+--   and frame level agree instead of contradicting each other.
+-- The plate carries the portrait's Health + Unit Characteristics trigger pair and both of its
+-- conditions unchanged, so the whole instrument fades out of combat and vanishes as one object.
+local function plate(id, lane, triggerList)
   return reg(stub{
-    regionType = "model", id = id, uid = W.uid(), parent = nil,
-    model_fileId = unit, model_path = unit, modelIsUnit = true, modelDisplayInfo = false,
-    portraitZoom = true, api = false,
-    model_x = 0, model_y = 0, model_z = 0,
-    model_st_tx = 0, model_st_ty = 0, model_st_tz = 0,
-    model_st_rx = 270, model_st_ry = 0, model_st_rz = 0, model_st_us = 40,
-    sequence = 1, advance = false, rotation = 0,
-    width = PORTRAIT, height = PORTRAIT, alpha = 1,
+    regionType = "texture", id = id, uid = W.uid(), parent = nil,
+    texture = PLATE_TEX, desaturate = false,
+    width = PLATE_W, height = PLATE_H, alpha = 1,
+    color = COL.plate, blendMode = "BLEND", textureWrapMode = "CLAMPTOBLACKADDITIVE",
+    rotation = 0, discrete_rotation = 0, mirror = false, rotate = false,
     selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
-    xOffset = localX(absX), yOffset = localY(absY), frameStrata = 2,
-    border = false, borderColor = { 1, 1, 1, 0.5 }, backdropColor = { 1, 1, 1, 0.5 },
-    borderEdge = "None", borderOffset = 5, borderInset = 11,
-    borderSize = 16, borderBackdrop = "Blizzard Tooltip",
+    xOffset = localX(SILL_X) + lane.x, yOffset = localY(SILL_Y) + lane.y, frameStrata = 2,
     subRegions = {},
     triggers = F.triggers(triggerList),
     load = F.load(CLASS),
   })
 end
 
--- WHERE THE NUMBERS LIVE, and v14 corrects the reasoning v12 shipped. A progresstexture accepts
--- a subtext (SubText's supports() lists texture / progresstexture / icon / aurabar / empty) and
--- a `model` region never did — but that only means the text cannot be a sub-region OF THE
--- PORTRAIT, not that it cannot be drawn OVER the portrait. Every number here is a sub-region of
--- a RING, anchored CENTER on that ring, and anchorYOffset puts it wherever the layout wants:
--- v14 puts the health number at 0, i.e. on the face. Each number still rides on the region that
--- owns it and appears and disappears with it: no threat table, no threat number. The size/offset
--- pair comes from one of the three canonical placements (PCT_HP / PCT_POWER / PCT_THREAT), never
--- from a call site, so no two packs and no two numbers can drift apart.
+-- WHERE THE NUMBERS LIVE (v15). A progresstexture accepts a subtext (SubText's supports() lists
+-- texture / progresstexture / icon / aurabar / empty), so every number is a sub-region of the
+-- RAIL it reports and appears and vanishes with it: no threat table, no threat number. v12-v14
+-- had to solve "the centre of the cluster is a face"; a rail has no centre problem — the number
+-- goes INSIDE the bar, at the right-hand end, on the plate. text_anchorPoint stays CENTER (the
+-- only anchor this repo has proven on a progresstexture) and anchorXOffset does the work.
+-- The size/offset triple comes from one of the three canonical placements (PCT_HP / PCT_POWER /
+-- PCT_THREAT), never from a call site, so no two packs and no two numbers can drift apart.
 local function pct(sym, place, color)
   local st = F.subtext("%" .. sym .. "%%", place.size, "CENTER", sym)
+  st.anchorXOffset = place.x
   st.anchorYOffset = place.y
   st.text_color = color
+  if place.visible == false then st.text_visible = false end
   return st
 end
 
@@ -819,7 +945,7 @@ local function notInArena(gate)
   return g
 end
 
--- ===== the four rings, in the v7 uid order they inherit =====
+-- ===== the four rails, in the v7 uid order they inherit =====
 -- CONSTRUCTION order below is uid order and MUST NOT CHANGE — not even where a region has been
 -- deleted. Two of v12's six slots (8 and 9) are now RETIRED: their W.uid() calls are still made,
 -- in place, and the value is thrown away, because the seeded stream is positional and dropping a
@@ -829,19 +955,21 @@ end
 -- FixGroupChildrenOrder walks controlledChildren and adds +4 frame levels per child, so
 -- EARLIER = further behind.
 
--- uid 6 (v7 "Druid - Health", v8-v9 "Druid - Player Health", v10-v11 "Druid - Life Globe").
--- YOUR HEALTH RING, 84px — the middle arc since v13 put threat outside it, and still the
--- most-read number in the pack.
+-- uid 6 (v7 "Druid - Health", v8-v9 "Druid - Player Health", v10-v11 "Druid - Life Globe",
+-- v12-v14 "Druid - Player Health Ring"). THE HEALTH RAIL, 100x11 — lane 2, the widest gauge in
+-- the strip because it is the one you read most.
 -- Trigger 2 is the always-on Unit Characteristics feeder that v7's bars used for the
 -- out-of-combat fade; it never gates visibility and trigger 1 stays the progress source.
 -- The escalations are v8's, untouched: amber under 50%, red under 25% (severe condition last,
--- so it wins), on `foregroundColor` — the progresstexture spelling of what an aurabar calls
--- `barColor`. The last condition is the zero-total guard: an aurabar with total 0 draws EMPTY
--- but a progresstexture draws FULL, and UnitHealthMax has no floor, so a unit whose max health
--- has not streamed yet would flash a complete ring.
-local playerHP = ring("Druid - Player Health Ring", OUTER, CLUSTER_X, CLUSTER_Y, COL.health,
+-- so it wins), on `foregroundColor`. The last condition is the zero-total guard: an aurabar with
+-- total 0 draws EMPTY but a progresstexture draws FULL, and UnitHealthMax has no floor, so a
+-- unit whose max health has not streamed yet would flash a complete rail.
+-- v15 appends the ruler at sub.2-4 — three 1px hairlines at 25 / 50 / 75 — which is what turns
+-- the rail from "estimate a fraction" into "count quarters". sub.1 keeps the percentage.
+local playerHP = rail("Druid - Health Rail", HEALTH_H, LANE_HEALTH, COL.health,
   { orbHealth("player"), F.unitCharTrigger() })
 playerHP.subRegions[1] = pct("percenthealth", PCT_HP, COL.text)
+ruler(playerHP)
 playerHP.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "percenthealth", "<", "50", "foregroundColor", COL.hurt),
@@ -849,17 +977,22 @@ playerHP.conditions = {
   F.condition(1, "maxhealth", "<=", "0", "alpha", 0),
 }
 
--- uid 7 (v7 "Druid - Rage", v8-v9 "Druid - Player Power", v10-v11 "Druid - Power Globe").
--- THE PLAYER'S INNER RING, and it is one arc for all three of the druid's resources. The
--- trigger is form-adaptive, and the resolved type is a stored, conditionable arg (`powertype`,
--- init = powerTypeToCheck, conditionType select), so the ring is coloured for the power type it
--- actually reads: mana blue as the base, rage red in bear, energy yellow in cat. Numeric select
--- values compile correctly — Conditions.lua takes the tonumber branch.
+-- uid 7 (v7 "Druid - Rage", v8-v9 "Druid - Player Power", v10-v11 "Druid - Power Globe",
+-- v12-v14 "Druid - Player Power Ring"). THE POWER RAIL, 100x11 — lane 3, and it is one gauge for
+-- all three of the druid's resources. The trigger is form-adaptive (no use_powertype), and the
+-- resolved type is a stored, conditionable arg (`powertype`, init = powerTypeToCheck,
+-- conditionType select), so the rail is coloured for the power type it actually reads: mana blue
+-- as the base, rage red in bear, energy yellow in cat. Numeric select values compile correctly —
+-- Conditions.lua takes the tonumber branch. Both conditions are kept VERBATIM.
 -- No load gate at all: every druid has a primary resource in every form. v7's rage bar was
 -- Feral-gated and Bear-form-gated, so a feral in caster form saw no resource bar whatsoever.
-local playerPower = ring("Druid - Player Power Ring", INNER, CLUSTER_X, CLUSTER_Y, COL.mana,
+-- The number is `%percentpower%%` and stays that way: rage and energy both cap at 100, so on a
+-- 100px rail the percentage IS the absolute value, and mana is the one resource where percent is
+-- the right reading anyway. Ruler appended at sub.2-4.
+local playerPower = rail("Druid - Power Rail", POWER_H, LANE_POWER, COL.mana,
   { orbPower("player"), F.unitCharTrigger() })
 playerPower.subRegions[1] = pct("percentpower", PCT_POWER, COL.text)
+ruler(playerPower)
 playerPower.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "powertype", "==", 1, "foregroundColor", COL.rage),
@@ -881,57 +1014,61 @@ W.uid()  -- retired: Druid - Target Health Ring (never re-issue this uid)
 -- draw their unfilled arc in COL.track already.
 W.uid()  -- retired: Druid - Target Ring Track (never re-issue this uid)
 
--- uid 10 — Threat (Bear), id unchanged since v7. THREAT IS NOW YOUR OUTERMOST RING (v13), one
--- band outside your health arc on YOUR cluster — which is both where it belongs and what it
--- always measured: your threat, not the target's. It is also the one thing the deleted target
--- cluster carried that nothing else on screen shows, and a feral who pulls aggro dies.
+-- uid 10 — Threat (Bear), id unchanged since v7. THREAT IS THE TOP LANE (v15): 100x4, the
+-- thinnest rail in the strip, because it is a warning and not a quantity. It is still YOUR
+-- threat, as v13 made it, and it is still the one thing on screen nothing else shows.
 -- Tank-inverted semantics preserved from v7: green while you are securely tanking, RED the
--- moment aggro is lost. `%threatpct` sits ABOVE the ring (PCT_THREAT, +58 — clear of the 100px
--- annulus), the one number in the layer that is above its arc rather than below it, so it can
--- never collide with the health number underneath.
+-- moment aggro is lost. The percentage is SWITCHED OFF (PCT_THREAT.visible == false), because
+-- threatpct is scaled so 100 = pulling aggro — a ratio, not a quantity you spend — and a
+-- full-height notch at the 70 line answers "am I close" faster than reading 68 against 72.
 -- The threatvalue guard is NOT cosmetic and is mandatory: threattotal is
 -- (threatvalue or 0) * 100 / threatpct, so it is 0 whenever threatvalue is 0 — post-Vanish,
 -- post-Feign, the instant before your first hit lands — and a progresstexture with total 0 draws
--- FULL, which would read as complete aggro at exactly zero threat. alpha 0 removes the ring
+-- FULL, which would read as complete aggro at exactly zero threat. alpha 0 removes the rail
 -- entirely, which is precisely the "no threat table" state: with no hostile target, or before
--- your first point of threat, the cluster is just two rings and a face.
-local threatF = ring("Druid - Threat (Bear)", THREAT_RING, CLUSTER_X, CLUSTER_Y, COL.threat,
+-- your first point of threat, lane 1 is simply empty.
+-- sub.2 is the 70 NOTCH, appended after the (now hidden) percentage so no index moves. Its x
+-- comes from the same waterX() every breakpoint in the pack uses, so it cannot drift from the
+-- scale it marks. On the bear rail it reads as the floor you must stay ABOVE; on the caster rail
+-- below it is the ceiling you must stay under, and the orange condition fires on the same value.
+local threatF = rail("Druid - Threat (Bear)", THREAT_H, LANE_THREAT, COL.threat,
   { F.threatTrigger() }, notInArena(GATE_F))
 threatF.subRegions[1] = pct("threatpct", PCT_THREAT, COL.text)
+threatF.subRegions[2] = subtex(2, THREAT_H, waterX(70, 100), 0, COL.notch)
 threatF.conditions = {
   F.condition(1, "aggro", "==", 0, "foregroundColor", COL.danger),
   F.condition(1, "threatvalue", "<=", "0", "alpha", 0),
 }
 
--- uid 11 — Threat (Caster), id unchanged since v7. The SAME outermost ring, at the same 100px on
--- the same centre: the two are mutually exclusive spec gates (Mangle (Bear) vs Moonkin Form) and
+-- uid 11 — Threat (Caster), id unchanged since v7. The SAME lane-1 rail, at the same 100x4 in
+-- the same place: the two are mutually exclusive spec gates (Mangle (Bear) vs Moonkin Form) and
 -- only one can ever load, so they share the slot exactly as they have since v7. Non-inverted
 -- semantics: green, orange at 70% of the pull threshold, red when you pull (severe condition
--- last, so it wins).
-local threatB = ring("Druid - Threat (Caster)", THREAT_RING, CLUSTER_X, CLUSTER_Y, COL.threat,
+-- last, so it wins) — which is exactly where the notch sits.
+local threatB = rail("Druid - Threat (Caster)", THREAT_H, LANE_THREAT, COL.threat,
   { F.threatTrigger() }, notInArena(GATE_B))
 threatB.subRegions[1] = pct("threatpct", PCT_THREAT, COL.text)
+threatB.subRegions[2] = subtex(2, THREAT_H, waterX(70, 100), 0, COL.notch)
 threatB.conditions = {
   F.condition(1, "threatpct", ">=", "70", "foregroundColor", COL.warn),
   F.condition(1, "aggro", "==", 1, "foregroundColor", COL.danger),
   F.condition(1, "threatvalue", "<=", "0", "alpha", 0),
 }
 
--- DISPLAY order. Sibling stacking is exact, not "roughly creation order": FixGroupChildrenOrder
--- walks controlledChildren and adds +4 frame levels per child, so EARLIER = further behind.
--- v14 INVERTS THE ENDS OF THIS LIST. The portrait goes FIRST (adoptFirst, in the block at the
--- bottom of this file where it is constructed), so it is the backdrop and every ring — with its
--- percentage text — stacks above it; the health number now lands ON the face, which is the only
--- opaque thing the HUD owns. That is safe because a ring is an ANNULUS: at 100/84/62 the drawn
--- bands are radius 42.19..50, 35.44..42 and 26.16..31 while the portrait is 0..22, so no arc's
--- art reaches the face at all and only the text does.
--- Order below the portrait: the arcs, then the rage pips (adopted in the v2 block, so they read
--- ON the power ring). The three arcs are concentric at three different diameters and their
--- annuli do not overlap at all, so their relative order is cosmetic — it is kept in uid order.
-adopt(gRes, playerHP)
-adopt(gRes, playerPower)
+-- DISPLAY order (v15). Sibling stacking is exact, not "roughly creation order":
+-- FixGroupChildrenOrder walks controlledChildren and adds +4 frame levels per child, so EARLIER
+-- = further behind. The Sill's canonical order is
+--     plate, threat rail, health rail, power rail, [lane-4 pips], waterlines, [alarm frame]
+-- The PLATE MUST BE FIRST — it is the opaque backdrop every rail and every number is legible
+-- against — and it gets there with adoptFirst() in the block at the bottom of this file where it
+-- is constructed (construction order is the seeded uid stream and cannot move; adoption order
+-- is free). The WATERLINES MUST COME AFTER THE POWER RAIL or they draw underneath it; they are
+-- adopted in the v2 block, which runs after this one, so they land last by construction.
+-- This pack has no lane-4 pip row and no alarm frame (see the v15 header note).
 adopt(gRes, threatF)
 adopt(gRes, threatB)
+adopt(gRes, playerHP)
+adopt(gRes, playerPower)
 
 -- ================= Buffs (0,-16): 40x40 timers per spec, slots shared =================
 -- Bear runs FOUR slots (-66/-22/+22/+66), the caster specs three (-44/0/+44); both rows stay
@@ -1170,41 +1307,42 @@ mangleCD.conditions[3] = F.condition(2, "inCombat", "==", 0, "sub.1.glow", false
 -- in-game import dialog on "Update". Each element is re-parented into its v1 group by the
 -- helper it is built with (adopt() appends to that group's controlledChildren).
 
--- R7-R10 Rage thresholds — the bear's two spend decisions, back ON the power ring since v12.
--- v7 drew them as vertical lines over a 172x14 bar; v10-v11 as horizontal waterlines across a
--- vessel. On a ring a threshold is a POINT ON THE CIRCUMFERENCE and needs the trigonometry
--- again, from the ring's own radius (markX / markY at the top of the file):
---   r = INNER/2 * 0.94 ;  x = r * sin(2*pi*f) ;  y = r * cos(2*pi*f)
--- Rage is a 0-100 resource, so the two fractions are simply 0.20 and 0.70 — and because f = 0
--- is 12 o'clock and the angle advances clockwise, each pip sits exactly where the CLOCKWISE fill
--- reaches that value: 20 rage at 72 degrees (upper right), 70 rage at 252 (lower left).
+-- R7-R10 Rage thresholds — the bear's two spend decisions, and in v15 they are WATERLINES again.
+-- v7 drew them as vertical lines over a 172x14 bar; v10-v11 as horizontal lines across a vessel;
+-- v12-v14 as round pips ON the circumference of a ring, which needed
+--   r = INNER/2 * 0.94 ; x = r*sin(2*pi*f) ; y = r*cos(2*pi*f)
+-- and landed 20 rage at (28, 9) — a dot whose position you had to learn. On a 100px rail the
+-- same threshold is one subtraction, waterX(v, max) = (v/max - 0.5) * RAIL_LEN:
+--   20 rage -> x -30      70 rage -> x +20        (rage is a flat 0-100 pool in TBC)
+-- and it is a FULL-HEIGHT LINE ACROSS the rail, at exactly the pixel the fill reaches at that
+-- value, so "have I got 20 rage" is answered by whether the fill edge has passed the line.
 --
--- ROUND PIPS, not lines, and that is forced rather than chosen: rotating a thin quad on a
--- texture region rotates the ART INSIDE the quad (DoTexCoord -> GetRotatedPoints), so a straight
--- line can never be laid along an arc. Circle_Smooth2.tga (F.TEX_CIRCLE) is a solid disc, which
--- is exactly right for a dot and exactly wrong for a ring — the opposite of the ring art.
+-- ROUND PIPS ARE GONE WITH THE RING, and the reason they had to be round is gone with it too:
+-- rotating a thin quad on a texture region rotates the ART INSIDE the quad (DoTexCoord ->
+-- GetRotatedPoints), so a straight line could never be laid ALONG an arc. Across a horizontal
+-- rail no rotation is needed at all, so these are Square_White quads: 3px wide dim, 5px lit,
+-- both POWER_H tall so they span the rail exactly.
 --
--- These stay FOUR SEPARATE AURAS rather than becoming sub-regions of the ring, deliberately:
+-- These stay FOUR SEPARATE AURAS rather than becoming sub-regions of the rail, deliberately:
 -- the aurabar tick sub-region cannot come along at all (SubRegionTypes/Tick.lua's supports()
 -- returns true only for "aurabar"), and the two sub-region types that DO support
--- progresstexture would cost the pop. A subtexture/subcirculartexture mark can change colour
--- by condition but cannot carry its own animation, and the pop-in on crossing IS the signal
--- here. Keeping them as regions also keeps their triggers, their Feral gate and their v7 Bear
--- form gate exactly as they were, and keeps them out of the sub.N condition index entirely.
+-- progresstexture would cost the pop. A subtexture mark can change colour by condition but
+-- cannot carry its own animation, and the pop-in on crossing IS the signal here. Keeping them
+-- as regions also keeps their triggers, their Feral gate and their v7 Bear form gate exactly as
+-- they were, and keeps them out of the sub.N condition index entirely.
 --
 -- THE STANDING TRAP: these are stand-alone texture regions anchored to the SCREEN, not
--- sub-regions of the ring, so nothing moves them when the ring they mark changes size or
--- position — and in v12 it changed both, again. Every coordinate is therefore derived from the
--- canonical constants (localX(CLUSTER_X) + markX(f), localY(CLUSTER_Y) + markY(f)) and none is
--- written down, so the marks follow the arc if those numbers ever move again. v13 moved the
--- threat ring onto this cluster but did NOT move the power ring, so every pip is byte-identical.
+-- sub-regions of the rail, so nothing moves them when the rail they mark changes size or
+-- position — and in v15 it changed both, again. Every coordinate is therefore derived from the
+-- canonical constants (the sill origin, the power lane, waterX) and none is written down, so the
+-- marks follow the rail if those numbers ever move again.
 local RAGE_MAX = 100  -- TBC rage is a flat 0-100 pool, so threshold/max is threshold/100
 
-local function rageMark(id, rageValue, size, color, minRage)
-  local fraction = rageValue / RAGE_MAX
-  local mark = reg(F.texture(id, CLASS, size, size,
-    localX(CLUSTER_X) + markX(fraction), localY(CLUSTER_Y) + markY(fraction),
-    nil, F.TEX_CIRCLE, color))
+local function rageMark(id, rageValue, width, color, minRage)
+  local mark = reg(F.texture(id, CLASS, width, POWER_H,
+    localX(SILL_X) + LANE_POWER.x + waterX(rageValue, RAGE_MAX),
+    localY(SILL_Y) + LANE_POWER.y,
+    nil, RAIL_TEX, color))
   mark.triggers = F.triggers({ F.powerTrigger(1, minRage) })  -- rage only exists in bear form
   mark.load = F.load(CLASS, GATE_F)
   if minRage then
@@ -1217,10 +1355,10 @@ end
 
 -- The dim/lit pair and their colours are v2's, unchanged; only the shape and the arithmetic are
 -- new. The lit twin is the fatter of the two, which is how the crossing reads at a glance.
-rageMark("Druid - Rage Mark Mangle",     20, PIP_DIM, { 0.25, 0.95, 0.45, 0.55 }, nil)
-rageMark("Druid - Rage Mark Maul",       70, PIP_DIM, { 1, 0.75, 0.2, 0.55 },     nil)
-rageMark("Druid - Rage Mark Mangle Lit", 20, PIP_LIT, { 0.25, 0.95, 0.45, 1 },    20)
-rageMark("Druid - Rage Mark Maul Lit",   70, PIP_LIT, { 1, 0.75, 0.2, 1 },        70)
+rageMark("Druid - Rage Mark Mangle",     20, WATER_DIM, { 0.25, 0.95, 0.45, 0.55 }, nil)
+rageMark("Druid - Rage Mark Maul",       70, WATER_DIM, { 1, 0.75, 0.2, 0.55 },     nil)
+rageMark("Druid - Rage Mark Mangle Lit", 20, WATER_LIT, { 0.25, 0.95, 0.45, 1 },    20)
+rageMark("Druid - Rage Mark Maul Lit",   70, WATER_LIT, { 1, 0.75, 0.2, 1 },        70)
 
 -- B10 Demoralizing Roar — bear priority #1 alongside Faerie Fire. Not own-only: any druid's
 -- roar satisfies the -240 AP debuff. Takes the fourth bear buff slot at x=+66.
@@ -1456,22 +1594,27 @@ ccOut.cooldownTextDisabled = true
 ccOut.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
 ccOut.subRegions[3] = F.subborder()
 
--- ================= v12/v13 — the portrait, on the uid it has always had =================
+-- ================= v15 — the SILL PLATE, on the uid the portrait has always had ============
 -- v8 added two `model` portraits here, the only genuinely new auras that version drew, and they
 -- still draw the last two uids in the file. v10 recycled them into the life and power globe
 -- rims when the vessels replaced the clusters; v12 turned them back into faces at the centre of
--- each cluster. v13 deletes the target one with the rest of that cluster and keeps yours, on the
--- same uid, at the same position in the seeded stream.
--- The portrait carries the cluster's trigger pair and alpha guards, so face and arcs appear,
--- fade out of combat and vanish as one object.
--- v14: adopted FIRST, not last. It is still CONSTRUCTED here — the uid stream is positional and
--- moving the constructor would re-identify every aura after it — but adoptFirst() puts it at the
--- FRONT of controlledChildren, i.e. the BOTTOM of the group's frame-level stack, so the rings
--- and their percentage text draw over it. That finally agrees with its frameStrata 2
--- (BACKGROUND), which has said the same thing since v12 while the child order said the reverse.
--- The face is not hidden by this: the arcs are annuli at radius 26.16..50 and the portrait ends
--- at radius 22, so the only thing that ever lands on it is the health number.
-local playerPortrait = portrait("Druid - Player Portrait", "player", CLUSTER_X, CLUSTER_Y,
+-- each cluster; v13 deleted the target one and kept yours; v14 moved it to the back of the
+-- group so the health number could be printed on it.
+-- v15 SPENDS IT. The 44x44 live 3D face becomes the 102x31 plate the whole instrument is drawn
+-- on — same uid, same position in the seeded stream, `model` re-typed to `texture`, which is
+-- free (WA matches by uid; the region type is data). THIS IS THE ONE THING THE REDESIGN TAKES
+-- AWAY FROM A PLAYER, and it is a deliberate trade: the model was 1,936 px2 — 19.4% of the old
+-- cluster — carrying zero decisions, and what v14 actually needed from it was not a face but an
+-- OPAQUE BACKDROP for a number. The plate is that backdrop at 1/62nd of the ink, and it is also
+-- what makes three separate bars read as one instrument.
+-- It keeps the trigger pair and BOTH alpha conditions unchanged, so plate, rails and waterlines
+-- appear, fade out of combat and vanish as one object.
+-- Adopted FIRST, exactly as v14 adopted the portrait: it is still CONSTRUCTED here (the uid
+-- stream is positional and moving the constructor would re-identify every aura after it) but
+-- adoptFirst() puts it at the FRONT of controlledChildren, i.e. the BOTTOM of the group's
+-- frame-level stack, so every rail, number, ruler tick and waterline draws over it. That agrees
+-- with its frameStrata 2 (BACKGROUND), which it inherits from the portrait unchanged.
+local playerPortrait = plate("Druid - Sill Plate", LANE_PLATE,
   { orbHealth("player"), F.unitCharTrigger() })
 playerPortrait.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
@@ -1515,7 +1658,7 @@ assert(bearFormGated == 14, "expected 14 Bear-only elements, gated " .. bearForm
 local transmit = F.assemble(top, byId)
 
 -- ABSOLUTE POSITION PROOF. localX/localY convert once, but a group offset edited later, a
--- forgotten conversion or an extra nesting level would all move the clusters silently — the
+-- forgotten conversion or an extra nesting level would all move the strip silently — the
 -- string would still verify, and the mistake would only show up in game. So re-walk the
 -- ASSEMBLED parent chain, sum every xOffset/yOffset exactly as WeakAuras does, and assert the
 -- canonical screen coordinates before anything is written.
@@ -1533,25 +1676,30 @@ local function assertAt(id, wantX, wantY)
   local node = assert(byId[id], "missing aura: " .. id)
   local x, y = absolutePos(node)
   assert(x == wantX and y == wantY,
-    ("%s lands at (%d,%d), canonical position is (%d,%d)"):format(id, x, y, wantX, wantY))
+    ("%s lands at (%g,%g), canonical position is (%g,%g)"):format(id, x, y, wantX, wantY))
 end
 -- The canonical numbers themselves, spelled out as literals exactly once, so that a sign flip in
 -- the constants block cannot pass a proof that is written in terms of those same constants.
-assert(CLUSTER_X == -270 and CLUSTER_Y == 40,
-  ("cluster centre is (%d,%d), the canonical position is (-270,40)"):format(CLUSTER_X, CLUSTER_Y))
-assert(THREAT_RING == 100 and OUTER == 84 and INNER == 62 and PORTRAIT == 44,
-  "ring diameters drifted from the canonical 100/84/62/44")
--- THE cluster (v13): three concentric rings and a face, all on one centre.
-assertAt("Druid - Player Health Ring", CLUSTER_X, CLUSTER_Y)
-assertAt("Druid - Player Power Ring",  CLUSTER_X, CLUSTER_Y)
-assertAt("Druid - Player Portrait",    CLUSTER_X, CLUSTER_Y)
-assertAt("Druid - Threat (Bear)",      CLUSTER_X, CLUSTER_Y)
-assertAt("Druid - Threat (Caster)",    CLUSTER_X, CLUSTER_Y)
--- and the four rage pips, the one thing in the layer that is not on the cluster centre
-assertAt("Druid - Rage Mark Mangle",     CLUSTER_X + markX(0.20), CLUSTER_Y + markY(0.20))
-assertAt("Druid - Rage Mark Mangle Lit", CLUSTER_X + markX(0.20), CLUSTER_Y + markY(0.20))
-assertAt("Druid - Rage Mark Maul",       CLUSTER_X + markX(0.70), CLUSTER_Y + markY(0.70))
-assertAt("Druid - Rage Mark Maul Lit",   CLUSTER_X + markX(0.70), CLUSTER_Y + markY(0.70))
+assert(SILL_X == 0 and SILL_Y == -110,
+  ("the sill anchor is (%g,%g), the canonical position is (0,-110)"):format(SILL_X, SILL_Y))
+assert(RAIL_LEN == 100 and THREAT_H == 4 and HEALTH_H == 11 and POWER_H == 11,
+  "rail geometry drifted from the canonical 100x4 / 100x11 / 100x11")
+assert(PLATE_W == 102 and PLATE_H == 31,
+  ("the plate is %gx%g; a druid has no discrete class resource, so it is 102x31"):format(PLATE_W, PLATE_H))
+-- THE GROUP ITSELF resolves to the canonical anchor — this is the proof that matters, because
+-- every lane offset below is measured from it and every other pack measures from the same point.
+assertAt(gRes.id, SILL_X, SILL_Y)
+-- THE STRIP (v15): the plate, three rails on one x, and the four waterlines.
+assertAt("Druid - Sill Plate",     SILL_X + LANE_PLATE.x,  SILL_Y + LANE_PLATE.y)
+assertAt("Druid - Threat (Bear)",  SILL_X + LANE_THREAT.x, SILL_Y + LANE_THREAT.y)
+assertAt("Druid - Threat (Caster)",SILL_X + LANE_THREAT.x, SILL_Y + LANE_THREAT.y)
+assertAt("Druid - Health Rail",    SILL_X + LANE_HEALTH.x, SILL_Y + LANE_HEALTH.y)
+assertAt("Druid - Power Rail",     SILL_X + LANE_POWER.x,  SILL_Y + LANE_POWER.y)
+-- and the four rage waterlines, the only things in the layer off the strip's centre line
+assertAt("Druid - Rage Mark Mangle",     SILL_X + LANE_POWER.x - 30, SILL_Y + LANE_POWER.y)
+assertAt("Druid - Rage Mark Mangle Lit", SILL_X + LANE_POWER.x - 30, SILL_Y + LANE_POWER.y)
+assertAt("Druid - Rage Mark Maul",       SILL_X + LANE_POWER.x + 20, SILL_Y + LANE_POWER.y)
+assertAt("Druid - Rage Mark Maul Lit",   SILL_X + LANE_POWER.x + 20, SILL_Y + LANE_POWER.y)
 
 -- REMOVAL PROOF (v13). The target cluster is gone, and "gone" has to mean gone from the SHIPPED
 -- string, not merely from the constructors above — a stray adopt() or a byId entry that survived
@@ -1566,171 +1714,267 @@ for id in pairs(shippedIds) do
     id .. ": a target-cluster region survived the v13 removal")
 end
 
--- BREAKPOINT PROOF (v12). A pip is only a breakpoint if it sits ON the ring it marks, at the
--- angle its threshold implies — and rounding the polar coordinates to whole pixels is the one
--- thing that could quietly push it off the band. Measure each pip back from the cluster centre
--- and assert BOTH polar components: the angle within a degree of 360 * f measured clockwise from
--- 12 o'clock, and the radius inside the drawn annulus (Ring_20px paints diameter * 20/256, so
--- the inner ring's band runs from INNER/2 - stroke to INNER/2).
-local function assertOnRing(id, fraction)
+-- ONE PIXEL IS ONE PERCENT (v15) — the proof the whole design rests on. A waterline is only a
+-- breakpoint if it sits at the pixel the fill reaches at that value, so measure each mark back
+-- from the CENTRE of the rail it marks and assert that the offset equals (v/max - 0.5) * length
+-- exactly (no rounding: these are whole pixels by construction, and if they ever stop being, the
+-- build must say so rather than shrug). Also assert each line spans the rail's full height, which
+-- is what makes it a waterline instead of a dot beside the bar.
+local powerCx, powerCy = absolutePos(byId["Druid - Power Rail"])
+local function assertWaterline(id, value, width)
   local node = assert(byId[id], "missing aura: " .. id)
   local x, y = absolutePos(node)
-  local dx, dy = x - CLUSTER_X, y - CLUSTER_Y
-  local radius = math.sqrt(dx * dx + dy * dy)
-  local angle = math.deg(math.atan2(dx, dy)) % 360   -- atan2(x, y): 0 = up, grows clockwise
-  local want = (fraction * 360) % 360
-  local drift = math.min(math.abs(angle - want), 360 - math.abs(angle - want))
-  assert(drift <= 1,
-    ("%s sits at %.2f degrees, threshold %.0f%% implies %.2f"):format(id, angle, fraction * 100, want))
-  assert(radius >= INNER / 2 - RING_STROKE and radius <= INNER / 2,
-    ("%s sits at radius %.2f, outside the %g..%g band of the power ring")
-      :format(id, radius, INNER / 2 - RING_STROKE, INNER / 2))
+  -- The expected offset is written in the READABLE algebra, deliberately not in waterX's
+  -- integer-safe rearrangement, so this is a genuinely independent check of the formula rather
+  -- than a restatement of it. That costs a 1e-9 tolerance (0.7 - 0.5 is not exactly 0.2 in a
+  -- double), so the shipped coordinate is separately asserted to be a whole pixel.
+  local want = (value / RAGE_MAX - 0.5) * RAIL_LEN
+  assert(math.abs((x - powerCx) - want) < 1e-9 and y == powerCy,
+    ("%s sits at (%g,%g) i.e. %g from the rail centre; %d rage of %d implies %g")
+      :format(id, x, y, x - powerCx, value, RAGE_MAX, want))
+  assert(x == math.floor(x) and node.xOffset == math.floor(node.xOffset),
+    ("%s ships a fractional x (%s): the mark would land between pixels"):format(id, tostring(node.xOffset)))
+  assert(node.height == POWER_H,
+    ("%s is %gpx tall; a waterline spans the whole %gpx rail"):format(id, node.height, POWER_H))
+  assert(node.width == width and node.texture == RAIL_TEX,
+    ("%s is a %gpx %s; expected a %gpx Square_White line")
+      :format(id, node.width, tostring(node.texture), width))
+  assert(math.abs(x - powerCx) + node.width / 2 <= RAIL_LEN / 2,
+    id .. ": the line hangs off the end of the rail")
 end
-assertOnRing("Druid - Rage Mark Mangle",     0.20)
-assertOnRing("Druid - Rage Mark Mangle Lit", 0.20)
-assertOnRing("Druid - Rage Mark Maul",       0.70)
-assertOnRing("Druid - Rage Mark Maul Lit",   0.70)
+assertWaterline("Druid - Rage Mark Mangle",     20, WATER_DIM)
+assertWaterline("Druid - Rage Mark Mangle Lit", 20, WATER_LIT)
+assertWaterline("Druid - Rage Mark Maul",       70, WATER_DIM)
+assertWaterline("Druid - Rage Mark Maul Lit",   70, WATER_LIT)
 
--- CLUSTER PROOF (v13). The cluster only reads as one object while the arcs are concentric at the
--- canonical diameters, and only a `progresstexture` on the CIRCULAR path draws an arc at all — a
--- stray "VERTICAL" here would silently draw a filled disc instead. Assert the geometry and the
--- fill path on the assembled tables, and that every ring's percentage is still sub.1 (conditions
--- address sub-regions positionally, so an inserted sub-region retargets them silently).
-local function assertRing(id, size)
+-- RAIL CANON (v15) — the replacement for v13's ring canon, and it exists for the same reason:
+-- a geometry change in this repo has never silently shipped wrong, because the build asserts the
+-- shape it believes it drew. Only a `progresstexture` on the LINEAR path draws a bar at all — a
+-- stray "CLOCKWISE" here would silently draw a Square_White pie wedge instead — and the
+-- orientation token is the one field in v15 that no committed string in this repo has rendered,
+-- so it is named explicitly rather than derived. Sub-region indexes are positional and
+-- conditions address them by index, so the expected COUNT and the type of every index is
+-- asserted too: sub.1 must still be the subtext, and nothing may be inserted before it.
+local function assertRail(id, height, lane, subTypes)
   local node = assert(byId[id], "missing aura: " .. id)
   assert(node.regionType == "progresstexture", id .. ": not a progresstexture")
-  assert(node.orientation == "CLOCKWISE", id .. ": not on the circular fill path")
-  assert(node.width == size and node.height == size,
-    ("%s is %gx%g, canonical is %d"):format(id, node.width, node.height, size))
-  assert(node.foregroundTexture == RING_TEX and node.backgroundTexture == RING_TEX,
-    id .. ": not drawn on the ring annulus")
-  assert(node.crop_x == 0.41 and node.crop_y == 0.41, id .. ": crop is not the circular identity")
-  assert((node.subRegions[1] or {}).type == "subtext", id .. ": the percentage is no longer sub.1")
+  assert(node.orientation == "HORIZONTAL_INVERSE",
+    id .. ": orientation is " .. tostring(node.orientation) .. ", not the left-to-right linear path")
+  assert(node.width == RAIL_LEN,
+    ("%s is %gpx long; the lossless length for a 0-100 gauge is %d"):format(id, node.width, RAIL_LEN))
+  assert(node.height == height,
+    ("%s is %gpx tall, canonical lane height is %g"):format(id, node.height, height))
+  assert(node.foregroundTexture == RAIL_TEX and node.backgroundTexture == RAIL_TEX
+    and node.sameTexture, id .. ": not drawn on the Square_White rail")
+  assert(node.backgroundColor[4] > 0 and node.backgroundOffset == 0,
+    id .. ": the unfilled track is invisible or offset into a halo")
+  assert(node.crop_x == 0.41 and node.crop_y == 0.41, id .. ": crop drifted from 0.41")
+  assert(node.compress == false and node.slanted == false,
+    id .. ": compress/slant are LIVE on the linear path and would bend the scale")
+  assert(node.xOffset == localX(SILL_X) + lane.x and node.yOffset == localY(SILL_Y) + lane.y,
+    id .. ": not on its canonical lane offset")
+  assert(#node.subRegions == #subTypes,
+    ("%s has %d sub-regions, expected %d"):format(id, #node.subRegions, #subTypes))
+  for i, want in ipairs(subTypes) do
+    assert(node.subRegions[i].type == want,
+      ("%s sub.%d is %q, expected %q"):format(id, i, tostring(node.subRegions[i].type), want))
+  end
 end
-assertRing("Druid - Player Health Ring", OUTER)
-assertRing("Druid - Player Power Ring",  INNER)
-assertRing("Druid - Threat (Bear)",      THREAT_RING)
-assertRing("Druid - Threat (Caster)",    THREAT_RING)
+-- sub.1 percentage, sub.2 the 70 notch on the threat rails; sub.1 percentage + sub.2-4 ruler on
+-- the two wide rails.
+assertRail("Druid - Threat (Bear)",   THREAT_H, LANE_THREAT, { "subtext", "subtexture" })
+assertRail("Druid - Threat (Caster)", THREAT_H, LANE_THREAT, { "subtext", "subtexture" })
+assertRail("Druid - Health Rail",     HEALTH_H, LANE_HEALTH,
+  { "subtext", "subtexture", "subtexture", "subtexture" })
+assertRail("Druid - Power Rail",      POWER_H,  LANE_POWER,
+  { "subtext", "subtexture", "subtexture", "subtexture" })
 
--- CONCENTRICITY AND SEPARATION (v13). Three arcs on one centre is only true if the annuli do not
--- collide: Ring_20px paints diameter * 20/256 at the OUTER edge of the diameter, so ring d
--- occupies radius (d/2 - d*20/256) .. d/2. Prove the new 100px threat ring shares the health
--- ring's centre exactly and that its band starts outside the health band's end.
-local function bandOf(d) return d / 2 - d * 20 / 256, d / 2 end
-local hpInner, hpOuter = bandOf(OUTER)
-local thInner, thOuter = bandOf(THREAT_RING)
-assert(thInner > hpOuter,
-  ("the %dpx threat band (%.2f..%.2f) overlaps the %dpx health band (%.2f..%.2f)")
-    :format(THREAT_RING, thInner, thOuter, OUTER, hpInner, hpOuter))
-for _, id in ipairs({ "Druid - Threat (Bear)", "Druid - Threat (Caster)" }) do
-  local tx, ty = absolutePos(byId[id])
-  local hx, hy = absolutePos(byId["Druid - Player Health Ring"])
-  assert(tx == hx and ty == hy,
-    ("%s is not concentric with the health ring: (%d,%d) vs (%d,%d)"):format(id, tx, ty, hx, hy))
-  assert(byId[id].subRegions[1].anchorYOffset == PCT_THREAT.y
-    and PCT_THREAT.y > THREAT_RING / 2,
-    id .. ": the threat percentage is not clear of the " .. THREAT_RING .. "px annulus")
+-- LANE STACK (v15). Four stacked rails only read as one instrument if they do not overlap each
+-- other and all of them sit inside the plate. Derive each lane's y span from the assembled
+-- tables and assert both, plus the 1px gutter the lane arithmetic promises.
+local function vspan(id)
+  local node = byId[id]
+  local _, y = absolutePos(node)
+  return y + node.height / 2, y - node.height / 2   -- top, bottom
 end
-
--- ALERT-COLUMN CLEARANCE (v13), projected six prompts deep. The threat ring widened the cluster
--- from 84 to 100, i.e. from x -312..-228 to -320..-220, and the Alerts column is a DYNAMIC GROUP
--- that grows vertically at x -150. A dynamic group cannot move a clone sideways while align is
--- CENTER and stagger is 0, so depth cannot change the horizontal answer — but assert that too,
--- because an earlier pass in this repo's history shipped a cluster that only cleared while a
--- single alert was showing. Six deep is well past the pack's realistic worst case (the alert
--- group holds nine prompts in total, of which no spec can ever load all nine at once).
-local alerts = byId["Druid - Alerts"]
-assert(alerts.grow == "UP" and alerts.align == "CENTER" and alerts.stagger == 0,
-  "Druid - Alerts no longer grows straight up: re-derive the clearance below")
-local widestAlert = 0
-for _, id in ipairs(alerts.controlledChildren) do
-  widestAlert = math.max(widestAlert, byId[id].width or 0)
+local plateTop, plateBottom = vspan("Druid - Sill Plate")
+local lanes = { "Druid - Threat (Bear)", "Druid - Health Rail", "Druid - Power Rail" }
+for i, id in ipairs(lanes) do
+  local top_, bottom_ = vspan(id)
+  assert(top_ <= plateTop - 1 and bottom_ >= plateBottom + 1,
+    ("%s spans y %g..%g and the plate only covers %g..%g"):format(id, bottom_, top_, plateBottom, plateTop))
+  if i > 1 then
+    local prevTop, prevBottom = vspan(lanes[i - 1])
+    assert(prevBottom - top_ == 1,
+      ("the gutter between %s and %s is %gpx, canonical is 1"):format(lanes[i - 1], id, prevBottom - top_))
+  end
 end
-local ax, ay = absolutePos(alerts)
-local alertLeft, alertRight = ax - widestAlert / 2, ax + widestAlert / 2
-local ringLeft, ringRight = CLUSTER_X - THREAT_RING / 2, CLUSTER_X + THREAT_RING / 2
-assert(ringRight < alertLeft,
-  ("the %dpx cluster reaches x %g and the alert column starts at x %g")
-    :format(THREAT_RING, ringRight, alertLeft))
-local STACK_DEEP = 6
-local stackTop = ay + STACK_DEEP * widestAlert + (STACK_DEEP - 1) * alerts.space
-print(("  clearance: cluster x %g..%g | alerts x %g..%g (%d deep reaches y %g) | gap %gpx")
-  :format(ringLeft, ringRight, alertLeft, alertRight, STACK_DEEP, stackTop, alertLeft - ringRight))
+-- The whole strip, as one rectangle, spelled out for the record.
+local STRIP_L, STRIP_R = SILL_X - PLATE_W / 2, SILL_X + PLATE_W / 2
+local STRIP_B, STRIP_T = plateBottom, plateTop
+print(("  the sill: x %g..%g  y %g..%g  (%gx%g = %g px2)")
+  :format(STRIP_L, STRIP_R, STRIP_B, STRIP_T, PLATE_W, PLATE_H, PLATE_W * PLATE_H))
 
--- The portrait is the other half of the cluster, and both unit fields are load-bearing:
--- current WA reads model_fileId, WA 3.5.0 read model_path, and the migration between them is
--- gated on IsClassicEra(), which a 2.5.x client is not.
-local function assertPortrait(id, unit)
+-- COLLISION SCAN (v15), the proof that replaces v13's single alert-column clearance. Project
+-- EVERY drawn region in the pack to an absolute rectangle and test it against the strip. Clones
+-- inside a dynamic group are projected SIX DEEP, in the group's own grow direction, using its own
+-- spacing — six is well past this pack's realistic worst case (the alert group holds nine prompts
+-- and no spec can load them all at once). A single overlapping pixel fails the build.
+local DEEP = 6
+local function rectOf(node)
+  local x, y = absolutePos(node)
+  local w, h = node.width or 0, node.height or 0
+  local l, r, b, t = x - w / 2, x + w / 2, y - h / 2, y + h / 2
+  local parent = node.parent and nodeById[node.parent]
+  if parent and parent.regionType == "dynamicgroup" then
+    local reach = (DEEP - 1) * (((parent.grow == "HORIZONTAL" or parent.grow == "LEFT"
+      or parent.grow == "RIGHT") and w or h) + (parent.space or 0))
+    local g = parent.grow
+    if g == "UP" then t = t + reach
+    elseif g == "DOWN" then b = b - reach
+    elseif g == "RIGHT" then r = r + reach
+    elseif g == "LEFT" then l = l - reach
+    elseif g == "HORIZONTAL" then l, r = l - reach / 2, r + reach / 2
+    elseif g == "VERTICAL" then b, t = b - reach / 2, t + reach / 2
+    else error("unhandled dynamic grow: " .. tostring(g)) end
+  end
+  return l, r, b, t
+end
+local sillChildren = {}
+for _, id in ipairs(gRes.controlledChildren) do sillChildren[id] = true end
+local scanned, nearest = 0, nil
+for _, node in ipairs(transmit.c) do
+  if node.regionType ~= "group" and node.regionType ~= "dynamicgroup" and not sillChildren[node.id] then
+    local l, r, b, t = rectOf(node)
+    scanned = scanned + 1
+    assert(r <= STRIP_L or l >= STRIP_R or t <= STRIP_B or b >= STRIP_T,
+      ("%s (x %g..%g, y %g..%g) overlaps the sill (x %g..%g, y %g..%g)")
+        :format(node.id, l, r, b, t, STRIP_L, STRIP_R, STRIP_B, STRIP_T))
+    -- report the tightest VERTICAL margin as a number in the build log rather than as a claim
+    -- in a comment: gaps are what a future edit erodes first.
+    if not (r <= STRIP_L or l >= STRIP_R) then
+      local gap = (b >= STRIP_T) and (b - STRIP_T) or (STRIP_B - t)
+      if not nearest or gap < nearest[2] then nearest = { node.id, gap } end
+    end
+  end
+end
+assert(nearest, "the collision scan found nothing in the strip's x range — the projection is broken")
+print(("  collision scan: %d regions, %d clones deep, 0 overlaps | tightest vertical gap: %gpx to %s")
+  :format(scanned, DEEP, nearest[2], nearest[1]))
+
+-- THE PLATE (v15). It replaces the model, so the assertion that used to prove the model's unit
+-- fields now proves the plate's: the right region type, the right art, and — the one that matters
+-- — an EXPLICIT colour. On a `texture` region the tint is `color`, and leaving it empty draws in
+-- WeakAuras' default rather than the intended shade.
+local function assertPlate(id)
   local node = assert(byId[id], "missing aura: " .. id)
-  assert(node.regionType == "model", id .. ": not a model region")
-  assert(node.modelIsUnit and node.model_fileId == unit and node.model_path == unit,
-    id .. ": must emit BOTH model_fileId and model_path as " .. unit)
-  assert(node.portraitZoom, id .. ": portraitZoom off — the model renders full-body")
-  assert(node.width == PORTRAIT and node.height == PORTRAIT,
-    ("%s is %gx%g, canonical is %d"):format(id, node.width, node.height, PORTRAIT))
+  assert(node.regionType == "texture", id .. ": not a texture region")
+  assert(node.texture == PLATE_TEX, id .. ": not drawn on Square_White_Border")
+  assert(type(node.color) == "table" and #node.color == 4 and node.color[4] > 0,
+    id .. ": colour is not an explicit opaque-enough RGBA — it would draw in WA's default")
+  assert(node.width == PLATE_W and node.height == PLATE_H,
+    ("%s is %gx%g, canonical is %dx%d"):format(id, node.width, node.height, PLATE_W, PLATE_H))
+  assert(node.frameStrata == 2, id .. ": the plate is the backdrop and belongs on BACKGROUND")
 end
-assertPortrait("Druid - Player Portrait", "player")
+assertPlate("Druid - Sill Plate")
+-- The 3D portrait is genuinely gone, not merely unreferenced: no `model` region survives.
+for _, node in ipairs(transmit.c) do
+  assert(node.regionType ~= "model", node.id .. ": a model region survived the v15 re-type")
+end
 
--- READABILITY PROOF (v14). The health number is only "in the middle" if BOTH halves of this
--- change shipped, and each half is silent on its own: the offset without the reorder puts the
--- text under a face, and the reorder without the offset moves nothing anyone can see. Assert
--- both, against the ASSEMBLED tables, and spell the canonical numbers as literals here exactly
--- once so a later edit to the constants block cannot pass a proof written in those constants.
-assert(PCT_HP.y == 0 and PCT_HP.size == 16,
-  ("the health percentage is %gpt at y %g; v14 ships 16pt dead centre"):format(PCT_HP.size, PCT_HP.y))
-assert(PCT_POWER.y == -54 and PCT_POWER.size == 12,
-  ("the power percentage is %gpt at y %g; v14 ships 12pt at -54"):format(PCT_POWER.size, PCT_POWER.y))
-assert(PCT_THREAT.y == 58 and PCT_THREAT.size == 10, "the threat percentage moved; v14 does not move it")
--- The two moved labels, as they are actually shipped: offset, size, and the OUTLINE that is what
--- keeps a white number legible on a lit 3D model.
-local function assertLabel(id, token, size, y)
+-- READABILITY PROOF (v15). The numbers are only "inside the rail" if the digits fit: at 11pt a
+-- glyph is about 7px wide, so three digits from x = +32 reach +42.5 and the rail ends at +50.
+-- Assert the canonical placements as literals here exactly once, so a later edit to the constants
+-- block cannot pass a proof written in those same constants.
+assert(PCT_HP.x == 32 and PCT_HP.y == 0 and PCT_HP.size == 11,
+  ("the health percentage is %gpt at (%g,%g); v15 ships 11pt at (32,0)")
+    :format(PCT_HP.size, PCT_HP.x, PCT_HP.y))
+assert(PCT_POWER.x == 32 and PCT_POWER.y == 0 and PCT_POWER.size == 11,
+  ("the power percentage is %gpt at (%g,%g); v15 ships 11pt at (32,0)")
+    :format(PCT_POWER.size, PCT_POWER.x, PCT_POWER.y))
+assert(PCT_THREAT.visible == false,
+  "the threat percentage is visible; v15 ships it switched off, not deleted")
+local DIGIT_W = 7  -- a Friz Quadrata digit at 11pt, conservatively
+assert(PCT_HP.x + 1.5 * DIGIT_W <= RAIL_LEN / 2,
+  ("three digits from x %g reach %g and the rail ends at %g")
+    :format(PCT_HP.x, PCT_HP.x + 1.5 * DIGIT_W, RAIL_LEN / 2))
+local function assertLabel(id, token, place)
   local st = assert(byId[id], "missing aura: " .. id).subRegions[1]
   assert(st and st.type == "subtext", id .. ": the percentage is no longer sub.1")
   assert(st.text_text == token, ("%s: text is %q, expected %q"):format(id, tostring(st.text_text), token))
-  assert(st.text_fontSize == size and st.anchorYOffset == y and st.anchorXOffset == 0,
-    ("%s: %gpt at (%g,%g), expected %dpt at (0,%d)")
-      :format(id, st.text_fontSize, st.anchorXOffset, st.anchorYOffset, size, y))
+  assert(st.text_fontSize == place.size and st.anchorXOffset == place.x and st.anchorYOffset == place.y,
+    ("%s: %gpt at (%g,%g), expected %gpt at (%g,%g)")
+      :format(id, st.text_fontSize, st.anchorXOffset, st.anchorYOffset, place.size, place.x, place.y))
   assert(st.text_anchorPoint == "CENTER" and st.text_fontType == "OUTLINE",
     id .. ": the percentage lost its CENTER anchor or its OUTLINE")
+  assert((st.text_visible ~= false) == (place.visible ~= false),
+    id .. ": the percentage's visibility does not match its canonical placement")
 end
-assertLabel("Druid - Player Health Ring", "%percenthealth%%", 16, 0)
-assertLabel("Druid - Player Power Ring",  "%percentpower%%",  12, -54)
-assertLabel("Druid - Threat (Bear)",      "%threatpct%%",     10, 58)
-assertLabel("Druid - Threat (Caster)",    "%threatpct%%",     10, 58)
+assertLabel("Druid - Health Rail",     "%percenthealth%%", PCT_HP)
+assertLabel("Druid - Power Rail",      "%percentpower%%",  PCT_POWER)
+assertLabel("Druid - Threat (Bear)",   "%threatpct%%",     PCT_THREAT)
+assertLabel("Druid - Threat (Caster)", "%threatpct%%",     PCT_THREAT)
 
--- DRAW ORDER (v14). controlledChildren IS the sibling stack — FixGroupChildrenOrder adds +4
--- frame levels per child, so FIRST is furthest behind — and the health number lands ON the face,
--- so the face has to be first and every ring has to follow it. Assert on the group AND on the
--- flat child list, because the transmit is what actually ships and F.assemble is the only thing
--- keeping the two in step.
-assert(gRes.controlledChildren[1] == "Druid - Player Portrait",
-  "the portrait is not the first child of Druid - Rings: its face would cover the percentages")
+-- THE RULER AND THE NOTCH (v15), on the same one-pixel-is-one-percent scale as everything else.
+local function assertSubtexAt(id, index, wantX, wantW, wantH)
+  local st = assert(byId[id], "missing aura: " .. id).subRegions[index]
+  assert(st and st.type == "subtexture", ("%s sub.%d is not a subtexture"):format(id, index))
+  assert(st.xOffset == wantX and st.yOffset == 0,
+    ("%s sub.%d sits at (%g,%g), expected (%g,0)"):format(id, index, st.xOffset, st.yOffset, wantX))
+  assert(st.width == wantW and st.height == wantH,
+    ("%s sub.%d is %gx%g, expected %gx%g"):format(id, index, st.width, st.height, wantW, wantH))
+  assert(st.textureTexture == RAIL_TEX and st.textureVisible,
+    ("%s sub.%d is not a visible Square_White line"):format(id, index))
+end
+for _, id in ipairs({ "Druid - Threat (Bear)", "Druid - Threat (Caster)" }) do
+  assertSubtexAt(id, 2, 20, 2, THREAT_H)  -- the 70 notch: 70 - 50 = +20
+end
+for _, pair in ipairs({ { "Druid - Health Rail", HEALTH_H }, { "Druid - Power Rail", POWER_H } }) do
+  assertSubtexAt(pair[1], 2, -25, 1, pair[2])  -- 25%
+  assertSubtexAt(pair[1], 3,   0, 1, pair[2])  -- 50%
+  assertSubtexAt(pair[1], 4,  25, 1, pair[2])  -- 75%
+end
+
+-- DRAW ORDER (v15). controlledChildren IS the sibling stack — FixGroupChildrenOrder adds +4
+-- frame levels per child, so FIRST is furthest behind. The Sill's order is fixed: the plate is
+-- the backdrop and must be first, the waterlines mark the power rail and must come after it, and
+-- the flat `c` list must be depth-first in the SAME order because that is what actually ships.
+-- (There is no alarm frame in this pack; see the v15 header note. If one is ever added it goes
+-- LAST, after the waterlines.)
+local WANT_ORDER = {
+  "Druid - Sill Plate",
+  "Druid - Threat (Bear)", "Druid - Threat (Caster)",
+  "Druid - Health Rail", "Druid - Power Rail",
+  "Druid - Rage Mark Mangle", "Druid - Rage Mark Maul",
+  "Druid - Rage Mark Mangle Lit", "Druid - Rage Mark Maul Lit",
+}
+assert(#gRes.controlledChildren == #WANT_ORDER,
+  ("the sill has %d children, expected %d"):format(#gRes.controlledChildren, #WANT_ORDER))
+for i, want in ipairs(WANT_ORDER) do
+  assert(gRes.controlledChildren[i] == want,
+    ("sill child %d is %q, expected %q"):format(i, tostring(gRes.controlledChildren[i]), want))
+end
 local cIndex = {}
 for i, child in ipairs(transmit.c) do cIndex[child.id] = i end
-for _, id in ipairs({ "Druid - Player Health Ring", "Druid - Player Power Ring",
-                      "Druid - Threat (Bear)", "Druid - Threat (Caster)" }) do
-  assert(cIndex[id] > cIndex["Druid - Player Portrait"],
-    id .. " is listed before the portrait: its percentage would draw under the face")
+for i = 2, #WANT_ORDER do
+  assert(cIndex[WANT_ORDER[i]] == cIndex[WANT_ORDER[i - 1]] + 1,
+    ("the flat c list is not depth-first in controlledChildren order at %q"):format(WANT_ORDER[i]))
 end
--- And the reason that is safe: no ring's ART touches the face, only its text. Ring_20px paints
--- diameter * 20/256 at the outer edge, so each band starts well outside the 22px portrait radius.
-for _, pair in ipairs({ { "Druid - Threat (Bear)", THREAT_RING }, { "Druid - Threat (Caster)", THREAT_RING },
-                        { "Druid - Player Health Ring", OUTER }, { "Druid - Player Power Ring", INNER } }) do
-  local bandInner = bandOf(pair[2])
-  assert(bandInner > PORTRAIT / 2,
-    ("%s's band starts at radius %.2f, inside the %gpx portrait radius — it would cover the face")
-      :format(pair[1], bandInner, PORTRAIT / 2))
-end
+assert(cIndex[WANT_ORDER[1]] == cIndex[gRes.id] + 1,
+  "the sill's children do not immediately follow the sill group in the flat c list")
 
 local encoded = W.encode(transmit)
 W.verify(transmit, encoded)
 
 local txtPath = dir .. "/all-specs.txt"
 -- Continuity vs the PREVIOUS shipped string (read before overwriting it). v13 spent this pack's
--- one removal licence and v14 does not need it: no aura is added, removed or renamed, and
--- reordering children consumes no uid, so the STRICT default applies again — every previous uid
--- must survive (missing = 0) and an id that keeps its name while swapping uid (changed) is never
--- forgivable at all. v13's three ids are already gone from the string this compares against.
+-- one removal licence and v15 does not need it: no aura is added or removed, and renaming,
+-- re-typing, resizing and reordering children all consume no uid, so the STRICT default applies —
+-- every previous uid must survive (missing = 0) and an id that keeps its name while swapping uid
+-- (changed) is never forgivable at all. Four ids are RENAMED in v15 (Rings -> Player Sill,
+-- Player Health Ring -> Health Rail, Player Power Ring -> Power Rail, Player Portrait -> Sill
+-- Plate); a rename shows up as a drop in `stable`, never in `changed` or `missing`, because WA
+-- matches by uid and every one of those uids is carried across untouched.
 local cont = W.uidContinuity(encoded, txtPath)
 W.assertUidContinuity(cont, "druid")
 

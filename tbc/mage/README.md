@@ -1,4 +1,4 @@
-# Mage — Arcane & Frost HUD (v13)
+# Mage — Arcane & Frost HUD (v14)
 
 Programmatically generated WeakAuras pack for TBC Anniversary (WeakAuras internalVersion
 45, tocversion 20501). One import covers raid Arcane (40/0/21) and raid Frost (10/0/51):
@@ -31,6 +31,15 @@ this pack, so **there is one leftover group to delete by hand after updating** (
 cluster, drawn *on your portrait* at 16pt instead of floating 54px underneath it on bare screen,
 and mana takes the slot it vacates. Nothing is added or removed — it is two numbers, two font
 sizes and one change of draw order (see below).
+**v14 replaces the ring cluster with THE SILL**: a 102×37 instrument strip under your feet at
+`(0, -110)`, four stacked 100px rails — threat, health, mana, Arcane Blast stacks — where **one
+pixel is one percent**, every number is printed inside its own rail and every breakpoint is a
+full-height waterline. It is 2.65× denser than the cluster it replaces and it sits on the
+crosshair instead of 270px off to the left. **The 3D portrait is gone** (its UID becomes the
+plate the whole instrument is read against), the threat *number* is switched off, and the Arcane
+Blast stack icon leaves the buff row to become the fourth rail (see below). The 80% threat alarm
+is a **red rim**: a 108×43 quad, 3px proud of the plate on every side, drawn at the *bottom* of
+the stack so only the protruding band shows and nothing is ever painted over a readout.
 Spell IDs only — aura triggers carry every rank ID as
 strings and cooldown triggers carry the numeric rank-1 ID, so the pack is safe on zhCN and
 any other localized client. There is no custom code anywhere, so the import dialog shows no
@@ -38,6 +47,234 @@ code-review panel. Import `all-specs.txt` (or the fenced block at the bottom of 
 whole: copy all → `/wa` → Import → paste. Heads-up: the `/wa` editor preview force-shows
 every aura at once with placeholder data (load gates ignored, identical fake "55.1"
 timers, both specs' icons visible together) — judge the pack in combat, not in the preview.
+
+## v14 — The Sill: the cluster becomes a four-rail instrument under your feet
+
+The ring cluster is gone. In its place, centred under your character at `(0, -110)`, is a
+**102 × 37 px strip** made of four 100px rails:
+
+```
+   x -54                                                    x +54    <- alarm rim (only >=80% threat)
+    rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr        y  -88.5
+    rrr .--------------------------------------------------. rrr    y  -91.5   x -51 .. +51
+    rrr |================================   :              | rrr    threat  100x4   @ +15.5
+    rrr |========================================82%       | rrr    health  100x11  @ +7
+    rrr |===============|================        64%       | rrr    mana    100x11  @ -5
+    rrr |              ###       ###       ###             | rrr    arcane  100x6   @ -14.5
+    rrr '--------------------------------------------------' rrr    y -128.5
+    rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr        y -131.5
+      0              30        50        70          100
+                     ^ the 30% conserve waterline (mana)
+                                          ^ the 70 notch (threat)
+```
+
+*(One character is 2px above; the percent scale and the pixel scale are the same ruler, which is
+the point. The health number is drawn at x = +32 and the fill edge at 82% is at +32 too — that
+overlap is real, and the dark plate behind it is the reason it is still readable. The `r` band is
+the 80% threat alarm: a 108 × 43 quad that lives **behind** the 102 × 37 plate, so only the 3px
+that sticks out on each side ever draws — see below.)*
+
+**One pixel is one percent.** That is the whole design, and every other number follows from it.
+A 0–100 quantity has exactly 100 distinguishable states, so a 100px rail is the exact length at
+which the gauge is lossless: shorter throws a state away, longer redraws states the eye cannot
+separate. It also makes every breakpoint arithmetic instead of trigonometry —
+
+> **x(v) = (v / max − 0.5) × 100**, i.e. **x = v − 50** for a 100-max resource.
+
+— where the ring needed `r = size/2 × 0.94; x = r·sin(2πf); y = r·cos(2πf)` and put the 30%
+conserve mark at `(27.71, −9.0)`.
+
+| | v13 cluster | v14 Sill |
+| --- | --- | --- |
+| bounding area | 10,000 px² (+1,600 for the stack icon in the buff row) | **3,774 px²** |
+| height, the scarce axis under a character | 100 | **37** |
+| px² carrying no decision | 1,936 (the 3D portrait) | **0** |
+| distance from the crosshair | 270px left | **0** |
+| breakpoint geometry | trigonometry on a stroke radius | `x = v − 50` |
+
+### The four lanes, and how to read each one
+
+| Lane | Region | Size @ local y | Reading rule |
+| --- | --- | --- | --- |
+| **Threat** | `Mage - Threat Rail` | 100×4 @ +15.5 | Green fill = your share of the pull threshold. **When the fill reaches the white notch you are at 70 — Invisibility or stop.** Orange past 70, red on aggro, and at 80 a red rim pulses *around* the whole instrument — outside the plate, never over the lanes. Absent entirely when you are solo, in an arena, or on nobody's threat table. |
+| **Health** | `Mage - Health Rail` | 100×11 @ +7 | Fill = health, the number at the right end is exact. **Colour is the threshold**: orange below 50, hot red below 30 where the Ice Block prompt fires. Three hairlines mark the quarters. |
+| **Mana** | `Mage - Mana Rail` | 100×11 @ −5 | Fill = what you can spend. The amber waterline at x = −20 is the **30% Arcane conserve switch** (Arcane only); a brighter, wider line appears over it the moment you cross. |
+| **Arcane** | `Mage - Arcane Lane` | 100×6 @ −14.5 | Three pips = three Arcane Blast stacks; **at three the lane turns red — your next Arcane Blast is at max cost**. And **the length of the lane is how long you have before the stack falls off**, because it is fed by the debuff's own remaining time. |
+
+The instrument fades to 50% alpha out of combat, exactly as the cluster did, but there is no
+parent that can do it for the group: **the plate is a *sibling* of the rails, not their parent**,
+so its alpha does not propagate and every region that can be on screen out of combat carries the
+`inCombat == 0 → alpha 0.5` condition itself. Five do — the plate, the health rail, the mana
+rail, the conserve waterline and the arcane lane. The other three cannot be on screen out of
+combat at all, and the build proves that rather than assuming it: the threat rail hides at
+`threatvalue <= 0`, the lit conserve marker is `load.use_combat`, and the alarm frame's trigger
+only fires above 80% threat. Add a lane carrying neither and the build fails — which is exactly
+what caught the arcane lane, the one lane that arrived in the strip with no fade and drew at full
+brightness over a faded plate whenever a stack window outlived the pull.
+
+### The 80% threat alarm is a *rim*, and here is why that took measuring
+
+`Mage - Alarm Frame` is a **108 × 43** additive red quad — the plate plus **3px on every side** —
+and it is **the first child of the group**, i.e. the *bottom* of the stack. Only the 3px band that
+protrudes past the 102 × 37 plate can be seen. The rest of it sits behind a 45%-black plate and
+behind every rail, number, waterline and pip, so **nothing is ever composited over a readout**.
+
+The first cut of v14 shipped it the other way round — the plate's own 102 × 37, `blendMode = ADD`,
+**last** in the draw order — on the belief that `Square_White_Border.tga` is an outline with a
+transparent middle, so a same-size quad would trace the instrument's edge. That belief was
+inferred from two poc builds and never checked. It is **wrong**, and the file was decoded to
+settle it:
+
+> `Interface/AddOns/WeakAuras/Media/Textures/Square_White_Border.tga` — 256×256, 32bpp, RLE.
+> **64516 of 65536 pixels (98.44%) are fully opaque, alpha 255**; the 1020 that are not are
+> exactly the 1px outer ring. Every pixel **inset 8px or more** from the edge: n = 57600,
+> **minimum alpha 255, minimum RGB channel 167**. The centre scanline's red over x = 0…13 reads
+> `0, 156, 100, 56, 40, 57, 102, 158, 206, 236, 250, 254, 255, 255`. The centre pixel is
+> `rgba(255, 255, 255, 255)`.
+
+So it is a **filled square with a dark bevel baked into its edge** — not an outline, and its
+interior is not transparent. Neither bundled square is hollow, which means **no single region can
+trace an edge**, which means the original construction was a full-area red wash over all four
+lanes at exactly the moment threat ≥ 80% makes them worth reading.
+
+Being bigger and being underneath are **one mechanism, and both halves are asserted** against the
+decoded string on every build: `alarm.width == plate.width + 6`, `alarm.height == plate.height +
+6`, `cc[1]` is the alarm and `cc[2]` is the plate. A +6 quad drawn last is the wash again; a
+same-size quad drawn first is invisible. This construction is correct whether the art is filled or
+hollow, which is the point of it — it does not rest on a claim about a `.tga`.
+
+*(The same scanline decides the art. The rim is the outer 3 screen pixels of a 108px-wide quad, so
+its columns sample texel centres 1.19 / 3.56 / 5.93 — red ≈ 156 / 48 / 102, a banded left-and-right
+rim at roughly 40% strength, while the vertical rim resamples onto 2.98 / 8.93 / 14.9 ≈ 56 / 236 /
+255 and draws nearly full. On `Square_White` every rim pixel is 255 on all four sides, so this pack
+draws the rim on the fill art for a uniform edge. The rogue pack uses the border art with the
+identical construction and is equally correct — correctness comes from the size and the order.)*
+
+### What each old aura became — no new UIDs, none discarded
+
+| v13 aura | v14 | Kept |
+| --- | --- | --- |
+| `Mage - Player Portrait` (**model** 44×44) | **`Mage - Sill Plate`** — texture 102×37 on `Square_White` (a flat, uniform quad: no border, no rounding), black at 45%, **second** in the draw order | UID, both triggers, both conditions |
+| `Mage - Threat Ring` (100×100) | `Mage - Threat Rail` 100×4 | UID, trigger, all three conditions, both load gates |
+| `Mage - Player Health Ring` (84×84) | `Mage - Health Rail` 100×11 | UID, both triggers, all four conditions |
+| `Mage - Player Mana Ring` (62×62) | `Mage - Mana Rail` 100×11 | UID, both triggers, both conditions |
+| `Mage - Mana Conserve Line/Lit` (6/8px beads) | 3×11 and 5×11 **waterlines** at x = −20 | UIDs, triggers, colours, Arcane gate, pop animation |
+| `Mage - Threat Flash` (100px halo) | `Mage - Alarm Frame` **108×43** — the plate + 3px per side, **first** in the draw order, so only the 3px rim shows | UID, trigger, ADD blend, alphaPulse, both load gates, and its explicit red |
+| `Mage - Arcane Blast Stacks` (**icon** 40×40, buff row) | **`Mage - Arcane Lane`** — progresstexture 100×6 in the strip, plus a second *Unit Characteristics* trigger that feeds the out-of-combat fade | UID, the aura2 trigger (36032), the Arcane-only gate |
+| `Mage - Player Cluster` | `Mage - Player Sill`, moved to `(0, −110)` | UID |
+| `Mage - Rings` | `Mage - Sill Layer` | UID |
+
+Continuity against v13 is `stable=35 changed=0 retained=43 missing=0 parentSame=true`: **all 43
+child UIDs survive**, and `stable` reads 35 only because eight auras were renamed (an aura counts
+as *stable* only if its id is unchanged; a `missing` UID is the hard failure, and it is 0). 44
+auras before, 44 after. Nothing to delete by hand.
+
+### What this costs you — the honest list
+
+- **The live 3D portrait is gone.** It was 1,936 px² — 19.4% of the cluster — and it decided
+  nothing, but it was also the one part of this HUD that read as *you* rather than as an
+  instrument panel. v11 brought it back on purpose ("two concentric arcs around a live portrait
+  read as a unit"); v14 reverses that on density grounds. Its UID is now the plate, so nothing is
+  orphaned, but a 3D face is not coming back without another version.
+- **The threat percentage is no longer printed.** The subtext still exists at index 1 with its
+  token, colour and font intact — it ships `text_visible = false`. `/wa` → `Mage - Threat Rail`
+  → the text sub-region → tick *Show Text* and it returns just above the plate — at absolute
+  y −84, which is 7.5px clear of the plate's top edge at −91.5, not on top of the lanes. (That
+  offset is `anchorYOffset = 10.5` on the threat rail, because a subtext anchors to its own
+  *region's* centre, so it stacks on the rail's +15.5 and not on the group. The build re-derives
+  the number from the decoded string and asserts both facts, so this sentence cannot go stale.)
+  It went because
+  `threatpct` is scaled so 100 = pulling aggro: it is an early-warning ratio, not a quantity you
+  spend, and a notch at the 70 line answers it faster than reading "68" against "72".
+- **The Arcane Blast stack count and its countdown are no longer text.** Three pips replace the
+  16pt number and the draining rail replaces the 11pt window timer, and the 40×40 spell icon art
+  goes with them.
+- **The numbers straddle the fill.** At ~82% health the fill edge sits under the digits. Outline
+  + black shadow + the dark plate is the mitigation, and it is why the plate is load-bearing
+  rather than decoration — judge it in combat, not in the editor.
+- **Four bars is a dashboard; the cluster was a character.** That is the aesthetic cost of a
+  2.65× density gain, and it is the most likely thing to dislike.
+
+### Where it sits, proved rather than asserted
+
+Offsets add down the chain, and the strip hangs two groups deep under a top group with its own y:
+
+```
+top (0, -140) + layer (0, +180) + sill (0, -150) = (0, -110)
+```
+
+The build **decodes the string it is about to ship**, walks that chain itself, and fails if the
+answer is not `(0, -110)` — along with 60-odd other checks that hard-code the rail canon the way
+v12/v13 hard-coded the ring canon (`orientation == "HORIZONTAL_INVERSE"`, every rail exactly
+`RAIL_LEN` long, the lane offsets, the subregion layout, **the alarm rim first and the plate
+second**, and the rim exactly 6px larger than the plate in both axes). Then it boxes every other
+element in the pack and scans them against **the alarm envelope, not the plate** — the rim is the
+widest thing the strip ever draws, and scanning the plate would have declared 3px of it clear
+without ever testing it — projecting each dynamic group **at least six children deep**:
+`max(childCount, 6)`, so the alert stack and the cooldown row, which own ten children each, are
+projected ten deep, because an alert stack that clears at depth 1 is not a clearance:
+
+```
+ALARM ENVELOPE (scanned)         x  -54..54    y -131.5..-88.5
+plate (inside it)                x  -51..51    y -128.5..-91.5
+  Mage - Ice Barrier             x  -20..20    y -176..-136   clear by  4.5px
+  Mage - Arcane Power Window     x  -65..-31   y -173..-139   clear by  7.5px
+  Mage - Icy Veins Window        x   31..65    y -173..-139   clear by  7.5px
+  Mage - Alerts     (stack x10)  x -172..-128  y  -66..450    clear by 74.0px
+  Mage - Cooldowns  (row x10)    x -178..178   y -222..-190   clear by 58.5px
+  Mage - PvP        (stack x6)   x   80..220   y -290..-26    clear by 26.0px
+                          6 boxes scanned, 0 overlaps, tightest 4.5px
+```
+
+The binding margin is **4.5px**, from the rim's bottom edge at −131.5 to the 40px Ice Barrier
+timer starting at −136. (The plate alone would clear it by 7.5px — that is the number this section
+used to print, and the reason the scan now boxes the envelope.) The rim only exists above 80%
+threat, so 4.5px is the worst case rather than the resting state, and the next tightest is 7.5px
+to the two burn-window timers. The strip is the same shape and the same `(0, -110)` in all seven
+packs, so the margin is deliberate and shared. **No existing row moved.**
+
+### After updating
+
+**Leave the update dialog's categories at their defaults — in particular, leave *Arrangement*
+checked.** This version re-parents nine auras, re-orders the group's children and moves the group
+itself, and every one of those travels in the *Arrangement* category. Unchecking it leaves the
+rails at their old ring sizes and positions, which is not a HUD.
+
+If you have dragged the pack around in game, expect to re-drag it afterwards. That is the cost of
+a version that changes region type, size, parent, offset and draw order at once, and it is the
+same trade v12 asked for.
+
+There is **nothing to delete by hand** this time: no aura is removed, every UID carries, and the
+eight renamed auras update in place under their new names. You should see **44 auras**, same as
+v13. The buff row is one icon shorter — the Arcane Blast stack tracker is now the bottom rail of
+the strip — and the row closes the gap by itself.
+
+### Honest limitations
+
+- **`HORIZONTAL_INVERSE` has never been rendered by this repo.** It is transcribed from
+  WeakAuras' `Private.orientation_with_circle_types` as "Left to Right" (`HORIZONTAL` is "Right
+  to Left" — note this is the *opposite* convention to an aurabar), and it shares the linear code
+  path with `VERTICAL`, which *is* live in a shipped poc string. **30-second check on a live
+  client**: at full mana the rail is solid; drop to ~50% and confirm the empty half is on the
+  **right**. If it is reversed, the fix is one token in `generate.lua` and nothing else changes.
+- **A non-square progresstexture is new here.** Every other one in this repo is a square (rings
+  and globes). `crop_x/crop_y = 0.41` is a texcoord scale on the linear path and the art is a
+  uniform white square, so it cannot alter what is drawn — but the aspect stretch itself is
+  untested for this region type in this repo.
+- **An aura2-fed progresstexture is new here too.** The arcane lane taking its fill from a
+  debuff's remaining time is standard WeakAuras, but every other progresstexture in this repo is
+  fed by a unit trigger.
+- **6px pips are small.** If the three Arcane Blast stacks do not read at a glance in combat, the
+  lane can grow — but the plate grows with it and so does the rim, and the rim already sits 4.5px
+  off the Ice Barrier timer, so it is a real trade rather than free space.
+- **The rim has not been rendered on a live client either.** The construction is arithmetic (a
+  108×43 quad behind a 102×37 one leaves a 3px band) and both halves are asserted off the decoded
+  string, but *how bright* a 3px additive band at `{1, 0.1, 0.1, 0.85}` reads against a night sky
+  versus a lava floor is a judgement no build check can make. If it is too subtle, `RIM` at the
+  top of `generate.lua` is the one number to change — the asserts derive from it.
+- **The geometry still has not been rendered on a 2.5.x client.** Every dimension is a named
+  constant at the top of `generate.lua`: retune and re-run rather than dragging pieces in game,
+  or the next update resets them.
 
 ## v13 — the health number moves into the middle, onto your face
 
@@ -1062,49 +1299,58 @@ What changed:
 
 ## Layout
 
-**Ring cluster** (v12 — ONE cluster, at `(-270, 40)`, after the target cluster was deleted for
-duplicating the default UI. The sizes are the canonical set shared by all seven class packs, so
-any two of them can be diffed and match: threat ring 100px, health 84px, mana 62px, portrait
-44px). Each ring is a `progresstexture` in `orientation = "CLOCKWISE"` on WeakAuras' bundled
-`Ring_20px` annulus, so the value is **arc length travelling round the hoop**, with the unfilled
-arc drawn as a black 55%-alpha track on the same art so a partial ring reads as a ring rather than
-as a shape appearing out of nothing. In the middle is a **live 3D portrait** of you — a real
-model, not a class icon — with your **health percentage drawn on top of it** since v13. The
-portrait is the FIRST child of the cluster group, i.e. the furthest back: every ring draws over
-it, which is what lets a ring's text land on the face. No ring paints anything inside radius
-26.16 and the face ends at 22.00, so nothing of the portrait is covered except by the number.
-Outside in: the **threat ring** is the outermost arc at 100px, green normally, orange from 70%,
-red the moment you pull aggro, with a red flare pulsing on it above 80% and the threat percentage
-10pt above the cluster — mage burst has no passive threat dump, so this ring is the warning
-system, and it is the one number here the default UI never shows. It is party/raid only and never
-loads in an arena (v5), and it hides itself at zero threat rather than reporting a relationship
-that does not exist, so most of the time the cluster is simply two arcs and a face: **the third
-arc appears only when threat is real**. Nothing is drawn in its place when it does not load.
-The **health arc** is next at 84px, green, with the percentage **16pt white in the dead centre of
-the cluster, over your portrait** (v13 — it was 13pt and 54px below the cluster through v12), running
-orange below 50% and hot red below 30%, where the Ice Block prompt fires. The **mana arc** is
-innermost at 62px, blue, its percentage 12pt in the slot health vacated, just under the health
-ring (v13 — it was 10pt and 16px lower) — mana is the mage's real clock,
-since Arcane plans its pool to hit zero as the boss dies — and it carries the conserve breakpoint
-as a bead on its circumference at the 30% mark, dim by default with a brighter, larger bead
-popping in the moment you cross it. Both unit rings, the portrait and the conserve bead fade to
-50% alpha out of combat so the HUD breathes with the fight, and the lit bead is combat-only. Since
-v3 the conserve bead and its lit marker load for Arcane only: they mark a rotation switch that
-Frost does not have. Every ring hides rather than showing a misleadingly full circle when its
-maximum is zero, because a `progresstexture` with a zero total draws **full**, not empty.
+**The Sill** (v14 — ONE 102×37 instrument strip, centred under the character at `(0, -110)`,
+replacing the ring cluster that sat at `(-270, 40)` from v11 to v13. The geometry is the canonical
+set shared by all seven class packs, so any two of them can be diffed and match: 100px rails,
+4 / 11 / 11 / 6 tall, at local y +15.5 / +7 / −5 / −14.5 on a 102×37 plate). Each rail is a
+`progresstexture` in `orientation = "HORIZONTAL_INVERSE"` — "Left to Right" — on WeakAuras'
+bundled `Square_White` art, so the value is **length along a 100px scale where one pixel is one
+percent**, with the unfilled part drawn as a black 55%-alpha track on the same art so a partial
+rail reads as a gauge rather than as a shape appearing out of nothing. Behind all four is the
+**sill plate**: a 102×37 black slab at 45% on the flat, uniform `Square_White` art — no border and
+no rounding, because that texture has neither — the SECOND child of the group, which is what makes
+an 11px rail and an 11pt number survive a snowfield or a lava floor. It carries the UID the live 3D
+portrait used to. Behind *that*, as the FIRST child and therefore the furthest back of all, is the
+**alarm rim**: 108×43, the plate plus 3px per side, additive red at `{1, 0.1, 0.1, 0.85}`, so only
+the protruding band is visible and the rest hides behind the plate. Both WeakAuras squares are
+*filled* — `Square_White_Border.tga` decodes to 98.44% fully-opaque pixels with a minimum RGB of
+167 across its entire 240×240 inset core, i.e. a filled square with a dark bevel at its edge, **not
+an outline** — so no single region can trace an edge, and the alarm reads as an edge purely because
+it is oversized and underneath. Both halves are asserted on every build.
+Top to bottom: the **threat rail** (100×4) is green, orange from 70%, red the moment you pull
+aggro, with a white notch at the 70 mark and the alarm rim pulsing red *around* the instrument
+above 80%
+— mage burst has no passive threat dump, so this rail is the warning system, and it is the one
+thing here the default UI never shows. It is party/raid only and never loads in an arena (v5),
+and it hides itself at zero threat rather than reporting a relationship that does not exist, so
+most of the time the strip is three lanes: **the threat lane appears only when threat is real**.
+Its percentage subtext still exists at index 1 but ships switched off — the notch is the read.
+The **health rail** (100×11) is next, green, with the percentage **11pt at the right-hand end,
+inside the rail**, running orange below 50% and hot red below 30%, where the Ice Block prompt
+fires, and three faint hairlines marking the quarters. The **mana rail** (100×11) follows, blue,
+its percentage in the same place — mana is the mage's real clock, since Arcane plans its pool to
+hit zero as the boss dies — and it carries the conserve breakpoint as a **full-height waterline
+at x = −20** (the 30% mark: `x = 30 − 50`), dim by default with a brighter, wider line popping in
+the moment you cross it. The **arcane lane** (100×6) is the bottom rail: three pips for Arcane
+Blast stacks, and the rail itself drains with the debuff's remaining window, turning red at three
+stacks. The plate, both unit rails, the conserve waterline **and the arcane lane** each carry the
+`inCombat == 0 → alpha 0.5` condition — the plate is a sibling of the rails, so nothing propagates
+it and every visible region has to hold it itself — so the HUD breathes with the fight; the threat
+rail, the lit waterline and the alarm frame carry no fade because none of them can be on screen
+out of combat in the first place. Since v3 the conserve
+waterline and its lit marker load for Arcane only: they mark a rotation switch that Frost does
+not have. Every rail hides rather than showing a misleadingly full bar when its maximum is zero,
+because a `progresstexture` with a zero total draws **full**, not empty.
 There is deliberately **no target-side anything** since v12: the target's health is on the target
 frame and the nameplate already, and enemy mana lives in the arena PvP column (v5), where it
-decides something. Every percentage is still a sub-region **of a ring**, because a `model` region
-cannot carry text at all — but since v13 that no longer decides where the text is *drawn*: each one
-anchors to the cluster centre, so the health number sits at the middle over the portrait while
-still belonging to the health ring (and still appearing and disappearing with it).
+decides something. Every percentage is a sub-region **of its own rail**, anchored to that rail's
+centre and offset to its right-hand end, so each number appears and disappears with the gauge it
+belongs to.
 
 **Buffs** (static timer row under the character). Arcane and Frost are mutually exclusive at 70,
-so both 40x40 centre icons share the one slot. Arcane Blast stacks (self-aura 36032, 8 s
-window) shows the stack count large in the center and the remaining window at the bottom, and
-glows purple at 3 stacks — the cap is the decision point: keep spamming Arcane Blast only
-while Arcane Power / Presence of Mind / Icy Veins are burning, otherwise fall back to filler
-until the stack aura drops and rebuild. Ice Barrier (all six ranks) shows its remaining uptime
+so both 40x40 centre icons share the one slot — although since v14 only Frost's fills it, because
+the Arcane Blast stack tracker left this row to become the strip's bottom rail (the row is a
+static group, so nothing else shifted). Ice Barrier (all six ranks) shows its remaining uptime
 for Frost and glows in its last 5 seconds so the reshield lands before the shield lapses;
 pushback protection is completed Frostbolt casts, so the timer is a rotation element, not
 decoration. The two 34x34 burn-window timers flank that slot: Arcane Power left, Icy Veins
@@ -1157,8 +1403,8 @@ interrupted — the column holds only the opponents' mana.
 
 | Element | Gate |
 |---|---|
-| Arcane Blast Stacks icon, Arcane Power CD, Arcane Power window | Spell Known 12042 (Arcane Power) |
-| Mana conserve bead + lit crossing bead | Spell Known 12042 — **Arcane only** (v3) |
+| Arcane Lane (the stack rail, v14), Arcane Power CD, Arcane Power window | Spell Known 12042 (Arcane Power) |
+| Mana conserve waterline + lit crossing line | Spell Known 12042 — **Arcane only** (v3) |
 | Presence of Mind CD | Spell Known 12043 |
 | Icy Veins CD + Icy Veins window | Spell Known 12472 (loads for deep Arcane *and* Frost) |
 | Summon Water Elemental CD | Spell Known 31687 |
@@ -1168,7 +1414,7 @@ interrupted — the column holds only the opponents' mana.
 | Ice Lance SHATTER prompt | Spell Known 30455 (learned at 66) **and NOT** 12042 — hidden from Arcane (v3) |
 | Evocation CD **and Evocation prompt** (v3), Counterspell CD, Blink CD, Invisibility CD | Spell Known 12051 / 2139 / 1953 / 66 |
 | Invisibility prompt | Spell Known 66 **and** party/raid only (`ingroup`) |
-| Threat ring (the outermost arc, v12), Threat Flash flare | party/raid (`ingroup`) **and** every instance type **except arena** (`size`, v5) |
+| Threat rail (the top lane, v14), Alarm Frame | party/raid (`ingroup`) **and** every instance type **except arena** (`size`, v5) |
 | All six PvE alert prompts | in combat only |
 | CC ON ME, TARGET IMMUNE, Trinket DOWN, CS LOCKOUT (v4) | arena **or** battleground (`size`) |
 | COUNTERSPELL NOW, CS LOCKOUT (v4) | arena/battleground **and** Spell Known 2139 |
@@ -1176,9 +1422,9 @@ interrupted — the column holds only the opponents' mana.
 | Enemy Trinket, Polymorph OUT (v4), Enemy Mana (v5) | **arena only** — they read `arena1..arena5` |
 | Everything | class MAGE |
 
-Seven elements carry no *spec* gate after v12 — the health ring, the mana ring, the portrait, the
-threat ring and its flare, Clearcasting and the mana gem prompt — and every one of them is a
-decision both Arcane and Frost make (the threat ring and its flare do carry a group gate, and
+Seven elements carry no *spec* gate after v14 — the health rail, the mana rail, the sill plate,
+the threat rail and its alarm frame, Clearcasting and the mana gem prompt — and every one of them
+is a decision both Arcane and Frost make (the threat rail and its frame do carry a group gate, and
 since v5 an instance-size gate as well; neither is a spec gate). The other three that used to be
 on this list were the target cluster's health ring, portrait and outer track, which v12 deletes.
 `tools/spec-preview.lua` models Spell Known gates only, so from v4 it lists the
@@ -1209,9 +1455,13 @@ and the item ones take the numeric item ID, never a name.
 `tools/tbc-weakaura-creator/scripts/setup.sh` once beforehand to fetch LibDeflate and
 LibSerialize). The script is fully deterministic — fixed UID seed 20260816, no time or
 environment inputs — so rebuilding produces a byte-identical `all-specs.txt`
-(sha256 `92508e8db3151660e2520b9489b64a9aea91f337cd07d9479f04e6b5a70087a3`, 9914 chars,
-44 auras). It round-trip verifies the encoded string and checks UID continuity against the
-committed `all-specs.txt` **before** overwriting it; `changed` must stay 0 so in-game
+(sha256 `4cc485a8f3ffb85b61c8f4d9af3c9bdfd1adfba155c2fa2ab4583dcf49ed9ac5`, 10025 chars,
+44 auras). It round-trip verifies the encoded string, **re-decodes it and re-proves the
+geometry** (v14: the sill's absolute position walked from the real parent chain, the rail canon
+on every lane, the subregion layout, the draw order, the alarm rim's +3px-per-side size *and* its
+`cc[1]` position, and a rectangle scan of the **108×43 alarm envelope** against every other
+element with dynamic groups projected six children deep), and checks UID continuity
+against the committed `all-specs.txt` **before** overwriting it; `changed` must stay 0 so in-game
 re-imports offer *Update* instead of duplicating the group. v2 added six auras and changed
 none of the 25 v1 UIDs (`stable=25 changed=0`); v3 added none and changed none of the 31
 (`stable=31 changed=0 parentSame=true`) — it edits load conditions only; v4 added nine and
@@ -1275,8 +1525,21 @@ script. And unlike every previous version, v12 leaves something behind on purpos
 cannot delete what an import does not mention, so `Mage - Target Cluster` and its three children
 must be deleted by hand once (see *After updating*, above).
 
-## Import string (v13)
+**v14 hands `W.assertUidContinuity` no allowance list at all**, which is the strict default
+restored: v12's licence expired at v13, the four deleted ids are absent from both sides of the
+comparison, and this version adds and removes nothing — `stable=35 changed=0 retained=43
+missing=0 parentSame=true`. It re-types five regions (a model into a texture, an icon into a
+progresstexture, three rings into rails), resizes nine, re-parents nine and re-orders one group's
+children, and **not one of those touches the UID stream**: every region is still created by the
+same `W.uid()` call in the same position, and the four retired slots are still drawn and thrown
+away. `stable` reads 35 rather than 43 because eight auras were renamed, listed in the v14 table
+above; each keeps its UID and updates in place. The one import-time note that *reverses* for this
+version: **leave the Update dialog's *Arrangement* category checked**, because the re-parenting,
+the re-ordering and the move to `(0, -110)` all travel in it, and unchecking it leaves the rails
+at their old ring geometry.
+
+## Import string (v14)
 
 ```
-!WA:2!L33E0TXX596rWYwgYYrK6HLvCCGvSuLuSLWdc(qv(baiGiKibGwaskkRyGfalXUIa7UA3f8LJDByItvonPpyBDttZ9EBrsCBsZ50tyTDCst7nHno960K25W)WDZRBB01NuLeN7Xh18OnVA)Mz2fViieffLJStoXG7o7mZoZ8977X899TJqJ0zU)K365FZlLLp3e51uudPuur74oC4iHd3hYVAN5uKn0ukwuiFirPI51eK3T6ogIVGGR7ZvII8ZiO5kuXY6gcAxiRIwEbTGwDK6wdwuA2z51Y7kLIsrdjvTPJp(46cgOSQ8q)yOEh0(jvWqqFfqlhVSGR95kIMIUrwwFjQndRj9V5kAcfKuKtnJQaxbnLYQvyvjP0ScBCbj5Xv0kXBa1W5cShWMiieYXs8Lnev0IRsESUZSWuACPco14ZrlOBoDdEndNzhxswsx0zq4pgoNZqtQqbbn9y7tZ6YNmOb5TZxwJ37IKF1vfkwukV(U70DWYqJYQsxqMJwE086oVGE5Sctct1KLhFCPPxiDOajtLozQaCPQ(OeAcWJ4sMi8GdEPY6cHNggxjz9qgoz(sc6oRKxil0dKjV2aHhmrKHhC(YYwdlNlKxs)SLLHzZKcE5lwuTdE61PypFiL8cF8BWA5kC(ccQDK8CLbkGRiLlw01OIsgclYEkBX(wMNxwITy2nEBrwuGxxiPbqXkyiEZ4DfuwrwyP8W8NuJ0K1enDbyrnV(CKQsgL4dhSeVKCe8HGgGpm2n2d2l83T3CjZRluC8eksYgzdfowQWC7rk)IwWloj5c6xcEKGMmFXrG3c8(E4fgxdwtGXdVbVJlXlNdiTrifrEVztgIlC4yvmuYnjR(BkXo8wwk)c7VG)ZnRXPutfSpo9C8ffCubOaCuqLUnMjQmm9DuHmxKyGLGfv4Z7Cb2RHooX(p)BgJQYHG3WSQ7Sr(HekaIHxYqTtRYtjQjWBqNpwy(Q1Dab(IgIShD7n(OH4L5BSn0scbdlbTjfCnOKSG6UwHhzOUTgF5rkYRlIVr8gX30lVv8nJ7gFlIyNi8MX3kElBeFBoXVbkZcERoXD4e3jq5DI3Ut8oCI3zS9HV9NeOA3bE3auh)gX3j(n5eFx43m2f(UX7jd(T4eFp49I3Nt8VcE)4d8XVb8bXVv89El47JaGAge47YdlWDH9dibSdCppmUxh4(Whb)RcKs8rxiVB3DfAs5iNE2rWpGd8d6e)qoWbCId6ehcOn(wOeG3lgvFyGHmdzc7LxvseFtiYSfQHg95PNgbt4QeXgMUpI109nsMICuM0Sm6K1uFoGnnDzA)twaQo7RVD44QBNmeCfsKNiPrqts3qkNU9Q3jBQT2RClQAHEoTIsPmW0Fr24DCPIcrZJVZkSBv5HrZDYMRP1naUq0CAkguwsuDfdtZh0zwrbPcIgJHdoY8KHEoalONjRbWfiBStUsLbPZo5OLUVS6aIROqWHcCSW4ZStC6mbbXz52j(modQdYAjxuh8FoDHZvwqoNGdat5GGCa8dGSoyWyGuc8M5Odf8wU7AJPY6NeGB1UxBwKgF(jbwmbX1oGbajp0TBrBNfHV3ntXlemu)wLotDRlAt)sBLBkP8gIJrXwhDHG9DmJWJOQnPX4eWN6wP1TFjDIm9OG6fro(IQI8aw7G7JlNOqUjIGV9no3K8As8zlkmNKCiLsz5n4MKVyzb0Euu3Z9F)A5e5LliOV79H1yRxQGQrbnJzWY7dRa9GdS68L4NwKHV060nPHh9(X0MGWgy56OMZw)uyg05pswGCQbZm2FbI9nHwGp)zj6JZpe)0BO2nsYBWIbqD75f05niYVfikRjAtLZlUGorgQW0WdeYuFDIOaQEz1HtViVSbAob58biOK31oba6fGPubnbD9KkL1YjCW78g2azfSo8WOiSmSUDKAZydQqj1CgyT90dDk)awt5JtXvDt(XJdSXLgV6BNQqVAxWXxakgR5GTqB1ysZ6lXncT1l7xOlWVZQnAb27LsHA5An(b3953PANgWYqADr(8ktDklBwMNwg5Nf3B1r)E3R6wRRU1m5q9ERw90mltsxTrPZlKduVc8WAWfeDuOlW6eBvHbdmCQ4QBJwiy7IcrxCUrjO1GbGBVeRBLMwipTW3Xsm1tJXgQLxK(CcDxA8zW(RqLlqjTbJfpwy17UnJnwbzJvUuwbn8U0aDKKkwHw7C05hznUhhKL3E87yERUbSMBRr0KM11jlZNNOA2vQunSoAn4qlrlBkqD7OA8QZnQ1flvTFOg5eF4udgfgQSv3g0(QU32m8PafQjjCJxurrRw3sStChwlu20u2c1KanayGZGh7fwZIFYMdyRtpdzrPlp1RnrDRaNzalMqkpPOAhzRY1zXVP2tuIvoJZNt4mbYNpUS(zgvGFIaeBmpZqc5L4pJvn1pdXIG0EDRo9HmkWtfYvHA)kLHeHd(UXNoZceP8q9i2jNHQTIi6we)WeP3AwpaUEF4Bntqqzt(m432(WpcontIpodvkpp87KCGT6gZKXR6KqpbR3gZuIxoJxdb5mvmMc0FmZ4GPMGYe61zWhotn7fOkcRWOoeDHGghTccgGsVlqgt1EqgIgX4QB1YwLKsgLPAYOQiBu)y2ssAAkAInVWkjlI38LSffzWwTMtbSceKFR7CEGclNNykmxWbdhRFQ97C2kmVGEjffdXewTotfQCUisA6gIly1h5kkPksuwCjRoNaBjDO62dnyGHsKkEWbde6eb6V)OPIocaDRrLTGBxQwjvLuqqm(9pxoLsQK3SirHvy8784KY96NWQ1l5hFoik4M4fu7OM8qleb(ph0EfQuWr77K9pB8OatOmX0xbX5PtcYimB0yjJ2F4fu0KaIeDkpFObJh6eJgnzyg0DAlO7T5uJ2mH8IN)iyqHYmeDk4z3a(rT1FGF7I4hld(XfX)Ai8Vovfa(DSYs9pot67gXQ4ZbszRxCnZ2lJ6ufUeW7NdgJ2Qd3JFIm6opkR(x8SninhJHk4RHkO0yfkVYc5XVBe(3qDR7THx4E3l(9WSc(3e)EXVp8Vf(3(DG)Dq4FxyInp(3dG0pj(pKy7Jd87h)hP6EzsIAO3AHGE8haH)JXFq8)d8)t8)lqw2bUm9qn5z4)u8hodUYDJ)qOwibSXwXke)hGh7JU2nO6JSCHz4Nse)Nb4nQL4FuqwZiGSgMqLvs(rZMtJJJtSsMa3u94UCMkJFor8Nc46XFA8FTt8Nb)3G)Br4)3zWFwr8NJYPIxe)3H)8i8ZFX5XFbkRvelwlp(j)2l1ibV9YyU(O4)EkVKqHPZoy8UdmO(q4xqe)fX)d4Ve(lJ)hRYHG)NwV4no4vcVXCGzIQktbQL160tBa1xYgttRCRH0fD0eMMjhYsPofDdqv19VsanAx3i6SoynGuvVN230Qq0k3bbrF42x7wWin2JDDc0(ludYYLGsEiW2tMzE6qNS4GiGygcwD7efFAWEMK0eO1MyUtMLiLwT(zE1JF4ye(baPrze6Is)7ZpJD4XSyhIg80UpWb6RNJ3tUvMDWffBt6E6AYZw3W(Rrh2FDuJJ8)VR5j5Tb7uL5JsgAT6W3VFcNfSg48dEd4nRzPLMWWrwkcS7vbV2AgsP2rEj9CAcgaX12OIgGxFt1JS6nXJ5EU0upZv1kplpHy5yKbW3uIn6TNd1JhqqsLABwtKiA5OlmQ7XhiXj83x3dnmLWtenn2wYY2jGio4Ka6MAdg1vLtiRmLSnApZYW8vQvPnDyBS)eBPEIoXIVVLnzuDhnW8s2VlVHIgiVAX6FaO62gEqnMRbw(mRmIPoKa(FTbuGJ6ba4VjL07fmiJ4EicLDC8UYsmZcmb1RgXvLXlBqiKFVS6IGzttmNTtndsm(IsBBbTh6f83JEjPPbhNpVa(v8cTGwLl0eDh))RfuVO1t9WVKfrBYHIn0P6V8G9pzOAeToWFlrMr94)nBPpucvfQNCOUCOjR3VyDuPoAMkvvC1s1mbh25ug8tJFgYY8ZMbp3E61nS2dBFR6(QQsdHTPhh)jBHD52udY(2z)quWwLLevLGGFzBYXYz0ACPTc1HljkxuhwG70dTAlxy(YwW)ZBXc(XjkQRBPM)eJNiCeLrhF0s1wQFHAl1FSm4)cRTlH)4x8D2svax89agK3KVGpU6UTC7Qv8mcwKxh2qJby5VEv)bhnh8aEnWACTMRpvNGRrLKHTmx1HWrZnJRreKK1TEaZnUiGWUjQxCV1RZDJRTd9dwg2i0Y9OR)bl5)4sHImHFUw5r33sfPCkYmNlDN3azIXS1APCkkfHvd5Ktjbknx0(wsioex5zoNVUD7Z7QA23ZdFPjeeudqCaQbhrYGi1ooaf9Gh)fxQqrLPIOX8)5mSnSX8yc5blcSxhROLpHYmhPiASRsinTqXkKBhKgqLDSa5ABVJmFb7MqTiRB)Sn)5GwjB3weKCJiTQjPrYGossjkLBczypKoOpHeDa9oOVOGSyPD(TrnpCp7v)kztonTJf2oqad8Q2BQR5EBXOXIfMlDW4PsfFiCLBN1XGmG5H1qwazwI9N0kwoSX62CvD0MvqhR6ehRa5Kwaab43Q9DeVF4ap2jzk(icsxjDD1l8CZbjapGl7Nty2o6cdMiX5eZ5pXa(viI6G)xWzvukrjrZzJ(Yu1VZ)y1TBxirZE)s6e)eNpdro0eN0eT7meo0xW2N3ewMDXK8zXD1ujBFzLq4HSTRb2GqwDQygy7b(Q36MmydsOUoKNdradere9648Vft0nupZKjcLXeTHvMV5SCE80L3U584ZTpp0F9s)1hN3E84RloF(6YT)vjxLj6gRXiDKx0eTrBUht0nzIUzyKSjt0TyICUdt0MrMOBLAKAxmvkoCyI2cu4TjAIEdW1Bf(Vo6We1P46aM0eTn2wsyirt02nr7aEz7K2FMOBhgB7c)wnr3XQgpDVvSXtanVgAkw0Kfov)Lg4KfeTqtMO7KILmrVPAOOFIj6UU2bzUGW0QsmBEsjvI4tC)1VZsa6yICTwHm7MZJx3D59AhOWrvubSPLRxafHVcfYufuCRoioFywHdm1OY517Zx7qf)0QOIWxdqfMO9V(Je6QNRwKaJ6EZwu46GboyIeSqkes)MwkBzddf54mF3E9nwW9ZTmSapafMjYa9nt4UoGS8qTdk8ZUgafCArODhSGMYu7z4e4n8XQMqbHkkWdgRQBuFoleEsLCuXiUsOPus1OAoryzNRRHIMmz0yhRoBAjghRKBc7gyBiCuzQUCPIsgZ0CNrZYHJjuYU8DvxNnijaYUsoqGuPcZDj7XAixXJ5AOWvFTHIpmjltOzBJRyXhvD72PjraUJfoLROdn0WXctnWMaV)C0DgWmPMtxf28(wUATPEbW4LYLKts6mA6n0vwMfqC8fLkiJ9RbQXj5TdjY9eBGRT)cnwE5iKHA5)d4yoG4y1pKqUd2QV5fZpJmFjPC0i8a7iiOUIMb(WZxqtIfSWnph5sIPO7HRFUIsLKm2mjcrdsUs8cGbpWRx2icFoy7Ez5c0F0HtMvJpVuz931Tc7fyEG2ZSC9DTtBm4s27HPOGMHELXlxSyijTCKyQzzPpSPlWM(BQ4vXwjaCndxE0f8EGtU)qN9St6z49V2Kf53x3xl1krntH5rclTszUoWuLXR5rZFqMv2PMmHqMOJZmtjYbkeTRregRpUjBJuit0Hxr7uS3u))F6M6xqVOuEHSkG05su3M4Z2plnlA68BDEAIArWQlPtYjMcIg0n8G3v2CL1HoilTcZqndG8gy3pn7EIldKr0eEHwCMoNj)T050O5PUvG0RZz3RK39sW1Y6fjrkhEKAh2plLDXWaJ5Ze7cYq7BAVLPr5M3dakrxom5JuVpZWF7opk(7uNlXWF3mT1PPNVdoyGKBIGKeeqTdYiPGGSGMuUKIktfxoZsnC7c60)WjWNFgs3pp1NEX4ljSPdVn8U4O3AL3s3riRTT4YoGOU2pnHepGAN0alxqwrtGewuqsIqML0e4lM0U7MVQMGLQ6Frs50q8sg9S5Y8wRK5MiJ62ixlqs7X6R(kZgEWv9og8XYvHvKlC1W20cxVTm(NlsweBI9HKvM0ChcePQUNAo)LCV(zORxPJr8ARq6eL1GDRsz3o5yfK2F8XegjHWYz3eRXU5EvYUzIIJFftuIvMjZeb9ahzHiPjkvvwjt0W1ZgzIgXM)XenQj6uKEYenMj60qFzIEyyv7mRvUGNYAlMMO72eThteithA7Enr7BjqDxorbDgiEjgiEijDssQ1oj4uget0BZe9iMO0WRf()8KgyIYs2qgmBZXq7Miy1uaE84luNB5mrInbynrsqLo76dUS5DYEney20UpbGPjAcvxTgpcRaPhe4(KnyOXaXg4eJ6D2iE8hPTOrpVEcnwlGEyM8ywaRbSLvy8ozgM82gc6Eg1D2yq4TDzoixFvGj)epElXKZx1m5RLisweuyBJ(vbijmxBbK8UBnKK(5aW(LHj7n4mCrMiXerk3xBXKEF9jM8h2yKA6HePg8pA5XLPDOTNOLyTfRFNxxdHBoSI1mndpVAqBpfn0mTig9mq4hZghciWl(eTcYDGMHCbyt(0K9ZKU(Ldg0BOq9OOW3NVXNP9Id996fONClmrTNvTjQplExbLmekrAmbdcMwURwyAzuOkhGjE1cLc91IudnHNqngCo7R20i3zT()fjRlpklJ2vklBKHHORq6qxHiLqY0q6JQpaMmJyz2Bw9naVCoAnHfu41BIEmyK841EDx9sy9zjHLLQcxva)R0DYrW67TzSE0yJKgSKkx6JjukDsdfzH0U9WW5Up906I9os)ZEAFTfN31RNeXA5EGz96XRxV92T)GD7HeOd3E95MZBpU7TxIpm7JeOdF9rc0XZ0cBp1gia3qrgEWlN2(j)rRS2EQFSwtIFpYQgl6Nk9Tphxp5EINAfLKFbzfJ0nKdkmw4glUEP9Kf4wWdSVlRjg0W1Zyc6)0Yk8AhB)s(7VTo(W)Rbycw9ojBFK0WoKMYu5jFnzwF5NunaRlUfJL3LE8Fnh49MwLaVXSKMwnBpwbPP7d)xMHJ8vRYNPzpKD6q(gPu5ZYxAi3TvAz3vbkJDDhq5du7tKX6d(L(vCQfmzQHJ1WxytJKrSXLQfA5g)aDmrpjwBjs7tpu4qdeiw0qTTJmrV)gBBWiHdWTSVUNESYiIw0GLinO1VSltl1cfpwKHtgEzTXk4IuVV3YXix84PwwRSD7uREtjJoy4yHcV8LcBpg3QjwIaHIgzS1stv3AYqdep(GPJsc7b3WjsDzA(vQ5Hrig)rKpepyiIStIIrQ2pkRxoMMTZMHQql(sbOFY1UgMMkeGMWN(jQwz8BK6Wqrqkm1K7mZx9sn2vcKxflfrFMxF6L(XS2cninQ(Tq)V18wOF6NOQqjt0VFMg1YDpTtlhyHrsrLCtWeDnRB3NCYtFA1ZfUqB1X1Z1XIUQLxVlY(U7L5iFYLnLIVzWg4x6ksBy92eY1L)U81R3U7YBqWGq3C(aBe7IZRV(GR90N)EaRc7QRE8ScwfAVFfki3e9HGx2h2e9rw3rZVMw5AJ4yg8Sqmp923OZiESsNOTWZEVogEwnu6MOdvzG4CrpD8yPcmijG6SOAhQ)MY(tRiHtlpbjBLjX1wzCxdjjN3ki80NvnRqvDvRWKLlvceWokpicWv4IceF5YxS(MbAPZ7kPmVAJ9LLBgRVWQrYP(rkDF1cAuwTlvR4GfLKNO(61G3tSdN(9EJ1fpDtuF3YvBW0nrhHfdDcx8rj)C)lpS5MOhWoI5MOhSwSYnrpeElB0efaFytuq42q7HRFtu)WvHfnrrmrhZenanQ3MOO1c3T6wTtMalNzOBIorZH6gTUeP7H69C9p1igQQQCuvYRoXwnTXZkKWMeO4u8ZOBVb0d7S1UaSECyB3d6v8NTXA3vHnPKw8k2JjbwlzKLj6ZqYWERJUMmw5SxpfhBWj18B4BQ2kqAbqGKivGuG1TCY5GvnSRIISnYRPV)DQwoOEDJV979gWQEdeR)S0JQa9d2TLnHlckg7U6NbJJwKDx3ZQEZInHZUal8CvhB2yTn3sSM6wBw42vRpNVsYpmt09UEJF2CZ4ht0N1c3OuyqvH(NmuV9mBBXn)vxdWnoVIiRpsR8B1FRnP09ZTs(TYsv0VKjZOPm3RbAU8SJ0BQduQVtEA)TLM)0xtLvqz4BNmct0FNj6ZVUlEO94Oh9VV1Ie2zRnF5xYqvWQZkIQ8my4I(Mj8idNYtBrvpZRlrvYTfvDONT1sNQAX7LdhTSU(5Vmc(mr)Fw795kWeyI(IxgfHE5LN5Qn)tAW9)xRaYabzfbYg96)uAtMsE4UJ1wG8ZE9aq(ilhihKySd0w4UBM8K)P1zJPQdOSc5gIjQ8RTTyAz5bsDWJW(k3FEDrFf7luBHhFYFHBXu7PDKKRSL0UcVg3A3TTY0Uesg5ILB0Y(e0AlT75U(M290RqAYuVhqEnnr8PFIvMgEkphVWXh1t4zmA)oD)uxFtd3(STKgYrDx1RPjEWmBfjEPovGd4xBcVPCFG2s8(0xFt8EIvq050VMMW1gMUSEhsiwp9Muov02s3(RVgs3i(Poy)XhngEdNT2zil50XqWWfPClVnFFUgvQyrIRBmefCfrrtNFcbzwnS)MQclluAg7gR2HTxtt6IC2JfF4uvRycLIZusrtv0fP0oAO5KV5Rw(9yzI6BlRB(p2BQ4jE1ZdYvSN3tMOfUoo)6Zxj1j96vAypt1tOjgzvgYRhNL0EMOhTwk7zIE71LBEpF9jh3V3fBix)w1n7BVMAw0)I1wZQuLKBI(YltWqMxTemS2ce2)ctWW09EQKJFQUsoO(XARGbZRHcgElRdwdFxpuR97Z2BLSKRCP8VQrmxvbPNmBBhrnqFELhTqyLsd6TTe1VY1fe1jH(iUM1jB)U56YR3(8Ipj7Kg1Q0m4xXRhVUjN810uoWvi6zFt5C5eihrNKyF)7)lCf0Rk(WD2k6v2ONESE6wxmYjZ3w61x9AP25k6Q8Atq)sE3bJ2v9GnFj6JQEMMQ2rd3tohqXVxyajwvp58StpQIkWErFPDh0RhF9HVRk1Yui8R0zV44vyhR1UguPatU63Y6KdJEG8qp9wRu7AqLBnkm9G7X6WAHMnbSi1oxwER)1zOHVfkaeSiDiZoMBgdudFKDI31cKtQvOfPH)BDibgwGDOZWf9ydKQAI5mjf4yFyZWoKG9cVV2aLUJ1wQ6Cb6mmO9Hrl(Ljh8GemgJWgQ2AfWtsom)0SM(amQ(vNtHMNU4QlLxGJnzwZ2muhV(c0xXa0Jl(7h)n5iFR)YawM9QTpTI3FTmmke7CaiiV2zgo69v7U7ljf8rBwD5a5xdyzq0JxWp)MSo41p3uWeXDSJnzUWaFI1aqkFEbzUyHhjmh(lzI(ewCapp9iZLKCDxbsUErA8VdvurwqpJ1xAOxpEi5ZDVE7I(RF6VDZb)0Jh6VExqvqJaOjuP54hFCHCgc51uMsoUCXzYqLLDbc)JKSqcwnZ0cJnnrVV1Le2UxRuq86Mt5KOxnsslEof9r6pCzJiTxZ3xVAE9e9A2PCIVv8uob2j03PzzSMOVlSI8Y1li9l04zDjrh33yvC6fAI(3RxMOj67x3z(C1dIZxci0)aqq4X3jHG8dTOYC7L8plmRzcDfMiWbdhbKaUdRJZl2zhl(F(kTxnR)OF1e9JiNsXFf7Z1v8xfnPfs6)We9F2EXPRE8Kj6hxtWPj6N0Gatt0pfakMOFg8Q(5MO)R1f5IMB4gaXHMBGCicAUHnyUb43BSo5AFJLlxtu)u5orxdO2ZydcOwZnCtMB4MTKLvl(d4VJ9ryDvm4YZj3VFJv3tJvVfFBr0g1O8Yol1z(oZF(7QHtRWtJ7g)ZPzn6NHWBADQcsorb)sB668)HHztl)yeC6I9Ewz9tusQNJ3IJrWo158Di)hYDNtEJp2)9
+!WA:2!T3xd0TXX9D6rWFidzNir9HLL)cw2svu2wIaGGFOiBhaqqjibcaTaKuswNawaSa7kcS7QDxqsqFo5eDCJAVExszUxExYLRnp0w37ADZhmooPxVMKY26KMM8U5yB8TTVxV0Q(rutV3LEk3D9AsAA)pZSl(IaqKuIoYoNFpdU7SZm7mZ)F))9))mZ)DeAIEY(XFIl)ilNHp7u50uudQuur7eoC4iUJ(oKp1EYQiBOPuSOqUGIsfZPjiVh1EgJVGGRNYv8I8ve0CLqQyXRKrrlNGwaRArDRbkkn3C8A5CLurPOHKQ2SXYNxxWaLrLhQed17NwjjdeeQi)Az5LfCTFxJQPOBKHvxIAvyfzKTuvtOGKICYkQcCf0ukRwLLLesZjChlkjNxrReVbKdNlYEaRxGqihlZx2qurlMk5X6oZa9N8sfCQXNLMWaC6g8AgoZKxswsx0za4pgoN3qtQqbbn9O7xZ6YpCadYBNVSgVNLi)QRkuSOuo990tFbkdfkJkD0yEA6HZP78k6LZimn0vtuoFEPzxmvq)jsMkrs)CjR9O4AcWJ4sepuKixRSUqOzH2vcwnKMtMVKGUZQ5eYa1aPZRD8qrIp64rwOSSvZY5I5K0VqzzO3mTGh(Ifv3gp96KSNpMsoHx52SgUcLRGG62sCXYGeW1OLlw01KIsgclXEkBW(UxGxwInyoaE7JUKaVUqcdqIvWq8UW7oGSISWY5G(pjhPiJjA6cWGAo95jzL0kXhoqjEj5rXhcka(W4(WUXEG)UJwtzbDHI5JRijBKjyOOjdXTxPCQBZcCrqvUIqgsVgKbbnz(ItaVl4T(ClMxdgzGwfVbVJRXlNfeWJssI82ZKiixOqrRAOKDAw(3C8D6PSuUfpqbFxCoJtRMmWWC6z5lk4Okih4OqlDBKtyzyqWrvspsIbzcuuHpNZfzVgARf77YpcgvtjbVPF6AQe(lYRvYfTX0Cpb0vmeQLTKIAc8gU44LkwlTJlWx0qKL2wTsBmEzEwk3FJPeeAxcAtl4kIKSG6U7WJmQ3Qy6xrGFW3o(oW3jcFx4bW3Ti2zX7gVf89GV37a)oCIFNuvg8wDI3MtCpG83jEhoX70jExr3p(((WGS7(X7ba84ha)G4hYj(HXpc2f(rX7nn(XCIFC8(W73j(NaFaCVVYTHpi(jWp5DJFkcmQvOG3Rp4a3p2hGhWoWd(C4HCGhgFe87ceL4JUyU(6R)Gtlp6zNBc8Z4a)SoXVBhy)oXbCIdcYgxqNZX1meM1OSMWKA8QeLa1DemI)XINmwGi(dEs)Jms4KHNieRJ96W79biDMLbvWuguzJAwJ0vzxoor7gyjkiyaDZRuppKhKEHA5FVd1hmOO2tTesPaAh8gkA79zEAoQ(U6wTK8jKmktvHOJFTmY9oCYLLrdtWxUz)C79DOH8bIMmLK00u0arhcVfnREjiVwitrb5CKUQhO3rgoA)iFE8UZOQjaOC69WJpxv(IQI8XlxuxyEBv7ECtlYkelQBdiCYQjyiKstXGMvutqLZOEKWe9188zfoN)C5IjRFUjf4NYpHZ8CJjKtI)CjzTA9ZX4IsrPHoKrbEMeMjWTK)JaOvoAd0bWeQZBqAGcIZx)TF0f5pz(4HgvzY8twIItauqgrbPcIgtMHMpbrCGFYfisUSf511tVi5sjzQTK0ZtUrhmLicszyq0yxCLkd2SCQzLJDHNA)47jDanEjGvMwd7pJo8WIcbgZ)XcHNAxy10baM)SqwDgGuxWftZbM6mQK2J60WlbSrzuPeVCApgcYa0Ag4fvjpWuNod7604dNMBgPCgI)rmimEmCu8UoVLMhfGIhpdJMWsdK20jwFstXr1ucBUmQ7GGuDfuKNy2tqts3qkRUTs8Z3szBagINKqiqGE9tGE4tZqD4Zq4holxGiHIciTdUFUSIczNAu89DhZpnVMepafNxsoOsPm8gCtZxSSaAVkQ79PFATSI8Yfe03Z(XxIYDoVQgrjXOcMF)43dudoWV3fkXpRiRxEPE6JuWJ(045jfbHFrm)6NrjvlivC62G3cryh5DGZiIZsWwbg(ygHMqvBAJ82ylSWjX5be1e4cPXxGiYXY7hRGvzab8fPjPr)TYx)YhjdiL0svbX(7Si4nSiFUluw3qi3y8ZUP63ijVjSZ43UBFGvf4fPUJ6iEIRve0OCoXf1j26y6qPBmpJQaokXYdNErEzd08aNGFcq99TlOBEfy0UaO3PNqPSwwHd(G32MiDBkydKOGeolTV7)i1eg4e4lT3bPsHNXskWOLgGsl5a)IxlFT3k1TRAfLJVaKm(soyYERctk2WeiLBpSFHQa)bRvOfzSNuqt7f)p7bV8UaswO7NsxKpNYmN2YZYfOPr(zP9vJdEF7tDRnK36ogQ(K1YEkM)J1z(tLtil4euXuarzwjIpeORWQeBhwc4F8KXu3onrWdtfIhtzNKO8gWpC71yvR0Sc5OjEPLzUpCgwtfKWa2FjAMisEP8vW(QYyQiY1arJfnK6J2LgilHmrlxkJGgE3AGJmKmwLMBMXdYa9GoiJXd6ZXcwvdXe0OAsZ56uL5Zr8FYvYKnnyA1crlttBgWNiIf05N06ILRvpu)rJnEYiHHMkBiUjxKu3xxA(u0c17rU8fvu0QxTex63P1OLTGLnqnniiaIfXlV9LTS6nMLLqWhakZuvI4jLk79B7aaNTDIRyLWeS6jTLhDPkbMm5yfA3vTghHSPUnRlgPUrh7QWs3d4pQChlzLw9joXSuFN9IfU7LSEhwTjG1y5gBwcISro4(a2wVXVauU1nhxMSaFAQkukB3nY2PUvG8XVfpdL2ruDBzQXPuVhryeRsNueL3abgoj0CIPXsIwKDfVAK2s4DvU6okYm9ehFkIHfU0ednJJNODE7CAXwBBsYI4TCnBUkRbO5va35HPyPdwEWVaDky1fT6LuumeJBvI0vPKFJkPPBiUOv5YwusvKYGdMvv3A9UUfi7A1tPgjbzy0NV5ZQuI4XKUiX(WO4p4jiP7XhrbBiYpEDqSFu53tDB1PcRpGE0fdwkWKdFQrMlwyq1tMmRebXfOnrIapt4OjcpsOfv0Ka3aODi1EoEmUWNnw0K(JKkC0jcXLietYoRLK9D4uJwbc5eV8rW)Ki87NyvbF5nH)PaliVtQvQFAr8)Y04Fgr8)ke(FnL)h)b6mL)jyuW3bq5)VaOABKZMnlNxSbt0ld6(zHwRTz696Jqu3Zrz5)QV)MO0XVbKbVnLHFMMZW7Rdm9N4Y7c)Hq4)nQBDFn9c33(WFy2uv(3I)i4pk(Fh(JDj8)Ee(Nd6y)84poa)(fW)IeDrh4Fj8lR23kyIAQ2AdBp(xgH)pG)pI)vW)Q4xb4Y696ud15ZWFc8Non(tEF4pL)2Wa2CPyjIRE5TJxSolg(Za9IxfH)SPXVg(Zb9Lpp(xxe)FIq24a)ByZW4Ei8D(XqyH7d)FMYRG)nfXFb8lSwQQR(vjqMB0AW7kQbscRBF0(IRK6c)LeX)w2(QTeA153vR(nJNRt(72s((NFD9lggy(Tbck8Vd(3LYfHFDe(lNg)veX)E1iyWFve(3)Q)A4VgLZ4ywCgU9rnoqD8XZqwSg4VoLKqOWSzIeBa)r0hd)FreJX)xXlJ)dW)H1u4XFJ2PQFUBBDORFW1IU(8G74QkZaUzCPEC3fL0RzRJsZ8QtfLrWA5Jcvzf08upqN0BO1CZkBnOLckEQpE3lQTgNLc6H7EUxjVWAv54)Vg61rd91RR5XfNcYiAFpF6fOsaImgr0fzkIQ7GmDxnHlwwstGMBItOPPRAtT8N(np16JtuRb9fpSzit(DyFnRvhoWz7R3EhEWtmy2oRv3YS9FTgA2)z0M9vqn3Y)lw3Ds6C6TMuqTMUVAtUhytSNDpma4FpRcEIn4PJhgFNrAA(4t2x(Jh)K(gEGXgV(8XVp68XNgqD0LNJUg8tjRmJSnk8IRalwTEM28HRnB97QrHbXx2)k7Hx1D2e3qTL27Op9sn(aWrhBXg1T2Myus3zjzNLqoANW55SxGV8q77CypAKfFpwzd665Lrxe8ZCk85dqCtLoE3g5HvjTwdWa55H5ECEpqjOzzvjCorRcNPhl6yNEKYrgz6GTkCOZI4BztbqLkvPlihDvIs3mpXvBqKSL2y1703U7(zlrYA0Y3zxlw(Yatdk7u6229Sx)J04xuDhWefpK7d18ukR7q73fkJN2wgpDTmEBBz8E9lJDNG5zn(zpshmsiUcJeVtlFkjlldvCkCVRkZnTTM(BrVa1I1nAv07kQcscBOMSM2cF2j(IgXK1CUKSDiCEhOpVE62wI8MGPOtA5H5a(ytiTzRqrIh)IIz9f)4(u6SvOM3sRJuBZJcNvWvaEny2PAQ7P5nuIAd21KsY5uMr9(QL)kUMqqsw36b13XPnt3XP7bDR9ooTKv)iq5851x5Mp5lsjFNqk4Ot5JRDB(0JvvkRImB9vFWBJ0Xaap8GLZQOuegnKtmJe4KYs23s2twXo2ZVaNB397zao3E7ZRB6VEO)6LZZGU92pNxV93NVv1yZGp31Msqq1pztkm4iRYGiLHeyUF2J8glxOOYmJs8SsqoBf2YBWwvrYdwc4PpwrRfpn98KKOBfFCPzfkwLCBe6(dVZfjxBVcIluWUiuNK6NTUyoCqZK9s7fGCJinRjOBjlTLKuuk7uYc66oOpHSlN6BJ(IcWcnaGqHmLJ9Up11Ycb00S6xkC0OH4sfiwYKXgd)jVF8NcbtGamkUa0Rz7f8YS)KsXAziTUnBT1q2kQhSxAY0w7HCkbqOIFc77iBhKdSWPwvCmpzvloMTeGaKaTMFar55OlgnCIcNEKsh)ufejoia)xG5uukrv3N3gnX4Ziec)9Q7WorYsrnIKozxzYLMyfSYPmrpuAIghqgW0wiQa7M5kGL2slPSJvKcrNW2drWw0veMvvIT3HjLkrw7EFnozrWywvMntIyKO6pKJl)y4FyJ6i4)X0MOBRZAd7HZTN(63ZQeVBIURgH4MOnBJRnr3TjYj8U2Ij6Emr37onrVdKj6DY2yJ(T8J3eTviXTjAI6bUE7W)VJTzI25ndSNjAxnI4mr3NjA3Wl7(P1NjApqB7bWpHj6bbCtO1MTjOp9qmuZ94GSScZj07mtkNtFyVwWgt0JqbnMix1HlFpt0JYWgH2aWgMO92g8Gj6Xw)4G(h8gfhWKToTKVnacOJrBfzHtic(TSCMYggkYXylL8T2iH((8RajWdaHkJE8HReQ)ELLhRBaHV)gaqWPLyUVaf0uMzVJhhVPFf1TBzMnyrbEWBcDdj5c18Hi00kzPujUIRPus1qDx2gLzoI4ASWjseo6XAWPdWjLIkzNYUa2EQewMsolvuYOsRvgnGzoMqj703DdvweEz43eh3FYKH4UMDBnORyrDnwOAV2GXgNe3s043Yv0ytQUd7a8Xp3XcL0v4XgB8OHOEarq3)wu0nZNhoDv(SGtT3Go9SiynQCj5eKkJgQm9NHzsJJVOubzSpnysmKibdrCvbCsPUtEASi9sin11SNXX8GWXQEa)0iotTLLYvrMVKuwAyqaUSfqxrZaF4fkOjX2yZTmp5sI3a7LBeUIsLKm2cjOeIqUs8kGfm41lBmkFwyUYz48ps4XtKrJpNuz9339aoRTai7zopatDZcdUCTyPsqZqVA(YflgusllyF12vmyYCGtx3zXBaF9aCndxE0f907PoqWlCHPDp(bwpmr(8oWgPfjQxtSfcWYIu6FuBrc8KjF9f47AP78A8XOGmrHy(WmAVfc3)ecNzyUP7chKj6G1iHA1tf7fT4)bDrlwuVOuoHmka3Cj6Ax41EXoALy6YBDbAi)rqQlRBOXtcoiQhN4DNjBzDOcYqZqfQlaK3a7(zz3F(ECJ5r0iiIMC6EQK7U7zw0c0itIuRZBxRK39YW1Y6Kq(J8i1Tz)SK2jdnmwWMzNqAADtRT0nZA(44Fi66GipFJluf(VUNJI)2nSou4)M0DDfeV824GMr2PcqcKb1TrAhfeKf0KYMquzMyYPxUPBxuN(hob(Cviv)c0fslkFjHnF4TJ3nh9wRap6(dA5dQl79M11bOH3AVQ9qdbRcYkAcKDOfyresVSMaFXe2v3c1ScSCTf1JKoDZKjTEwFzbRXXStLwD7KRfibrBJzVZkHhCvPesrOSWPOJ6GRgLM2SeyRq75QKbXwuEiX4lj6Idd0PQ7TE01rUx)C0XRurjXOGqQ4L1GPEqv2o1zkiDGyNryI4cRuztSUY2tSkv2mrNaFEt0j7SkMjkIjAmYarutuSAksMO4nQezIoLT2JjIZeLGutMOKMOXH6YenbmQn56th4LTM1SjcQ6nzsKb3Uj6omr35YGHUSIc6mi8Ymi8ys6KO476S0nxgKVN2eDgt0zHxlGFohPaMO)zK5Qb91ZZW6MOuMO0qo4xSHvmXeLTf4QjkhKPBsOYAtQEJhwwFIP2WstuEvxThncJaPIa6EYgmSO)Oh)Kt6zUrD7B0UIfFY3(GfRVZwVbJlMTb0aYYA)SE(0mU2MIjG0Q7Q5yeWEFgao9vbI8t)EAlICHAUhVrIhzBzbBYZVjaiH(ABaKpA7bK0pSe2Vme5qbQWn6uXNA0Yd3ve5t92rezS0nezwj27GK4whNKSXdnhJwDdR9sTfPTuJZ3AdeS5WAlxPXG6ncw7LPrZwB2QAgeu0gfc4VR(sTdW1BRao)SoFkYSys14Wbd4nwWbvu4h2B(kDNk8qV9a4j3gxthCv7A6RH3DajdHsKctqGGlL7UnUuggYsVmQvlmkuxlrDWeEc1jW5TVAZt8G1R)3GmQmn7ddqPSSrAgEUkPcDfKKc5l(G(Og)yoyoVY8ZS2BaE5C0CcdNWR3enlmCuP(R7gND1Rf7kBp7VHG9R15Vrq67RvKE4OtKc8HkBQJjukvcdfzHu95MHY77SZQlo0eJm3z92vu(HF7d9Q1scmNh3E84zOb8fya3K9SPppE7JZZG9n0qKvTCyYE24DyYE2CQ24ZP2X9Zn2OJh56zNF6)UoBNNUYvRlQ3JSQrI(OmVd74wPLK4L7il(vKvms1u4EWuGBo5gz6jdWTrdy)xxNlcuK32dJroRScV2XoGKVr66ID03BbubwTll2(bc6TgutzMCKperRpCyk7)nLfcJf)KU9THd7EOvjS7mwmP1cn(oWKUFSrAoY39mF6wxtSZg07eLkFb(sJ1xxzkDxdMCMB5GjF06F(owFV40Vd4lfirYXJ20x)tZIr8lET67jyZF8qMOFw8LwMu(uJfk4X9hnCWUwrMOpuZLnWOH8ZTIV8ObTdpIvwGLjfO9VSRtj1cgl6OJNi0kkJ1wjsxT922g5Ifl5kkL9sn1U3uIWrcfnyOvouyVgXTRJf3FWWJEM1trv3AIGhpwmYhHqYqCCJhp51P4RnhdhL42hHDy8abj8MeJIulFufVZZSQjKMAmB8L9t)K9DnoDNSbRGV6lvlZ4hGUeHIadm1v70lu7sn2vcKxfl2Bo1Bpxv(ZynXzGlQXjo)TADIZV6lvJsYe9bs3SfUhVBw4aVlsiQKDkgX1C913PM(SNv9IHk0v7BEUfM4QEaUUe7CBqMJ89P2sKbMg)I4mRblHn6nix)(637qEgOFpbaxb7JZl4Dy)CE8omCT7H9ni4py)9pO7o4pO98uOqCt0ph8Y(5nrF8B6y53sByTzumdCwiQ7HgEYkIhR0j7k407TWGZABBUjQ3Q1)GWiBEoBhSdoslHIN1UEttpo5B8NSh2k5DnMKCoRnCN(SAHONQR6jMOCPsa96K8abGRqffiRElFXglgyHoNReY8QnxxwlTyJjwBNBASLsNpTGgvr7A1toqrj5PAmFnTMj2BD(tE7nS35MO(V7B0no3e5JTF5yFMObj)m0k3ICt0W27oUj6i13xCt07cFV3Hj6OyycSpnC7ZSxUrmrplC17w0e53efWefKUd3MOrQV121oypSxedDt0OTUT2OBk7Q9ydDXrMzcdvvvoI54vfPvlt4SkzBs8xCg(k62t88WoB)Y(1ikSRZ9CnhlSR)LhSfd0IR51jX)6jYRmrFosCTBDShL2k49gS4zImTMpdVZ0v6OFnGosKsh5)Mw03CWAU0vvr2g31YxLp1chKVbW33tEB43Rh)rhjd9mDq)Gdy5n4VjyuCGAroVJ2efxp(QCsITGYUcBZ4Q1YSrABPTin1T2kX2n6QmVwIdmt0pXnB0ZwAf9yI(nSqnkfIOkmY0bhAW56kQ5tSbGACUgeQNVDRv1VUTGSVpFNwRklJq)ygFrlXNxtsC55MyOK9wA4tDwFDvI)j3q5jOk7DJFWe9fmrFXBYudDhf98F52thSR272YpMHPGrNoIPChjurVvcnX4jD3vm1N6THyk5UIPo0R1EMPA(5E9qrROQ)sxhspt0V96Vo7GkGj6396yc0dVCLB04mPPL7FJcgdcKocJngY3P1MoP84deTRW4p9TcW4JSsyCaIBoqzH7UlYt(Q3uDIQbyshIbetK6BT9uAfX7rdGJqElpsoDrVfhoyxbhl(JypL6UKJe(KTvYL5T4(4U9ol5IlzKnA2jl7vqRRsUpZTYsUxTdbdtJR4XBPfHV6l1zj4PDFIcNys3HQy0952(Q3klb3XCTvcYrxCQ3sl6GEwhfDjpT)E9PnLNK91BxfDF2BLfDVuhin1FlTyRlkCz8mMq0bhkHCYWDvQ9ABGsnYAshyKytgfVPlu7t5kj5uNqWWfjDRvw(PCnj50pwjVldrbxJQOPZpLGmlh2FRuHKfkvXUW1o1KdMWvKybpzSXtwlJXvkwPKIMQOlsQBRPIt(wUA73zLjQ)79M2Af7jzS4V5TAXvT73thVnltCUBoF9tNYJhPXDpZGbNAIv1MB9EyHLNjA66bLNjAMgI(UVuJH)2h6QnfnFR6I9xVUkw4F11xXQwtGBI(kRGwi9Bw0cRVT86pMrlm7qNor(t3FIi6hRR0c)bBG0cp2nSpWp87U9RZZoAhpYANH)nnr5QAR4j92Ujs9pSh5jlesPuepDvK(hElGiDAOggxZ6F9d2dx)E8mSh8ZZoPTTsnn(8EC7PpYbsnnScCrc6dxjkNnRa5C)KSd3FGFKBAEvPdUR2jTYe(SNzWb0fh9u56Q06BSrAxUQUkV2u0Vn3DsLCqtZ6eiH(KANzQQBRP7Ph9SFeO9iwZa5cSJMPIkfmrFZ9eWJBVdJF4Q1dfi857zi84vzhZ3UIOuGrP(NzDgCrpcuOhr(vRFnyRTUaMEuPyDCAqdza22XoFgET2CUHayGLOnz2rhYza7Vhzx4DVi5KGfkrk4)VjeLclYowq4cFSJNSwS3mnf3yFCGWotF9aVVUGKU)1x04CfApS(Hb8ZroNIiqmMCny9XkqJKCgbPz19buuJJoNgTaDWvxkNahRZSUDwObv9fPVIJtpA9FA8z4iF8(YauM9QToZBvpq9Giki7d7paV25gp8tv)UNkbf8rlwdb5iOH)ii6rx0VZMPa7JU4fNb6i9f9ytNneOMy1aKYLtqMlAOjcXHx2e9kwka)(0dTxs0ZTQPTEd6MChSOISGEARpFqpUDtcw7H80p9xF0FhGd(zq30F9SOQGgbotKrZZNpVqwdHCAkZihtUyL0uISRq0EKKfIZYz624JPj6Y3uIg7HSIWWBzoYscFJqJw8Ik6tmsOYgJ2DJE)3Qf6oH3WoYs82XJSeycq)LTqWAI(RGbKVvJSOVEZhLJe7B)5RIdbqt0)ZgjenrFNgoYPRDotMbKZ)Tal4j2frE8)YsiZTpY)SbTULZvz8Frcnkq)TtM826aEf)NSwR1)7nEaTAIUg5Or(Bso9vPaP)u00waPVRj6)D35sx9Wjt0)N6SMMO)VnXwAI(7aCIj6)h8Q(7nrFVBkKIMOVpWfAI(bay0e9pyI(HMO)Xgi1mxjPMO(PZEY(pU6GNjcaAn3eYCtBYIiR(EnG)22NB21GGRmIB)onND3nN928vdrluZKL9uQNC9K7YpCthaCNfpa(hqJk0phr106qCJCaU9128T4)tg0Mx5P22Sfh6cY6NSK0GNOnNAB9OZ59q(ouF9m9T)c)tp
 ```

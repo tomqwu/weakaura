@@ -1,4 +1,4 @@
--- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v13.
+-- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v14.
 -- Run: lua5.1 tbc/mage/generate.lua   (toolkit libs live in tools/tbc-weakaura-creator/scripts/)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (internalVersion 45).
 --
@@ -310,10 +310,77 @@
 --   * UID STREAM UNTOUCHED. Reordering adopt() calls edits controlledChildren only; the portrait
 --     is still created in its original position in the uid stream. changed = 0, missing = 0.
 --
+-- v14 (THE SILL: the 100x100 ring cluster becomes a 102x37 instrument strip UNDER the character,
+-- four stacked 100px rails where ONE PIXEL IS ONE PERCENT. NO aura is added or removed, NO uid()
+-- call is added, moved or discarded, and every trigger, load gate and colour escalation the rings
+-- carried is still here on the region that replaced its ring. What changes is region SHAPE,
+-- region TYPE, POSITION and DRAW ORDER — all four of which are free of the uid stream):
+--   * WHY A RAIL BEATS A RING, measured rather than asserted. A 0-100 quantity has exactly 100
+--     distinguishable states. The old cluster spent 10,000 px2 delivering 712 px of arc for three
+--     of them, 1,936 px2 of it on a 3D portrait that decides nothing, and every breakpoint on it
+--     needed trigonometry (the 30% conserve bead lived at (27.71, -9.0), derived from sin/cos on
+--     a stroke radius). A 100px rail is the exact length at which the gauge is lossless: every
+--     breakpoint is x = value - 50, a full-height waterline instead of a bead on a curve, and the
+--     whole instrument is 3,774 px2 — 2.65x denser, and 2.7x shorter on the axis that is scarce.
+--   * ONE FIELD SEPARATES A RAIL FROM A RING, and it is the same field that took v8's rings to
+--     v9's globes and back again: `orientation`. Both are `progresstexture`. A ring is "CLOCKWISE"
+--     on annulus art and encodes the value as ARC LENGTH; a rail is "HORIZONTAL_INVERSE" on a flat
+--     white square and encodes it as a LENGTH that grows left to right. The name is the usual WA
+--     trap and it is the one field in this version that no committed string in this repo has ever
+--     rendered: Private.orientation_with_circle_types reads HORIZONTAL_INVERSE = "Left to Right",
+--     HORIZONTAL = "Right to Left" (transcribed verbatim in poc/diablo-globes/generate.lua), i.e.
+--     the OPPOSITE of the aurabar convention in references/gotchas.md. If a live client fills the
+--     rails from the right, the fix is this one token and nothing else moves.
+--     Switching to the linear path also swaps which fields are live: startAngle/endAngle go inert
+--     (emitted for the schema), compress/slanted/slant/slantFirst/slantMode become live and are
+--     all left at their neutral defaults, and crop_x/crop_y stop being the circular branch's
+--     sqrt(2) identity and become a plain texcoord scale on uniform white art, where they cannot
+--     alter what is drawn. 0.41 therefore stays exactly where it is.
+--   * THE PORTRAIT IS GONE, AND ITS UID BECAME THE PLATE. `Mage - Player Portrait` is re-typed
+--     model -> texture and becomes the SILL PLATE: a flat 102x37 black-at-45% slab on the uniform
+--     fill art — no border and no rounding, because Square_White has neither — drawn SECOND, over
+--     the alarm rim and under everything else, so that four rails, three numbers, a ruler and
+--     five waterlines all read against one even backdrop instead of a lava floor. It keeps the
+--     portrait's Health trigger and both of its conditions, so it fades out of combat and hides
+--     itself at max health 0 exactly as before. model -> texture is the v7/v9/v11 precedent read
+--     the other way; the uid carries, so the in-game Update renames the region in place.
+--   * THE ARCANE BLAST STACK ICON LEAVES THE BUFF ROW AND BECOMES LANE 4. The 40x40 icon at
+--     (0, -156) is re-typed icon -> progresstexture and becomes `Mage - Arcane Lane`, 100x6 at the
+--     bottom of the strip, fed by its OWN existing aura2 trigger (auraspellids {"36032"}) — so the
+--     lane DRAINS with the debuff's remaining time — with three subtexture pips lit by the same
+--     `stacks` variable the icon's glow condition already used. 1,600 px2 of buff row becomes 600
+--     px2 inside the instrument, 12px under the mana rail, and the stack count and the window
+--     clock become one object instead of two numbers on an icon. No new uid.
+--   * THE CONSERVE BEADS BECOME WATERLINES. The Arcane 30% mark needed ringPoint() trigonometry on
+--     the mana ring's circumference; on a rail it is x = 30 - 50 = -20, a full-height 11px hairline
+--     across the mana rail with the lit one 5px wide over it. Two auras still, with the same
+--     colours, the same Arcane-only spellknown gate and the same pop animation — the gate is why
+--     they are auras and not subtextures (a subregion cannot carry a load gate).
+--   * THE FLARE BECOMES THE INSTRUMENT'S RIM. `Mage - Threat Flash` keeps its uid, its
+--     threatpct >= 80 trigger, its ADD blend, its party/raid + never-in-arena gates and its
+--     alphaPulse animation, and changes from a 100px annulus to a 108x43 quad in the red it
+--     already ships explicitly ({1, 0.1, 0.1, 0.85} — decoded, not assumed). It is a RIM AND NOT
+--     AN OUTLINE: both squares WeakAuras bundles are FILLED (measured — see the texture note
+--     below), so no single region can trace a hollow edge. What makes it read as an edge is that
+--     it is 3px larger than the plate on every side and is adopted FIRST, at the BOTTOM of the
+--     stack: only the 3px band that protrudes is visible, and the rest of the quad hides behind a
+--     45%-black plate and behind every rail, number, waterline and pip. Nothing is composited
+--     over a readout. Its footprint is 108x43 = 4,644 px2 and it exists only at >= 80% threat.
+--   * POSITION IS ABSOLUTE AND IT IS (0, -110), not the ring cluster's (-270, 40). The strip sits
+--     UNDER the character, on the crosshair, where the eye already is. A rectangle scan of the
+--     full 108x43 ALARM ENVELOPE (not just the plate) against every other element in this pack,
+--     dynamic groups projected six children deep, finds ZERO overlaps with 4.5px of clearance to
+--     the nearest neighbour — the proof is re-run against the DECODED string at the bottom of
+--     this file on every build.
+--   * WHAT IS LOST, said out loud: the live 3D portrait (1,936 px2, zero decisions, and the one
+--     thing in the pack that read as "you"), the threat percentage as a NUMBER (its subtext is
+--     switched off, not deleted — one checkbox in /wa brings it back), and the Arcane Blast stack
+--     COUNT and window countdown as text (three pips and a draining rail replace them).
+--
 -- The four auras v12 removes, declared for the verifier (see tools/verify-packs.lua). These
--- lines are the licence for the four disappearing uids and they expire at v13 — which is now,
--- so they are inert: the removal already happened in the committed v12 string, both sides of the
--- continuity check agree, and `missing` is 0 without needing the allowance:
+-- lines are the licence for the four disappearing uids and they expired at v13, so they are
+-- inert: the removal already happened in the committed v12 string, both sides of the continuity
+-- check agree, and `missing` is 0 without needing the allowance:
 -- WA-REMOVED (v12): Mage - Target Cluster
 -- WA-REMOVED (v12): Mage - Target Health Ring
 -- WA-REMOVED (v12): Mage - Target Ring Track
@@ -407,97 +474,174 @@ local function manaPctTrigger(op, pct)
   return tr
 end
 
--- ===== v11 ring primitives ==================================================
--- wa_factory has a builder for neither of the two region types this HUD is made of, so the
--- `progresstexture` ring and the `model` portrait are written out in full below, field for
--- field from poc/unit-orbs/generate.lua — the verified reference build for this layout.
--- Everything else (marks, triggers, subtexts, conditions, load gates, assembly) still goes
--- through the factory.
+-- ===== v14 rail primitives ==================================================
+-- wa_factory has no builder for `progresstexture`, so the region is written out in full below,
+-- field for field, from the same table v11's ring() used — one field different (`orientation`)
+-- and one texture different. Everything else (marks, triggers, subtexts, conditions, load gates,
+-- assembly) still goes through the factory.
 --
--- Ring_20px.tga is a true ANNULUS (the number is the stroke weight of the source art, so the
--- band is 20/256 of whatever diameter it is drawn at) and it ships inside WeakAuras itself,
--- registered in Private.texture_types under "Shapes" — nothing here needs a media addon.
--- v9/v10's Circle_Smooth.tga (the liquid) and Circle_Smooth_Border.tga (the glass rim) are
--- gone with the vessels: a solid disc on the CIRCULAR path fills as a pie wedge, not an arc,
--- which is exactly why the globes had to use the linear path.
-local RING_TEX = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_20px.tga"
+-- TWO BUNDLED TEXTURES, AND BOTH OF THEM ARE FILLED. Both ship inside WeakAuras itself
+-- (Private.texture_types → "Shapes"; wa_factory exposes them as F.TEX_SQUARE and
+-- F.TEX_SQUARE_BORDER), so nothing here needs a media addon.
+--   Square_White.tga        — a FILLED, uniform white quad. This is the art every rail fills
+--                             with, every waterline is cut from, the art the SILL PLATE is drawn
+--                             on, and the art the ALARM RIM is drawn on.
+--   Square_White_Border.tga — ALSO FILLED. A white square with a dark BEVEL baked into its edge.
+--                             It is NOT an outline and its interior is NOT transparent.
+--
+-- THE SECOND LINE IS A MEASUREMENT, AND v14 SHIPPED ITS EXACT OPPOSITE. This file previously
+-- claimed the border art was "an OUTLINE, the interior is transparent", inferred from two poc
+-- builds. It was decoded out of the client instead:
+--     Interface/AddOns/WeakAuras/Media/Textures/Square_White_Border.tga — 256x256, 32bpp, RLE
+--   * 64516 of 65536 pixels (98.44%) are FULLY OPAQUE, alpha 255. The 1020 that are not are
+--     exactly the 1px outer ring (4 * 256 - 4 = 1020);
+--   * every pixel inset 8px or more from the edge: n = 57600, MIN alpha 255, MIN RGB channel 167.
+--     There is no hole — a 240x240 core of the alleged "outline" is solid, opaque white;
+--   * the centre scanline's red channel over x = 0..13 reads
+--         0, 156, 100, 56, 40, 57, 102, 158, 206, 236, 250, 254, 255, 255
+--     i.e. a dark inward bevel across roughly the outer 8 texels, bottoming out at 40 at x = 4
+--     and fully recovered by x = 12;
+--   * the centre pixel is rgba(255, 255, 255, 255).
+-- The two poc builds that were cited as proof prove nothing: a filled square whose bevel darkens
+-- its edge reads as "a frame" at low alpha and nests exactly as an outline would, so both
+-- observations are consistent with the measurement. Neither poc was ever decoded. What v14 built
+-- on that inference was a full-area additive red quad over the whole instrument.
+--
+-- THE CONSEQUENCE, and it is the entire reason this note exists: A SINGLE REGION ON EITHER OF
+-- THESE TEXTURES CANNOT TRACE A HOLLOW EDGE. The alarm is not an outline and never was one. It is
+-- a RIM, and it is a rim for two structural reasons that have nothing to do with which art it
+-- uses (see ALARM_W / ALARM_H below, and post-build assert 2b, which pins both):
+--   * it is RIM = 3px larger than the plate on every side (108x43 against 102x37), so a 3px band
+--     protrudes past the plate on all four sides and that band is the alarm;
+--   * it is drawn FIRST — cc[1], the BOTTOM of the stack — so the other 102x37 of it sits behind
+--     a 45%-black plate and behind every rail, number, waterline and pip. NOTHING is composited
+--     over a readout. Drawn LAST at the plate's own size, which is what v14 did, an ADD red at
+--     0.85 washes all four lanes at exactly the moment threat >= 80% makes them worth reading.
+-- Drop either half and the rim silently degrades back into that wash, which is why both halves
+-- are asserted against the decoded string rather than left to this comment.
+--
+-- WHICH ART THE ALARM USES IS NOW A BRIGHTNESS QUESTION, NOT A CORRECTNESS ONE, and the same
+-- scanline settles it. The visible rim is the outer 3 screen pixels of a 108px-wide quad, so its
+-- columns sample texel centres (i + 0.5) * 256/108 = 1.19, 3.56, 5.93 — red ~156, ~48, ~102, a
+-- banded left/right rim at roughly 40% strength (a mipmapped average over texels 0..7 is
+-- 83.6/255 = 33%, which agrees). Vertically, 256 texels resampled onto 43px put those rows at
+-- 2.98, 8.93, 14.9 — red ~56, ~236, ~255, i.e. nearly full. That is a rim that is dim on two
+-- sides and bright on the other two. On Square_White every rim pixel is 255 on all four sides, so
+-- the alarm is drawn on the FILL art: identical construction, uniform rim. (The rogue pack ships
+-- the same construction on the border art; it is equally correct there, because correctness comes
+-- from the size and the order. This is the one place the seven packs may differ.)
+-- v11's Ring_20px annulus is gone with the rings: an annulus on the LINEAR path would fill as a
+-- growing rectangle clipped out of a hoop, which is exactly the mirror of why a solid disc could
+-- not be used on the circular path.
+local RAIL_TEX  = F.TEX_SQUARE          -- the fill AND the track: one flat white square
+local SLAB_TEX  = F.TEX_SQUARE          -- the plate: a FILLED quad, because it is a backdrop
+local ALARM_TEX = F.TEX_SQUARE          -- the alarm rim: also filled. It reads as an edge because
+                                        -- it is +3px per side and drawn FIRST, not because of art
 
--- ===== CANONICAL RING GEOMETRY (v12) — IDENTICAL IN ALL SEVEN PACKS =========
--- These numbers are not this pack's to tune, exactly as v8's, v9's and v11's were not. Every
--- migration that handed a pack design intent instead of dimensions drifted, and the
--- disagreement was visible in the first screenshot. They are declared as named constants so a
--- later edit cannot pull them apart: change them in all seven packs or not at all.
---   * 44/84 is the 0.52 portrait-to-outer-ring ratio the live review approved.
---   * v12 adds ONE number, THREAT_RING, and changes nothing else: there is one cluster now, and
---     threat rides outside health on it. What 100 actually produces, measured on the decoded
---     string rather than assumed: the Ring_20px stroke is 20/256 of the drawn size, so the
---     threat band occupies radius 42.19..50 and the health band 35.44..42 — the two arcs are
---     FLUSH, 0.19px apart, not spaced. They read as one double band around the portrait, which
---     is a deliberate look and not a collision, but it is the thing to check first on a live
---     client: if the pair reads as one fat ring instead of two, THREAT_RING is the number to
---     raise, in all seven packs at once.
-local THREAT_RING = 100         -- OUTERMOST ring: YOUR threat on the current target (v12)
-local OUTER    = 84             -- health ring, unchanged since v11
-local INNER    = 62             -- primary power ring, unchanged since v11
-local PORTRAIT = 44             -- live player portrait in the middle, unchanged since v11
-local FLARE    = THREAT_RING    -- the 80% threat pulse, ON the threat ring rather than beside it
-local CLUSTER_X = -270          -- the one cluster; x is unchanged from v11's player cluster
-local CLUSTER_Y = 40            -- ABSOLUTE screen y of the cluster, also unchanged
--- The three read-outs. Every one is a CENTER-anchored subtext, so its offset is measured from
--- the CLUSTER centre rather than from whichever ring carries it — which is why the threat number
--- can move outward with its ring by changing one constant. A `model` region still cannot carry a
--- subtext (SubText's supports() lists texture / progresstexture / icon / aurabar / empty), so the
--- numbers still RIDE ON THE RINGS — but v13 stops treating that as a reason they must also SIT
--- outside them. The subtext is anchored to the cluster centre, not welded to its ring's band, so
--- a ring's number can be placed anywhere, the middle included.
---
--- v13 PUTS HEALTH IN THE MIDDLE, over the portrait, and that is the whole point of the version.
--- v11 and v12 parked health 54px BELOW the cluster and mana 70px below it: two small numbers
--- floating on bare screen with nothing behind them, which against a bright zone is unreadable —
--- reported from the client as "percentage in middle can't be seen". The middle, meanwhile, held
--- only the portrait, which is the one part of the cluster with a dark, opaque, always-present
--- backdrop. So health moves onto it at 16pt (the biggest number in the pack, because it is the
--- one you read at a glance while taking damage), mana takes the -54 slot health vacates at 12pt,
--- and threat does not move at all.
---
--- MOVING THE OFFSET IS ONLY HALF THE FIX. See the child-order note in the assembly section at the
--- bottom: with the portrait drawn LAST, as v11/v12 had it, a number at y = 0 lands UNDER the face
--- and nothing visibly changes. The reorder there is what makes these two constants take effect.
-local PCT_HP       = 16         -- v13: 13 -> 16. Health is the glance read; it gets the big font
-local PCT_HP_Y     = 0          -- v13: -54 -> 0. Dead centre, ON the portrait (its only backdrop)
-local PCT_POWER    = 12         -- v13: 10 -> 12, readable now that it owns the under-ring slot
-local PCT_POWER_Y  = -54        -- v13: -70 -> -54, the slot health vacates, just under the ring
-local PCT_THREAT   = 10         -- threat %, the one read-out that sits above the cluster
-local PCT_THREAT_Y = 58         -- v12: 54 -> 58, clear of the new 100px outer ring (radius 50)
-local TOP_Y        = -140       -- the pack's top group; the ring layer offsets back out of it
+-- ===== CANONICAL SILL GEOMETRY (v14) — IDENTICAL IN ALL SEVEN PACKS =========
+-- These numbers are not this pack's to tune, exactly as v8's, v11's and v12's were not. They are
+-- declared as named constants so a later edit cannot pull them apart: change them in all seven
+-- packs or not at all. The whole design is one sentence — ONE PIXEL IS ONE PERCENT — and every
+-- other number here follows from it:
+--     x(v) = (v / maxpower - 0.5) * 100 ,  which for a 100-max resource is simply  x = v - 50
+-- Compare the ring this replaces, whose 30% conserve mark needed r = size/2 * 0.94 and
+-- sin/cos to land on (27.71, -9.0). The rails are 100px because 100 is the exact length at
+-- which a 0-100 gauge is lossless: every pixel beyond it redraws a state the eye cannot
+-- separate, every pixel below it throws one away.
+local RAIL_LEN  = 100           -- the gauge itself: 1px == 1%
+local SILL_W    = 102           -- the plate: RAIL_LEN + a 1px margin on each side
+local SILL_H    = 37            -- 4 + 1 + 11 + 1 + 11 + 1 + 6 content + 1px margin top and bottom
+local H_THREAT  = 4             -- lane 1: an early-warning ratio, so the thinnest rail
+local H_HEALTH  = 11            -- lane 2: the glance read while taking damage
+local H_POWER   = 11            -- lane 3: the mage's real clock
+local H_LANE    = 6             -- lane 4: Arcane Blast stacks + the window they live in
+-- THE ALARM RIM. Not a separate design — it is the plate plus a band, and the band is the only
+-- part of it anyone ever sees. RIM is per side, so the quad is 6px bigger in each axis:
+--     plate 102 x 37  ->  alarm 108 x 43
+-- The two numbers below and the cc[1] position of the alarm are the SAME mechanism stated twice;
+-- neither is optional. A 108x43 quad drawn LAST is a wash over every lane; a 102x37 quad drawn
+-- FIRST is invisible (the plate covers it exactly). Only "bigger AND underneath" is a rim.
+local RIM       = 3             -- how far the alarm protrudes past the plate, per side
+local ALARM_W   = SILL_W + 2 * RIM   -- 108
+local ALARM_H   = SILL_H + 2 * RIM   -- 43
+-- Lane y offsets, LOCAL to the sill group. The stack runs top to bottom with a 1px gutter
+-- between every pair, and the plate adds a 1px margin all round:
+--     +18.5 .. -18.5  plate            (37 tall)
+--     +17.5 .. +13.5  threat rail      (4)
+--     +12.5 ..  +1.5  health rail      (11)
+--      +0.5 .. -10.5  power rail       (11)
+--     -11.5 .. -17.5  arcane lane      (6)
+local Y_THREAT  =  15.5
+local Y_HEALTH  =   7
+local Y_POWER   =  -5
+local Y_LANE    = -14.5
 
--- THE ABSOLUTE-POSITION RULE, spelled out because it is what three migrations in a row got
--- wrong: CLUSTER_Y is a SCREEN coordinate, not a local one, and every ring here hangs two groups
--- deep off a top group that carries its own y. Offsets ADD down the chain, so the ring layer has
--- to cancel TOP_Y before the cluster places its rings at y = 0. The full chain, which the decode
--- check reproduces:
---     top (0, -140) + layer (0, 180) + cluster (-270, 0) + ring (0, 0) = (-270, 40)
--- x = -270 is not a taste call and must not be "tidied" inward. This pack's Alerts column sits
--- at x = -150 and is a DYNAMIC GROUP that grows upward, so its widest child (44px) spans
--- -172..-128 at every stack depth; the threat ring now reaches 100px wide, i.e. -320..-220, and
--- the 48px between -220 and -172 is the whole clearance margin. A cluster at -190 would be
--- walked into by the alert stack from the second simultaneous prompt onward.
--- Decode the shipped string and walk the parents to prove it; do not trust this comment.
-local RING_LAYER_Y = CLUSTER_Y - TOP_Y      -- 180: cancels the top group's own y
+-- THE ABSOLUTE-POSITION RULE, spelled out because it is what four migrations in a row got wrong:
+-- SILL_Y is a SCREEN coordinate, not a local one, and the strip hangs two groups deep off a top
+-- group that carries its own y. Offsets ADD down the chain, so the sill group has to cancel BOTH
+-- of them. The full chain, which the geometry proof at the bottom re-derives from the decoded
+-- string rather than trusting this comment:
+--     top (0, -140) + layer (0, 180) + sill (0, -150) + lane (0, y) = (0, -110 + y)
+-- (0, -110) is not a taste call. It is the only place in this HUD where the strip is UNDER the
+-- character, on the crosshair, and still clears everything — AND THE THING THAT HAS TO CLEAR IS
+-- THE ALARM RIM, not the plate. The rim is 3px proud on every side, so the envelope is 108x43,
+-- x -54..+54, y -131.5..-88.5. The buff row's icons span y -136..-176, so the rim's bottom edge
+-- at -131.5 leaves 4.5px (the plate alone would have left 7.5px, which is the number this comment
+-- used to print and the reason the scan below now boxes the envelope). 4.5px is the tightest
+-- clearance anywhere in the pack; the next is 7.5px to the two burn-window timers. Scanned as a
+-- rectangle against every element in this pack, dynamic groups projected six children deep.
+local SILL_X       = 0          -- ABSOLUTE screen x of the strip: dead centre, on the crosshair
+local SILL_Y       = -110       -- ABSOLUTE screen y of the strip: under the character's feet
+local TOP_Y        = -140       -- the pack's top group; the sill layer offsets back out of it
+local LAYER_Y      = 180        -- "Mage - Sill Layer", unchanged since v7 — the sill cancels it
+local SILL_LOCAL_X = SILL_X                        -- 0
+local SILL_LOCAL_Y = SILL_Y - TOP_Y - LAYER_Y      -- -110 + 140 - 180 = -150
+
+-- The read-outs. Every number is printed INSIDE its own rail now, so there is exactly one
+-- offset pair for both of them: x = +32 puts two 11pt digits at x +25..+39 and three at
+-- +21.5..+42.5, i.e. still 7.5px inside the 100px rail's right edge, and y = 0 is the rail's
+-- own middle. The subtext still anchors CENTER and is offset from the region's centre, which is
+-- the mechanism v13 proved; what changes is that the region is now 11px tall instead of 84px
+-- wide, so "inside the rail" and "legible" are finally the same place.
+local PCT_SIZE        = 11      -- health and mana, printed in their own rails
+local PCT_X           = 32      -- right-hand end of the rail, clear of the ruler tick at +25
+local PCT_THREAT_SIZE = 10      -- unchanged size; the subtext SHIPS SWITCHED OFF (see below)
+-- The one offset in this file that is measured from a RAIL rather than from the sill, and the
+-- one v14 first got wrong: a subtext anchors to ITS OWN REGION's centre, and the threat rail's
+-- centre is already at local +15.5, so this number is added to that, not to the group. The claim
+-- it has to satisfy is "if a user re-enables it in /wa it lands just above the plate": the plate
+-- ends at local +18.5, the rail sits at +15.5, and a 10pt line is ~12px tall, so its centre
+-- belongs at local +26 -> 26 - 15.5 = 10.5 here, i.e. ABSOLUTE (0, -84), clearing the plate's top
+-- edge at -91.5 by 1.5px. At the old value of 26 it landed at absolute (0, -68.5), 23px above
+-- the instrument in open space — which is the placement the whole design set out to remove.
+-- Assert 4 re-derives the absolute from the decoded string so the sentence cannot drift again.
+local PCT_THREAT_Y    = 10.5
 
 local COL = {
-  health   = { 0.15, 0.82, 0.28, 1 },    -- green: the player's health arc
-  mana     = { 0.20, 0.45, 0.95, 1 },    -- blue. A mage's power ring is ALWAYS mana: the ring
-                                         -- is coloured for the power type it actually reads,
+  health   = { 0.15, 0.82, 0.28, 1 },    -- green: the player's health rail
+  mana     = { 0.20, 0.45, 0.95, 1 },    -- blue. A mage's power rail is ALWAYS mana: it is
+                                         -- coloured for the power type it actually reads,
                                          -- and this class has exactly one.
-  track    = { 0, 0, 0, 0.55 },          -- the UNFILLED arc, on every ring. A ring with no
-                                         -- track is a shape that appears out of nothing; with
-                                         -- one, it is an arc travelling round a hoop.
-  threat   = { 0.25, 0.80, 0.30, 1 },    -- green: the threat ring's base = no threat problem
+  track    = { 0, 0, 0, 0.55 },          -- the UNFILLED part of every rail. Without a track a
+                                         -- rail is a shape appearing out of nothing; with one
+                                         -- it is a fill travelling along a known length.
+  threat   = { 0.25, 0.80, 0.30, 1 },    -- green: the threat rail's base = no threat problem
   warn     = { 1, 0.60, 0.10, 1 },       -- orange: 50% health / 70% threat  (unchanged since v2)
   danger   = { 0.90, 0.12, 0.12, 1 },    -- red:    30% health / aggro       (unchanged since v2)
+  arcane   = { 0.65, 0.30, 1, 1 },       -- v14: the arcane lane's fill. This is the exact colour
+                                         -- the Arcane Blast icon's 3-stack glow used, moved onto
+                                         -- the region that replaced the icon.
+  plate    = { 0, 0, 0, 0.45 },          -- v14: the slab every rail and number is read against.
+                                         -- The reported failure was "a bright floor washed it
+                                         -- out"; this is the fix, and it is load-bearing.
+  ruler    = { 1, 1, 1, 0.18 },          -- v14: quarter hairlines. 33px of ink, zero footprint,
+                                         -- and they turn "estimate a fraction" into "count
+                                         -- quarters" on an 11px rail.
+  notch    = { 1, 1, 1, 0.85 },          -- v14: the 70% threat notch — the one number on the
+                                         -- threat rail worth acting on, drawn instead of printed
+  pip      = { 1, 1, 1, 0.90 },          -- v14: an Arcane Blast stack, lit
   hpText   = { 1, 1, 1, 1 },
-  mpText   = { 0.55, 0.75, 1, 1 },       -- each number is coloured like its own ring, so none
+  mpText   = { 0.55, 0.75, 1, 1 },       -- each number is coloured like its own rail, so none
   thText   = { 0.70, 1, 0.75, 1 },       -- of the three ever needs a label
 }
 
@@ -567,43 +711,47 @@ end
 -- the unit names the TABLE it is read from — your standing on your current target. The ring is
 -- on your cluster because the number is about you.
 
--- THE RING. Same region type as the v9/v10 globe, ONE field different — `orientation` — and
--- that field decides which of the others are live. Notes on every trap in this table:
---   orientation "CLOCKWISE"     -> the value is encoded as ARC LENGTH round the annulus. The
---     only radial values are CLOCKWISE / ANTICLOCKWISE; every other entry in
---     Private.orientation_with_circle_types is linear ("VERTICAL", the globes' setting, filled
---     a disc bottom-to-top instead).
---   startAngle 0 / endAngle 360 -> LIVE again (they were inert on the globes' linear path):
---     a full circle. WA normalises 0/360 -> 0/0 and then corrects endAngle back up by 360, so
---     the full ring is a handled case, not a degenerate one.
---   compress / slanted / slant / slantFirst / slantMode -> the mirror image: LIVE on the
---     globes' linear path, inert here. They are emitted because they are in the region's
---     default table, not because they do anything.
---   crop_x / crop_y = 0.41      -> the IDENTITY value on this path, NOT "no crop". The circular
---     branch expands the texture by sqrt(2) so rotated quadrants never run off it, and
---     1 + 0.41 exactly cancels that. Setting 0 blows the ring up 1.41x and clips it.
---   backgroundColor             -> the unfilled arc, drawn on the same annulus art; with
---     sameTexture = true, backgroundTexture is dead code and both are set anyway.
+-- THE RAIL. Same region type as the v11 ring and the v9 globe, ONE field different —
+-- `orientation` — and that field decides which of the others are live. Notes on every trap:
+--   orientation "HORIZONTAL_INVERSE" -> "Left to Right" in Private.orientation_with_circle_types
+--     (HORIZONTAL is "Right to Left", VERTICAL "Bottom to Top", VERTICAL_INVERSE "Top to
+--     Bottom"; CLOCKWISE / ANTICLOCKWISE are the two radial values the rings used). NOTE this
+--     is the OPPOSITE convention to an aurabar, where HORIZONTAL is the left-anchored one —
+--     see references/gotchas.md. This is the one field in v14 that no committed string in this
+--     repo has rendered; if a live client fills the rails from the right, swap this single
+--     token to "HORIZONTAL" and nothing else in the build changes.
+--   startAngle 0 / endAngle 360 -> INERT on the linear path (they were live on the rings).
+--     Emitted because they are in the region's default table, not because they do anything.
+--   compress / slanted / slant / slantFirst / slantMode -> the mirror image: inert on the
+--     rings, LIVE here. All left at their neutral defaults: a slanted fill line is a stylistic
+--     choice, and a square end is what makes a pixel-per-percent rail readable against a ruler.
+--   crop_x / crop_y = 0.41      -> on the CIRCULAR path this was the identity value cancelling
+--     a sqrt(2) expansion; on the linear path it is a plain texcoord scale, and the art is a
+--     uniform white square, so it cannot change what is drawn either way. Left where it was.
+--   backgroundColor             -> the UNFILLED part of the rail, drawn on the same white art;
+--     with sameTexture = true, backgroundTexture is dead code and both are set anyway.
 --   backgroundOffset = 0        -> the default 2 fattens the track relative to the fill, which
---     reads as a halo around the ring instead of the same hoop behind it.
+--     on an 11px rail reads as a halo rather than as the same rail behind it.
 --   auraRotation = 0            -> absent from the 3.5.0 default table but read unconditionally
 --     by current code as data.auraRotation / 180 * math.pi, so it must be emitted.
 --   adjustedMin/Max are STRINGS ("") because SetAdjustedMin does adjustedMin:find(...).
 --   progressSource is rewritten to {-1, ""} by Modernize < 71 no matter what is emitted, so
---     ONE PROGRESS-SUPPLYING TRIGGER PER RING and it must be trigger 1: automatic progress
+--     ONE PROGRESS-SUPPLYING TRIGGER PER RAIL and it must be trigger 1: automatic progress
 --     reads the first ACTIVE trigger's value/total (F.triggers sets activeTriggerMode -10).
 --     A second trigger is legal but can only feed CONDITIONS, never the fill — which is exactly
---     what the Unit Characteristics trigger is for on the two player rings.
-local function ring(id, size, color, triggers)
+--     what the Unit Characteristics trigger is for on the health and mana rails.
+--   foregroundColor is the conditionable colour. NOT the aurabar's `barColor`, which a
+--     progresstexture does not have and which Conditions.lua drops SILENTLY.
+local function rail(id, w, h, x, y, color, triggers)
   return regionStub{
     regionType = "progresstexture", id = id, uid = W.uid(), parent = nil,
-    width = size, height = size,
+    width = w, height = h,
     selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
-    xOffset = 0, yOffset = 0, frameStrata = 1, alpha = 1,
-    orientation = "CLOCKWISE", startAngle = 0, endAngle = 360,
+    xOffset = x, yOffset = y, frameStrata = 1, alpha = 1,
+    orientation = "HORIZONTAL_INVERSE", startAngle = 0, endAngle = 360,
     inverse = false, mirror = false,
     compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
-    foregroundTexture = RING_TEX, backgroundTexture = RING_TEX, sameTexture = true,
+    foregroundTexture = RAIL_TEX, backgroundTexture = RAIL_TEX, sameTexture = true,
     desaturateForeground = false, desaturateBackground = false,
     foregroundColor = color, backgroundColor = COL.track,
     backgroundOffset = 0,
@@ -620,62 +768,83 @@ local function ring(id, size, color, triggers)
   }
 end
 
--- THE PORTRAIT, back in the middle of both clusters. A real 3D portrait of whoever is there,
--- not a static image and not a class icon, which is what makes the target side work without
--- ever knowing the target's class — it renders NPCs and mobs too.
---   modelIsUnit = true + model_fileId = "<unit>" -> PlayerModel:SetUnit(unit)
---   portraitZoom = true                          -> SetPortraitZoom(1), Blizzard head framing
--- CRITICAL, and the reason a v7-era build would silently ship two empty squares today: current
--- WeakAuras reads the unit from `model_fileId`. WA 3.5.0 read `model_path`, and the migration
--- that bridges the two (Modernize < 72) is guarded by WeakAuras.IsClassicEra(), which is a
--- DISTINCT predicate from IsTBC() — so on a 2.5.x client that migration DOES NOT RUN and
--- emitting only model_path is a no-op with no error. Both are emitted; model_fileId does the work.
-local function portrait(id, unit, triggers)
-  return regionStub{
-    regionType = "model", id = id, uid = W.uid(), parent = nil,
-    model_fileId = unit, model_path = unit, modelIsUnit = true, modelDisplayInfo = false,
-    portraitZoom = true, api = false,
-    model_x = 0, model_y = 0, model_z = 0,
-    model_st_tx = 0, model_st_ty = 0, model_st_tz = 0,
-    model_st_rx = 270, model_st_ry = 0, model_st_rz = 0, model_st_us = 40,
-    sequence = 1, advance = false, rotation = 0,
-    width = PORTRAIT, height = PORTRAIT, alpha = 1,
-    selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
-    xOffset = 0, yOffset = 0, frameStrata = 1,
-    border = false, borderColor = { 1, 1, 1, 0.5 }, backdropColor = { 1, 1, 1, 0.5 },
-    borderEdge = "None", borderOffset = 5, borderInset = 11,
-    borderSize = 16, borderBackdrop = "Blizzard Tooltip",
-    subRegions = {},
-    triggers = F.triggers(triggers),
-    load = F.load(CLASS),
-  }
+-- THE SILL PLATE, which is where the portrait's uid goes. v11's `model` region is re-typed to a
+-- plain `texture`: a 102x37 dark slab drawn FIRST so everything else in the instrument reads
+-- against it. That is not decoration — the complaint this whole line of versions has been
+-- chasing is "a bright floor or a fire washed it out", and an 11px rail with an 11pt number on
+-- it survives snow, lava and Shattrath at noon only if it has an opaque backdrop. It is also
+-- what makes four rails read as ONE instrument instead of four floating bars.
+-- IT IS DRAWN ON Square_White (SLAB_TEX). Either bundled square would in fact back it — the
+-- decode above shows Square_White_Border is filled too (98.44% of its pixels at alpha 255, min
+-- RGB 167 across the whole 240x240 inset core), so the "a plate on the border art is a hollow
+-- rectangle" claim this comment used to carry was simply false. Square_White is chosen because it
+-- is UNIFORM: the border art's baked-in bevel (centre-scanline red 0,156,100,56,40,57,102,158,...
+-- over the outer 8 texels) would resample onto the plate's outer ~2px as a dark lip, and a
+-- backdrop wants one flat value behind an 11px rail and an 11pt number, not a vignette. The plate
+-- therefore has no edge of its own, which is right: the instrument's only edge is the alarm rim,
+-- and an alarm reads as an alarm because nothing else looks like it. F.texture consumes exactly
+-- one uid() call, in the portrait's original position in the stream, so the re-type is free:
+-- WeakAuras matches by uid and updates the region in place.
+local function plate(id, w, h, color, triggers)
+  local t = F.texture(id, CLASS, w, h, 0, 0, nil, SLAB_TEX, color)
+  t.triggers = F.triggers(triggers)
+  return t
 end
 
--- The percentages ride on the rings, never on the portraits, for the reason spelled out at
--- PCT_HP above: a `model` region cannot carry a subtext. Each number therefore appears and
--- disappears with the ring that owns it — no target, no numbers; no threat table, no threat %.
-local function pct(sym, size, yOffset, color)
+-- The percentages ride on the rails and are printed INSIDE them. A subtext anchors to its
+-- region's centre and is then offset (the mechanism v13 proved on the rings), so x = +32 puts
+-- the number at the right-hand end of its own 100px rail with the ruler tick at +25 clear of it.
+-- Each number still appears and disappears with the rail that owns it.
+local function pct(sym, size, xOffset, color)
   local st = F.subtext("%" .. sym .. "%%", size, "CENTER", sym)
-  st.anchorYOffset = yOffset
+  st.anchorXOffset = xOffset
   st.text_color = color
   return st
 end
 
--- RESOURCE BREAKPOINTS ARE CIRCUMFERENCE MARKS AGAIN. On a vessel a threshold was a waterline
--- and needed no trigonometry; on a ring it is a point on the hoop, at the angle its fraction
--- implies, measured CLOCKWISE FROM THE TOP because that is where a CLOCKWISE progresstexture
--- starts filling (startAngle 0 = 12 o'clock). Hence sin on x and cos on y rather than the other
--- way round: fraction 0 is (0, +r), fraction 0.25 is (+r, 0).
---     r = INNER/2 * 0.94   -- 0.94 puts the mark on the STROKE, not on the outer edge: the
---                          -- Ring_20px band is 20/256 of the diameter, so on a 62 px ring it
---                          -- runs from radius 28.6 to 31, and 29.14 sits inside it.
--- Rounded to 0.01 so the build stays byte-identical across libm implementations (the rounding
--- is belt and braces — sin/cos are IEEE-exact here — and matches what v8's ringPoint did).
+-- RESOURCE BREAKPOINTS ARE ARITHMETIC NOW. On a ring a threshold was a point on the hoop and
+-- needed r = size/2 * 0.94 with sin/cos; on a 100px rail it is one subtraction, because the
+-- rail's length IS the percentage scale:
+--     x(v) = (v / maxValue - 0.5) * RAIL_LEN , i.e. x = v - 50 for a 100-max resource
+-- Written as v * RAIL_LEN / maxValue - RAIL_LEN / 2 so the common case is exact in binary
+-- floating point (30/100 - 0.5 is not), and rounded to 0.01 anyway so the build stays
+-- byte-identical across libm implementations, exactly as v8's ringPoint did.
+-- Vigor-style talents that raise a cap move the mark: the general form above is the reason
+-- this takes maxValue rather than assuming 100 (see references/gotchas.md).
 local function round2(v) return math.floor(v * 100 + 0.5) / 100 end
-local function ringPoint(fraction)
-  local r = INNER / 2 * 0.94
-  local angle = 2 * math.pi * fraction
-  return round2(r * math.sin(angle)), round2(r * math.cos(angle))
+local function railX(value, maxValue)
+  return round2(value * RAIL_LEN / (maxValue or 100) - RAIL_LEN / 2)
+end
+
+-- A SUBTEXTURE MARK, the field set copied verbatim from the rogue pack's shipped energy
+-- breakpoint marks — the repo's proven subtexture instances, and the ones whose
+-- `sub.N.textureVisible` conditions prove the property name too.
+--   xOffset/yOffset are NOT in the subtexture default table but ARE read by modify ->
+--   AnchorSubRegion, and only while anchor_mode = "point"; omit either and the mark stacks in
+--   the dead centre of the region.
+--   `subtick` still cannot come along: SubRegionTypes/Tick.lua's supports() returns
+--   regionType == "aurabar", full stop. `subtexture` does list progresstexture.
+local function submark(w, h, x, y, color, visible)
+  return {
+    type = "subtexture",
+    textureVisible = visible ~= false, textureTexture = F.TEX_SQUARE,
+    textureColor = color, textureBlendMode = "BLEND",
+    textureDesaturate = false, textureMirror = false,
+    textureRotate = false, textureRotation = 0,
+    anchor_mode = "point", anchor_point = "CENTER", self_point = "CENTER",
+    width = w, height = h, scale = 1, mirror = false, rotate = false,
+    xOffset = x, yOffset = y,
+  }
+end
+
+-- THE RULER: three 1px hairlines at 25 / 50 / 75%, appended to a rail AFTER everything already
+-- on it (subregion indexes are positional and conditions address them as sub.N — append, never
+-- insert). 33px of ink at 18% alpha, zero footprint, and it is what converts an 11px rail from
+-- "estimate a fraction" into "count quarters".
+local function addRuler(region, h)
+  for _, x in ipairs({ -25, 0, 25 }) do
+    region.subRegions[#region.subRegions + 1] = submark(1, h, x, 0, COL.ruler)
+  end
 end
 
 -- ===== top-level group, anchored below the character ========================
@@ -683,27 +852,31 @@ end
 -- that choice is permanent — changing it would reshuffle every uid downstream.
 local top = F.group(TOP, 0, TOP_Y, nil)
 
--- ===== Resources -> ONE RING CLUSTER (v12) ==================================
+-- ===== Resources -> THE SILL (v14) ==========================================
 -- The four regions below occupy the uid slots the v6 health / mana / threat bars held, and the
 -- threat flash, IN THE SAME ORDER. v7 turned those bars into rings, v9 into globes, v11 back
--- into rings, and every hop kept the slots because W.assertUidContinuity forbids a uid from
--- disappearing. v12 is the first version to actually DELETE regions (the target cluster), and it
--- still does not move one of these four: all four survive, three unchanged and the threat ring
--- resized and re-parented. The freed slots are retired explicitly at the bottom of the script so
--- the call ORDER is untouched — see "v12 assembly".
--- They are NOT adopted into the cluster here: the cluster group takes a uid slot at the very
--- bottom of this script, and re-parenting is free — only uid ORDER matters.
-local gRings = reg(F.group("Mage - Rings", 0, RING_LAYER_Y, nil))
-adopt(top, gRings)
+-- into rings, v12 moved threat onto the player's own cluster, and every hop kept the slots
+-- because W.assertUidContinuity forbids a uid from disappearing. v14 is a shape change, not a
+-- membership change: all four survive, re-typed from arcs into rails and re-positioned into a
+-- single instrument under the character. Not one uid() call is added, moved or discarded.
+-- They are NOT adopted into the sill here: the sill group takes a uid slot at the very bottom of
+-- this script, and re-parenting is free — only uid ORDER matters.
+local gLayer = reg(F.group("Mage - Sill Layer", 0, LAYER_Y, nil))
+adopt(top, gLayer)
 
--- PLAYER HEALTH, at 84 the MIDDLE ring since v12 put threat outside it, and still the arc that
--- is read most. Trigger 1 is the only progress source (see ring()); the Unit Characteristics
--- trigger is there purely to feed the out-of-combat fade, exactly as it did on the v6 bar, the
--- v8 ring and the v10 globe. Its size, colour, conditions and read-out are untouched by v12.
-local hpRing = reg(ring("Mage - Player Health Ring", OUTER, COL.health,
+-- LANE 2 — PLAYER HEALTH, 100 x 11 at local y +7: the widest rail with the biggest number,
+-- because it is the read you take at a glance while something is killing you. Trigger 1 is the
+-- only progress source (see rail()); the Unit Characteristics trigger is there purely to feed
+-- the out-of-combat fade, exactly as it did on the v6 bar, the v8 ring, the v10 globe and the
+-- v12 arc. Its colour, its conditions and its text token are untouched by v14 — what changes is
+-- that 84x84 of annulus becomes 100x11 of rail, and the number moves from the middle of a
+-- cluster to the right-hand end of the rail that owns it.
+local hpRail = reg(rail("Mage - Health Rail", RAIL_LEN, H_HEALTH, 0, Y_HEALTH, COL.health,
   { unitHealthTrigger("player"), F.unitCharTrigger() }))
--- The number is back OUTSIDE the ring, because the portrait is back inside it.
-hpRing.subRegions[1] = pct("percenthealth", PCT_HP, PCT_HP_Y, COL.hpText)
+hpRail.subRegions[1] = pct("percenthealth", PCT_SIZE, PCT_X, COL.hpText)
+-- ...and the ruler, APPENDED at sub.2-4. Quarter marks are what make a linear gauge readable
+-- without a scale printed under it.
+addRuler(hpRail, H_HEALTH)
 -- v2's escalating colour tiers, carried across for the third time. The property is
 -- `foregroundColor`, NOT the aurabar's `barColor` and not the plain texture's `color`:
 -- progresstexture has no barColor, and Conditions.lua skips any change whose property is
@@ -713,85 +886,107 @@ hpRing.subRegions[1] = pct("percenthealth", PCT_HP, PCT_HP_Y, COL.hpText)
 -- revert is automatic (CreateDeactivateCondition restores data.foregroundColor).
 -- The maxhealth guard stays mandatory: AuraBar draws EMPTY at total == 0 (`if self.total ~= 0`)
 -- but ProgressTexture starts from `local progress = 1` and draws FULL, so a unit whose max
--- health has not streamed in yet would flash a completely full ring. `maxhealth` is a stored
+-- health has not streamed in yet would flash a completely full rail. `maxhealth` is a stored
 -- conditionType = "number" arg on the Health prototype.
-hpRing.conditions = {
+hpRail.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "percenthealth", "<", "50", "foregroundColor", COL.warn),
   F.condition(1, "percenthealth", "<", "30", "foregroundColor", COL.danger),
   F.condition(1, "maxhealth", "<=", "0", "alpha", 0),   -- zero-total guard, wins over the fade
 }
 
--- PLAYER MANA, the INNER ring: the mage's real resource clock — Evocation pacing reads off it,
--- and the Arcane conserve breakpoint below is a bead on this ring's circumference.
-local mpRing = reg(ring("Mage - Player Mana Ring", INNER, COL.mana,
+-- LANE 3 — PLAYER MANA, 100 x 11 at local y -5: the mage's real resource clock — Evocation
+-- pacing reads off it, and the Arcane conserve breakpoint below is now a waterline ACROSS it
+-- rather than a bead on a circumference. Colour, conditions and text token unchanged.
+local mpRail = reg(rail("Mage - Mana Rail", RAIL_LEN, H_POWER, 0, Y_POWER, COL.mana,
   { unitManaTrigger("player"), F.unitCharTrigger() }))
-mpRing.subRegions[1] = pct("percentpower", PCT_POWER, PCT_POWER_Y, COL.mpText)
+mpRail.subRegions[1] = pct("percentpower", PCT_SIZE, PCT_X, COL.mpText)
+addRuler(mpRail, H_POWER)   -- appended at sub.2-4
 -- Power is the one prototype that cannot hit total == 0 — its init floors the total at
 -- math.max(1, UnitPowerMax(...)) — which is exactly why this guard reads <= 1 and not <= 0.
-mpRing.conditions = {
+mpRail.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "maxpower", "<=", "1", "alpha", 0),
 }
 
--- THREAT, and v12's one real change: it is now the OUTERMOST ring of the PLAYER cluster at 100px
--- instead of the outer ring of a target cluster that no longer exists. Everything that made it
--- worth keeping is unchanged — the trigger, both escalations, both load gates and the zero-value
--- guard — because the target cluster was deleted for duplicating the default UI, and threat is
--- the one thing it carried that the default UI never shows. Putting it on your own cluster is
--- also the honest reading: it is YOUR threat.
--- The region is created HERE, before the cluster it belongs to, because it inherits the v6 threat
--- bar's uid slot (v7 gave that slot to the threat ring, v9 to the target globe's rim, v11 back to
--- the threat ring). Parenting happens in "v12 assembly".
---   * THE PROPERTY NAME IS THE TRAP: an aurabar escalates with `barColor`, a plain texture — what
---     v9/v10's rim was — with `color`, and a progresstexture with `foregroundColor`. Conditions
---     whose property is missing from the region's table are dropped SILENTLY, with no error and
---     no editor warning, so `barColor` here would be two dead escalations nobody notices until
---     the ring stays green while the aggro is already lost.
+-- LANE 1 — THREAT, 100 x 4 at local y +15.5, the top rail of the instrument. Everything that
+-- makes it worth keeping is unchanged — the trigger, both escalations, both load gates and the
+-- zero-value guard. What changes is the shape and, deliberately, the READ:
+--   * THE NUMBER IS SWITCHED OFF, not deleted. `threatpct` is scaled so 100 = pulling aggro, so
+--     it is an early-warning RATIO, not a quantity you spend. Reading "68" against "72" is
+--     slower than watching a fill cross a notch, and it was the one element of the old cluster
+--     printing 10pt text onto open screen. The subtext keeps its index (sub.1), its token, its
+--     colour and its font, and ships with text_visible = false: one checkbox in /wa brings it
+--     back, and it lands just above the plate rather than on top of a rail.
+--   * THE 70 NOTCH REPLACES IT, appended at sub.2 — a 2x4 white tick at x = 70 - 50 = +20. When
+--     the fill touches the notch you are at 70% of the pull threshold: stop, or dump.
+--   * THE PROPERTY NAME IS THE TRAP: an aurabar escalates with `barColor`, a plain texture with
+--     `color`, and a progresstexture with `foregroundColor`. Conditions whose property is
+--     missing from the region's table are dropped SILENTLY, with no error and no editor warning.
 --   * Severe state last: the aggro red overwrites the 70% orange on the same property.
---   * The ONLY fields v12 touches are the id, the diameter and the subtext offset. Renaming it
---     is safe and is not a new aura: WeakAuras matches auras across imports by uid, which this
---     region keeps, so the in-game Update renames the existing ring in place.
-local threatRing = reg(ring("Mage - Threat Ring", THREAT_RING, COL.threat,
+--   * Renaming it is safe and is not a new aura: WeakAuras matches auras across imports by uid,
+--     which this region keeps, so the in-game Update renames the existing region in place.
+local threatRail = reg(rail("Mage - Threat Rail", RAIL_LEN, H_THREAT, 0, Y_THREAT, COL.threat,
   { F.threatTrigger() }))
-threatRing.subRegions = { pct("threatpct", PCT_THREAT, PCT_THREAT_Y, COL.thText) }
-threatRing.conditions = {
+local threatPct = pct("threatpct", PCT_THREAT_SIZE, 0, COL.thText)
+threatPct.anchorYOffset = PCT_THREAT_Y
+threatPct.text_visible = false     -- switched off, index preserved — see the note above
+threatRail.subRegions = {
+  threatPct,
+  submark(2, H_THREAT, railX(70, 100), 0, COL.notch),   -- sub.2: the 70 notch
+}
+threatRail.conditions = {
   F.condition(1, "threatpct", ">=", "70", "foregroundColor", COL.warn),
   F.condition(1, "aggro", "==", 1, "foregroundColor", COL.danger),   -- severe last
   -- MANDATORY, and the one place this migration could still regress. threattotal is
   -- (threatvalue or 0) * 100 / threatpct, so BOTH value and total are 0 whenever threatvalue
   -- is 0 — the instant before your first cast lands, and right after an Invisibility drop.
-  -- On a ProgressTexture a zero total draws FULL, so without this guard the ring would report
-  -- a complete circle of aggro at the exact moment you have none. `threatvalue` is a stored
-  -- conditionType = "number" arg (the hidden `total` is not), so the ring is hidden instead.
+  -- On a ProgressTexture a zero total draws FULL, so without this guard the rail would report
+  -- a complete bar of aggro at the exact moment you have none. `threatvalue` is a stored
+  -- conditionType = "number" arg (the hidden `total` is not), so the rail is hidden instead.
   F.condition(1, "threatvalue", "<=", "0", "alpha", 0),
 }
 -- v2: party/raid only, like the flash overlay and the Invisibility prompt. Solo you are always
--- the aggro target, so ungated this ring would sit pinned red for every quest mob.
-threatRing.load.use_ingroup = true
-threatRing.load.ingroup = IN_GROUP
+-- the aggro target, so ungated this rail would sit pinned red for every quest mob.
+threatRail.load.use_ingroup = true
+threatRail.load.ingroup = IN_GROUP
 -- v5: and NOT in arena. An arena team has no threat table, so it would read a meaningless
 -- number in exactly the place a player has least attention to spare. `ingroup` cannot express
 -- this on its own — an arena team IS a party. Everywhere else is unchanged, open world included
 -- (see NOT_ARENA). Both gates travel with the threat read-out unchanged, exactly as they did in
 -- v5, v8, v10 and v11. The honest consequence is now a FEATURE rather than a compromise: solo
--- and in arena the ring does not load at all, so the common case is two arcs and a face, and the
--- third arc appears only when threat is a real relationship. Nothing draws a placeholder in its
--- place — v11's target ring track existed to keep a uid alive, and v12 deletes it.
-threatRing.load.use_size = false   -- false selects MULTI mode; only nil disables the gate
-threatRing.load.size = NOT_ARENA
+-- and in arena the rail does not load at all, so the common case is a three-lane instrument, and
+-- the fourth lane appears only when threat is a real relationship. Nothing draws a placeholder
+-- in its place — v11's target ring track existed to keep a uid alive, and v12 deletes it.
+threatRail.load.use_size = false   -- false selects MULTI mode; only nil disables the gate
+threatRail.load.size = NOT_ARENA
 
--- 80%+ threat: the pulsing red halo, the same annulus art as the threat arc at exactly the same
--- diameter (FLARE = THREAT_RING) in ADD blend, so the outer edge of the cluster glows red instead
--- of a rectangle appearing beside it. v11 drew it 4px outside an 84px ring; v12 puts it ON the
--- 100px one, which is the difference between a halo that pulses on the thing it is warning about
--- and one that orbits a radius nothing occupies any more. Same region type, same trigger, same
--- animation and the same two load gates as v6, v8, v10 and v11. It is adopted after every arc it
--- haloes, so the pulse draws over them — an alarm drawn behind the thing it warns about would be
--- worse than no alarm. Only the portrait is adopted after it, and the two never overlap: the
--- flare is a 100px annulus, the face a 44px disc.
-local flash = reg(F.texture("Mage - Threat Flash", CLASS, FLARE, FLARE,
-  0, 0, nil, RING_TEX, { 1, 0.1, 0.1, 0.85 }))
+-- LANE 5 — THE ALARM RIM: 80%+ threat, pulsing red, and since v14 it IS the strip's own edge
+-- rather than a halo orbiting a cluster. Same region type, same trigger, same animation and the
+-- same two load gates as v6, v8, v10, v11 and v12.
+--
+-- ALARM_W x ALARM_H = 108x43, WHICH IS THE PLATE PLUS 3px PER SIDE, AND IT IS ADOPTED FIRST.
+-- Those two facts together are the alarm; either one alone is a defect:
+--   * IT IS NOT AN OUTLINE, because there is no outline available. Both bundled squares are
+--     FILLED (Square_White_Border decodes to 98.44% fully-opaque pixels, min RGB 167 over its
+--     entire 240x240 inset core — see the texture note above). v14 believed the border art was
+--     hollow, shipped this region at the plate's own 102x37 in ADD blend, and adopted it LAST.
+--     The result was a full-area additive red quad over all four lanes: the health fill, the mana
+--     fill, both numbers, the 70 notch and the three arcane pips all washed to one colour at
+--     exactly the moment threat >= 80% makes them worth reading.
+--   * WHAT IT IS INSTEAD: 3px bigger than the plate on every side and at the BOTTOM of the draw
+--     order. Only the 3px band protruding past the plate is ever visible — a pulsing red rim
+--     around the whole instrument. The remaining 102x37 sits behind a 45%-black plate and behind
+--     every readout, so nothing is composited over a number and every colour code survives.
+--     This construction is correct whether the art is filled or hollow, which is exactly why it
+--     is the one to use: it does not depend on a claim about a .tga.
+-- THE COLOUR IS SET EXPLICITLY and always has been in this pack ({1, 0.1, 0.1, 0.85}, decoded
+-- from the shipped v13 string, not assumed): a texture that ships `color = {}` draws in
+-- WeakAuras' default white, which on an alarm is the difference between a warning and a flicker.
+-- ADD blend is likewise explicit, because a rim that stops being additive stops glowing.
+local flash = reg(F.texture("Mage - Alarm Frame", CLASS, ALARM_W, ALARM_H,
+  0, 0, nil, ALARM_TEX, { 1, 0.1, 0.1, 0.85 }))
+flash.color     = { 1, 0.1, 0.1, 0.85 }   -- restated, never inherited: assert 2b checks all four
 flash.blendMode = "ADD"
 flash.triggers = F.triggers({ F.threatTrigger(80) })
 flash.animation.main = F.animPreset("alphaPulse", "1")  -- duration required or it is invisible
@@ -804,17 +999,57 @@ flash.load.size = NOT_ARENA
 local gBuffs = reg(F.group("Mage - Buffs", 0, -16, nil))
 adopt(top, gBuffs)
 
--- Arcane driver: Arcane Blast stacks (8 s window, each stack +75% mana cost).
--- Glows at 3 = cap reached: keep spamming AB only while burning, else filler.
-local ab = reg(F.icon("Mage - Arcane Blast Stacks", CLASS, 40, 40, 0, 0, nil))
-ab.triggers = F.triggers({ F.auraTrigger("player", true, { 36032 }) })
-ab.subRegions[1] = F.subglow(false, { 0.65, 0.3, 1, 1 })  -- preset color, lit by condition
-ab.subRegions[2] = F.subtext("%s", 16, "CENTER")
-ab.subRegions[3] = F.subtext("%p", 11, "INNER_BOTTOM")
-ab.conditions = { F.condition(1, "stacks", "==", "3", "sub.1.glow", true) }
+-- LANE 4 — ARCANE BLAST STACKS, and v14's one genuine gain in information rather than density.
+-- Arcane driver: Arcane Blast stacks (8 s window, each stack +75% mana cost). Three stacks = the
+-- cap: keep spamming AB only while Arcane Power / Presence of Mind / Icy Veins are burning,
+-- otherwise fall back to filler until the aura drops and rebuild.
+--
+-- THIS AURA IS CREATED HERE, in the buff row's uid slot, and ADOPTED INTO THE SILL at the bottom
+-- of the file. It keeps its uid, its aura2 trigger (auraspellids {"36032"}, ids not names, so it
+-- survives a zhCN client) and its Arcane-only spellknown gate byte for byte; the region TYPE
+-- changes, icon -> progresstexture, which is free of the uid stream exactly as model -> texture
+-- is on the plate. What that buys:
+--   * THE LANE IS THE WINDOW CLOCK. Fed by the same aura2 trigger, a progresstexture's automatic
+--     progress is the aura's remaining duration, so the rail DRAINS as the 8s stack window runs
+--     out. The icon needed a separate 11pt "%p" subtext to say the same thing.
+--   * THE PIPS ARE THE STACK COUNT. Three 7x6 subtexture pips at x -20 / 0 / +20, each lit by
+--     the SAME `stacks` variable the icon's glow condition already used, so "how many" is a
+--     count of blocks instead of a digit — and at three the whole lane turns red, which is the
+--     one state that changes the next button press.
+--   * IT COSTS 1,000 px2 LESS AND SITS 12px UNDER THE MANA RAIL. "Am I at cap" and "can I
+--     afford another Arcane Blast" are now one fixation instead of two: the buff row was 46px
+--     below the strip and the mana ring was 250px to the left of it.
+-- WHAT IS LOST, said plainly: the 40x40 spell icon art, the 16pt stack NUMBER and the countdown
+-- text. The pips and the draining rail carry both facts; the icon carried them in 1,600 px2.
+--   * AND IT BREATHES WITH THE REST OF THE INSTRUMENT. Trigger 2 is the same always-active Unit
+--     Characteristics feeder the plate and the health and mana rails carry, added in v14 for the
+--     one reason a trigger is ever added here: the lane is part of the strip now, and without it
+--     a stack window that outlives the pull drew at 100% over a plate at 50%. It cannot change
+--     WHEN the lane shows (F.triggers defaults to disjunctive = "all" and the feeder is always
+--     active, so the aura trigger alone still decides) and it cannot change WHAT the lane fills
+--     with (activeTriggerMode -10 takes progress from the first ACTIVE trigger, which is the
+--     aura). It exists only to expose `inCombat` to the fade condition below.
+local ab = reg(rail("Mage - Arcane Lane", RAIL_LEN, H_LANE, 0, Y_LANE, COL.arcane,
+  { F.auraTrigger("player", true, { 36032 }), F.unitCharTrigger() }))
+ab.subRegions = {
+  submark(7, H_LANE, -20, 0, COL.pip, false),   -- sub.1: stack 1
+  submark(7, H_LANE,   0, 0, COL.pip, false),   -- sub.2: stack 2
+  submark(7, H_LANE,  20, 0, COL.pip, false),   -- sub.3: stack 3
+}
+-- `stacks` is a stored conditionType = "number" arg on the aura2 prototype — the shipped v13
+-- condition compared it with "==" for the glow, so the variable is proven on this exact trigger.
+-- Ordered least severe first: a later matching condition overwrites the same property, and the
+-- three pip conditions each address a different one, so only the colour escalates.
+ab.conditions = {
+  F.condition(2, "inCombat", "==", 0, "alpha", 0.5),   -- the same fade the rest of the strip has
+  F.condition(1, "stacks", ">=", "1", "sub.1.textureVisible", true),
+  F.condition(1, "stacks", ">=", "2", "sub.2.textureVisible", true),
+  F.condition(1, "stacks", ">=", "3", "sub.3.textureVisible", true),
+  F.condition(1, "stacks", "==", "3", "foregroundColor", COL.danger),  -- at cap: max cost
+}
 ab.load.use_spellknown = true
-ab.load.spellknown = 12042      -- Arcane Power known == deep-arcane spec gate
-adopt(gBuffs, ab)
+ab.load.spellknown = 12042      -- Arcane Power known == deep-arcane spec gate (unchanged)
+-- NOT adopted into gBuffs any more; see the v14 assembly at the bottom of this file.
 
 -- Frost: Ice Barrier uptime (all 6 ranks) — pushback protection = more Frostbolts.
 local ib = reg(F.icon("Mage - Ice Barrier", CLASS, 40, 40, 0, 0, nil))
@@ -989,10 +1224,13 @@ coldsnap.conditions[2] = allOf({
 -- time the boss dies: above the line keep burning Arcane Blast, below it drop to the
 -- 3x Arcane Blast / 3x Frostbolt conserve cycle (Icy Veins puts the switch at ~1500-3000
 -- mana, i.e. roughly 30% of a raid pool — a percentage keeps it honest across gear).
--- The dim bead is always there; the lit one pops in the moment mana crosses it.
+-- The dim waterline is always there; the lit one pops in the moment mana crosses it.
 -- v7 put the breakpoint on the mana RING as a bead on the circumference; v9 flattened it into
--- a waterline across the mana globe; v11 puts it back on the hoop, because the vessel it was a
--- waterline on no longer exists. This is the mark following its ring, not a redesign.
+-- a waterline across the mana globe; v11 put it back on the hoop; v14 makes it a FULL-HEIGHT
+-- WATERLINE across the mana rail. This is the mark following its gauge, not a redesign — and on
+-- a rail it is the cheapest form it has ever taken: x = 30 - 50 = -20, no trigonometry, no
+-- dependence on a ring diameter, and the mark spans the whole 11px height instead of being a
+-- 6.6px bead sitting near an arc.
 --
 -- WHY IT IS STILL TWO STANDALONE TEXTURE AURAS AND NOT A `subtexture` TICK. WeakAuras does
 -- support static ticks on a progresstexture — SubRegionTypes/Texture.lua's supports() lists
@@ -1001,17 +1239,19 @@ coldsnap.conditions[2] = allOf({
 -- for one reason: a sub-region cannot carry a load gate. This breakpoint is ARCANE-ONLY since
 -- v3 — it marks the switch from Arcane Blast spam to the 3x AB / 3x Frostbolt conserve cycle,
 -- and Frost has no second rotation to switch into — and a tick welded onto the shared mana
--- ring would show for Frost too, silently undoing that audit. Two auras also keep the "lit"
--- pop as a real animation.
+-- rail would show for Frost too, silently undoing that audit. (The ruler hairlines on that rail
+-- CAN be subtextures precisely because they are spec-neutral: 25/50/75 is arithmetic, not
+-- rotation.) Two auras also keep the "lit" pop as a real animation.
 local MANA_CONSERVE_PCT = 30
--- Straight out of ringPoint(), so both beads follow INNER instead of being left behind in
--- empty space if the ring is ever resized. 30% of the way round from the top is 108°, which on
--- the 62px mana ring's stroke radius (29.14) is (27.71, -9.0) — right of centre and slightly
--- below it, exactly where a CLOCKWISE fill hands over from "above the line" to "below" it.
--- (v9's line spanned the glass at y = -14.4; that number went with the glass.)
-local MANA_MARK_X, MANA_MARK_Y = ringPoint(MANA_CONSERVE_PCT / 100)
-local MARK_DIM, MARK_LIT = 6, 8   -- small bead, bigger when it lights
-local manaLine = reg(F.texture("Mage - Mana Conserve Line", CLASS, MARK_DIM, MARK_DIM,
+-- Straight out of railX(), so both waterlines follow RAIL_LEN instead of being left behind in
+-- empty space if the rail is ever resized: 30% of a 100px rail is x = -20, and y is the mana
+-- rail's own local y so the mark sits ON it. Height is the rail's height, exactly — a waterline
+-- is the full depth of the gauge it crosses, which is what distinguishes it from a bead.
+-- (v9's line spanned the glass at y = -14.4; v11's bead orbited to (27.71, -9.0). Both numbers
+-- went with the shape that needed them.)
+local MANA_MARK_X, MANA_MARK_Y = railX(MANA_CONSERVE_PCT, 100), Y_POWER
+local MARK_DIM, MARK_LIT = 3, 5   -- hairline, wider when it lights
+local manaLine = reg(F.texture("Mage - Mana Conserve Line", CLASS, MARK_DIM, H_POWER,
   MANA_MARK_X, MANA_MARK_Y, nil,
   F.TEX_SQUARE, { 1, 0.75, 0.2, 0.55 }))
 manaLine.triggers = F.triggers({ F.powerTrigger(0), F.unitCharTrigger() })
@@ -1023,10 +1263,10 @@ manaLine.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
 -- carry their own thresholds. So for Frost the line marked nothing pressable.
 manaLine.load.use_spellknown = true
 manaLine.load.spellknown = 12042      -- Arcane Power == deep-Arcane spec gate
--- v11: adopted into the player cluster at the bottom of this script, AFTER the mana ring it
--- marks, so it draws over the arc rather than under it (+4 frame levels per child).
+-- v14: adopted into the sill at the bottom of this script, AFTER the mana rail it marks, so it
+-- draws over the fill rather than under it (+4 frame levels per child).
 
-local manaLit = reg(F.texture("Mage - Mana Conserve Lit", CLASS, MARK_LIT, MARK_LIT,
+local manaLit = reg(F.texture("Mage - Mana Conserve Lit", CLASS, MARK_LIT, H_POWER,
   MANA_MARK_X, MANA_MARK_Y, nil,
   F.TEX_SQUARE, { 1, 0.75, 0.2, 1 }))
 manaLit.blendMode = "ADD"
@@ -1381,10 +1621,10 @@ emana.conditions = {
 emana.load = pvpLoad(true)
 adopt(gPvP, emana)
 
--- ===== v12 assembly: ONE cluster, four deletions, and the uid stream held still =====
--- TWO regions are created here where v11 created six, and the four uid slots that are freed are
--- RETIRED IN PLACE rather than reused. That is the whole trick of this migration, and it is
--- worth being explicit about both halves:
+-- ===== v14 assembly: ONE strip, the same six uid slots, and the stream held still =====
+-- TWO regions are created here where v11 created six, and the four uid slots that v12 freed are
+-- still RETIRED IN PLACE rather than reused. That is the whole trick of this migration, and it
+-- is worth being explicit about both halves:
 --
 --   1. WHAT IS GONE, and why it is not replaced by anything. The target cluster group, the
 --      target's health ring, its portrait and the outer track that v11 invented purely to keep
@@ -1400,77 +1640,72 @@ adopt(gPvP, emana)
 --      shifts every uid AFTER it by one position, which would silently re-uid every surviving
 --      aura downstream and turn the in-game Update into 40-odd duplicates. So the four calls are
 --      still made, in their exact original positions, and their results are discarded. Only
---      gPlayer (slot 1) and pPortrait (slot 3) are consumed, and both get the value they got in
---      v11. Future versions append after ALL SIX slots, so a new aura can never inherit the uid
---      of a region a player may still have sitting in their collection.
+--      gSill (slot 1) and pPlate (slot 3) are consumed, and both get the value they got in v11.
+--      Future versions append after ALL SIX slots, so a new aura can never inherit the uid of a
+--      region a player may still have sitting in their collection.
 --
---   uid slot   v11 aura                    v12
---     1        Mage - Player Cluster    -> Mage - Player Cluster   (unchanged, x = -270)
---     2        Mage - Target Cluster    -> RETIRED
---     3        Mage - Player Portrait   -> Mage - Player Portrait  (unchanged)
---     4        Mage - Target Health Ring-> RETIRED
---     5        Mage - Target Ring Track -> RETIRED
---     6        Mage - Target Portrait   -> RETIRED
+--   uid slot   v11 aura                    v14
+--     1        Mage - Player Cluster    -> Mage - Player Sill      (renamed, moved to (0,-110))
+--     2        Mage - Target Cluster    -> RETIRED (since v12)
+--     3        Mage - Player Portrait   -> Mage - Sill Plate       (model -> texture, 102x37)
+--     4        Mage - Target Health Ring-> RETIRED (since v12)
+--     5        Mage - Target Ring Track -> RETIRED (since v12)
+--     6        Mage - Target Portrait   -> RETIRED (since v12)
 --
--- THE ONE SURVIVOR THAT MOVES is the threat ring, created far above in the v6 threat bar's slot:
--- it changes parent (target cluster -> player cluster), diameter (84 -> 100) and id, keeps its
--- uid, and takes the 80% flare with it. See the threat ring itself for the reasoning.
+-- EVERY OTHER SURVIVOR IS RESHAPED IN PLACE, in the slot it has held since v6: the health, mana
+-- and threat bars-turned-rings-turned-globes-turned-rings become rails; the threat flash becomes
+-- the alarm frame; the two conserve beads become waterlines; and the Arcane Blast stack icon,
+-- created up in the buff row's slot, becomes the arcane lane. Not one of them changes uid, and
+-- not one uid() call moves.
 --
 -- CHILD ORDER IS THE STACKING ORDER: FixGroupChildrenOrder walks controlledChildren and adds
 -- +4 frame levels per entry, so EARLIER = further behind. sharedFrameLevel is deliberately left
--- off the cluster group: it would zero the level offset and make the overlap order ambiguous.
+-- off the sill group: it would zero the level offset and make the overlap order ambiguous.
 --
--- v13 MOVES THE PORTRAIT FROM LAST TO FIRST, and this is the half of the "put health in the
--- middle" change that is invisible in a diff of the constants but is the reason it works at all.
+-- v13 moved the portrait from last to FIRST so the rings' text could print on it. v14 keeps that
+-- position and makes it structural: the region in that slot is now the PLATE, and everything in
+-- the instrument is read against it — with the ALARM RIM one place further back still.
 --
 --   v11/v12:  threat, health, mana, beads, flare, PORTRAIT   <- face on top of everything
 --   v13:      PORTRAIT, threat, health, mana, beads, flare   <- face behind everything
+--   v14:      ALARM RIM, PLATE, threat, health, mana, waterlines, arcane lane
 --
--- WHY IT WAS LAST. The old rule was "nothing draws over the face", which was correct while the
--- numbers lived outside the rings: nothing else reached the middle, so last cost nothing and
--- guaranteed the portrait was never clipped. Once health moves to y = 0 that rule inverts — the
--- portrait is drawn AFTER the health ring, so it covers the health ring's subtext, and a build
--- with PCT_HP_Y = 0 and the old order renders a number that is simply not there. Changing the
--- offset alone looks like nothing happened; that is the trap this note exists to prevent.
+-- WHY THIS ORDER, lane by lane. The ALARM RIM is first because it is a FILLED 108x43 quad, not an
+-- outline (measured; see the texture note at the top of the file). Anywhere else in this list it
+-- covers what it is warning about in additive red. At the bottom of the stack, oversized by 3px
+-- per side, the only part of it that can be seen is the band protruding past the plate — so it
+-- rings the instrument instead of flooding it, and every readout draws over it. The plate is
+-- second: it is opaque, so anything before it is hidden (which is the point for the rim) and
+-- anything after it is legible. The three rails do not overlap each other at all (the lane
+-- arithmetic gives every pair a 1px gutter), so their relative order is free and they are listed
+-- top to bottom simply because that is how the instrument reads. The two conserve waterlines MUST
+-- come after the mana rail they cross, or the rail's own fill is drawn over them and the
+-- breakpoint disappears exactly when mana is near it.
+-- THE SIZE AND THE ORDER ARE ONE MECHANISM. +6px with the rim drawn last is a wash; cc[1] at the
+-- plate's own size is invisible. Post-build assert 2b pins both halves against the decoded
+-- string, so dropping either fails the build instead of shipping.
 --
--- WHY PUTTING IT FIRST IS SAFE, and not just a trade of one occlusion for another: every other
--- child of this cluster is an ANNULUS or a bead, and none of them has any art at the centre.
--- Measured off the decoded string rather than assumed (Ring_20px's stroke is 20/256 of the drawn
--- size, so a ring of diameter d spans radius d/2 - 20d/256 .. d/2):
---     threat ring   100px -> radius 42.19 .. 50.00
---     threat flare  100px -> radius 42.19 .. 50.00  (same annulus art, ADD blend)
---     health ring    84px -> radius 35.44 .. 42.00
---     mana ring      62px -> radius 26.16 .. 31.00
---     conserve beads 6/8px at (27.71, -9) -> ~29 from centre, on the mana stroke
---     PORTRAIT       44px -> radius  0.00 .. 22.00
--- The innermost band starts at 26.16 and the face ends at 22.00, so no ring's ART can reach the
--- portrait at all: drawing the rings above it hides nothing. The only thing of theirs that lands
--- on the face is the health SUBTEXT, which is exactly the point — the number now has the one
--- opaque, always-present backdrop in the cluster behind it instead of the open sky.
---
--- The flare is the case worth checking twice, because it is the one child drawn over the health
--- number: it is 100px of Ring_20px in ADD blend, i.e. the 42.19..50 band, so at 80% threat it
--- pulses around the OUTSIDE of the cluster and never touches a number at y = 0.
---
--- Reordering is a controlledChildren edit ONLY. It consumes no uid and moves no uid() call — the
--- portrait is still CREATED in its original position in the stream above (slot 3), and only its
--- adopt() call moves — so every uid is unchanged and the in-game Update flow is unaffected.
--- F.assemble derives the flat c-list depth-first from controlledChildren, so the transmit's two
--- orderings cannot drift apart here; W.verify enforces that they agree.
-local gPlayer = reg(F.group("Mage - Player Cluster", CLUSTER_X, 0, nil))
-adopt(gRings, gPlayer)
+-- Reordering and re-parenting are controlledChildren edits ONLY. They consume no uid and move no
+-- uid() call — every region is still CREATED in its original position in the stream above, and
+-- only its adopt() call moves — so every uid is unchanged and the in-game Update flow is
+-- unaffected. F.assemble derives the flat c-list depth-first from controlledChildren, so the
+-- transmit's two orderings cannot drift apart here; W.verify enforces that they agree, and the
+-- geometry proof at the bottom re-reads both out of the DECODED string.
+local gSill = reg(F.group("Mage - Player Sill", SILL_LOCAL_X, SILL_LOCAL_Y, nil))
+adopt(gLayer, gSill)
 
 -- RETIRED UID SLOT 2 — "Mage - Target Cluster". Consumed and discarded; see (2) above.
 W.uid()
 
--- THE PLAYER'S FACE. It carries the same two triggers as its health ring, so it fades out of
--- combat with the cluster instead of sitting at full brightness inside dimmed arcs, and it
--- disappears with them if max health ever reads zero. `alpha` is a region-prototype property,
--- valid on every region type including `model`, so both conditions are live here rather than
--- silent no-ops. Untouched by v12 in every field, including its 44px diameter.
-local pPortrait = reg(portrait("Mage - Player Portrait", "player",
+-- THE SILL PLATE, in the portrait's uid slot. It carries the same two triggers the portrait did,
+-- so the whole instrument fades out of combat instead of sitting at full brightness, and it
+-- disappears if max health ever reads zero. `alpha` is a region-prototype property, valid on
+-- every region type, so both conditions are live here rather than silent no-ops. The two
+-- conditions and both triggers are byte-identical to v13's portrait; the region type, the size
+-- and the texture are what changed.
+local pPlate = reg(plate("Mage - Sill Plate", SILL_W, SILL_H, COL.plate,
   { unitHealthTrigger("player"), F.unitCharTrigger() }))
-pPortrait.conditions = {
+pPlate.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
   F.condition(1, "maxhealth", "<=", "0", "alpha", 0),
 }
@@ -1483,18 +1718,16 @@ W.uid()
 W.uid()
 W.uid()
 
--- THE CLUSTER: the face first, then the arcs outside in. The portrait is adopted FIRST as of v13
--- so that every ring — and therefore every ring's subtext, which is the whole reason — draws over
--- it; see the long note above for why that hides nothing. The arcs keep their v12 order among
--- themselves: threat outermost, then health, then mana, the conserve beads over the arc they
--- mark, and the flare last so the 80% pulse draws over every arc it haloes.
-adopt(gPlayer, pPortrait)
-adopt(gPlayer, threatRing)
-adopt(gPlayer, hpRing)
-adopt(gPlayer, mpRing)
-adopt(gPlayer, manaLine)
-adopt(gPlayer, manaLit)
-adopt(gPlayer, flash)
+-- THE SILL: the alarm rim underneath everything, then the plate, then the lanes top to bottom,
+-- with the waterlines over the rail they mark. This list IS the z-order.
+adopt(gSill, flash)         -- 1  the alarm rim, 108x43 — 3px proud of the plate, and BEHIND it
+adopt(gSill, pPlate)        -- 2  the slab everything is read against; it hides the rim's middle
+adopt(gSill, threatRail)    -- 3  lane 1, 100x4  @ +15.5
+adopt(gSill, hpRail)        -- 4  lane 2, 100x11 @ +7
+adopt(gSill, mpRail)        -- 5  lane 3, 100x11 @ -5
+adopt(gSill, manaLine)      -- 6  the 30% conserve waterline, over the mana rail
+adopt(gSill, manaLit)       -- 7  ...and its lit twin, over that
+adopt(gSill, ab)            -- 8  lane 4, 100x6  @ -14.5 (Arcane Blast stacks + window)
 
 -- ===== icon polish everywhere ===============================================
 for _, aura in ipairs(order) do
@@ -1506,27 +1739,591 @@ local transmit = F.assemble(top, byId)
 local encoded = W.encode(transmit)
 W.verify(transmit, encoded)
 
+-- ===== v14 GEOMETRY PROOF, against the DECODED string ========================
+-- Through v13 this pack asserted its geometry in prose, and every migration that did so drifted.
+-- These checks read the string that is about to ship, sum the parent chain themselves and fail
+-- the build if the instrument is not exactly what this file claims. They are the RAIL canon,
+-- rewritten from the ring canon they replace (orientation == "CLOCKWISE", width == height ==
+-- <diameter>, foregroundTexture == Ring_20px, concentric offsets) — rewritten rather than
+-- deleted, because a geometry change that ships silently wrong is the exact failure this repo
+-- has spent six versions learning to catch. tools/verify-rebuild.sh re-runs this script, so the
+-- proof is re-executed on every suite run rather than trusted from a header.
+--
+-- THE CANON IS WRITTEN AS LITERALS, AND THAT IS THE WHOLE POINT OF THIS TABLE. v14 first shipped
+-- a proof block that compared the decoded string against the constants that had just produced it
+-- — `assert(n.width == RAIL_LEN)` where RAIL_LEN is what set n.width, and `assert(sy == SILL_Y)`
+-- where SILL_LOCAL_Y is derived from SILL_Y. Both are tautologies: editing the single constant
+-- moves the string AND the expectation together, and the build passes. Measured, four one-token
+-- sabotages sailed through it: RAIL_LEN 100->96, SILL_W 102->96, SILL_Y -110->-21, PCT_X 32->20.
+-- CANON is the independent second opinion. Every number the design PROMISES appears here once,
+-- as a literal, and is compared against BOTH the tunable constant above and the value decoded out
+-- of the shipped string — so a constant edit fails at the constant, and a hand-edited string
+-- fails at the string. Change a number here only by changing the design in all seven packs.
+local CANON = {
+  absX     = 0,     absY    = -110,   -- where the instrument sits, in SCREEN coordinates
+  -- ...and the three hops that add up to it, pinned individually. The sum alone is not enough:
+  -- SILL_LOCAL_Y is computed as SILL_Y - TOP_Y - LAYER_Y, so the layer's offset CANCELS out of
+  -- the total and can be set to anything without moving the strip one pixel. It still has to be
+  -- pinned, because these three numbers are printed as a chain in both READMEs and an unpinned
+  -- number in a published diagram is a number that goes stale.
+  chainTop = -140,  chainLayer = 180, chainSill = -150,
+  rail     = 100,                     -- one pixel is one percent; this is the whole design
+  plateW   = 102,   plateH  = 37,     -- rail + 1px margin each side; lane stack + 1px top/bottom
+  rim      = 3,                       -- how far the alarm protrudes past the plate, per side
+  alarmW   = 108,   alarmH  = 43,     -- plate + 2 * rim. The rim IS the alarm; see assert 2b
+  margin   = 1,     gutter  = 1,      -- plate margin, and the gap between adjacent lanes
+  hThreat  = 4,     hHealth = 11,     hPower = 11,   hLane  = 6,
+  yThreat  = 15.5,  yHealth = 7,      yPower = -5,   yLane  = -14.5,
+  pctX     = 32,    pctSize = 11,     -- the health and mana numbers, inside their own rails
+  notchX   = 20,                      -- threat 70  ->  70 - 50
+  conserveX = -20,                    -- mana   30  ->  30 - 50
+  rulerX   = { -25, 0, 25 },          -- quarter hairlines
+  pipX     = { -20, 0, 20 },          -- arcane stack pips
+  threatPctAbsY = -84,                -- the switched-off threat number, if a user turns it on
+  scanDepth = 6,                      -- minimum projection depth for a dynamic group
+}
+-- The z-order, bottom to top. The alarm rim is cc[1] and the plate cc[2]; both positions are
+-- load-bearing and assert 2b names them individually rather than trusting this list.
+local SILL_CHILDREN = {
+  "Mage - Alarm Frame", "Mage - Sill Plate", "Mage - Threat Rail", "Mage - Health Rail",
+  "Mage - Mana Rail", "Mage - Mana Conserve Line", "Mage - Mana Conserve Lit",
+  "Mage - Arcane Lane",
+}
+do
+  local back = W.decode(encoded)
+  local nodes = { [back.d.id] = back.d }
+  for _, ch in ipairs(back.c) do nodes[ch.id] = ch end
+
+  local function absolute(id)
+    local node = assert(nodes[id], "geometry proof: no such aura " .. id)
+    local x, y, hops = 0, 0, 0
+    while node do
+      hops = hops + 1; assert(hops < 32, "geometry proof: parent cycle at " .. id)
+      x, y = x + (node.xOffset or 0), y + (node.yOffset or 0)
+      node = node.parent and nodes[node.parent] or nil
+    end
+    return x, y
+  end
+
+  -- 0) THE CONSTANTS THEMSELVES, against the canon literals. This runs first so that a one-token
+  --    edit above fails HERE, naming the constant, instead of surfacing thirty asserts later as a
+  --    decoded number that disagrees with a number nobody can trace. It is also the only place
+  --    the DERIVED relationships are stated as arithmetic rather than as a comment:
+  --      * the plate is the rail plus one pixel of margin on each side, so a plate can never
+  --        again end up NARROWER than the rails it is supposed to be backing;
+  --      * the plate's height is the lane stack plus its gutters plus its margins, added up
+  --        rather than asserted, so adding a lane without growing the plate cannot pass.
+  local function mustBe(name, got, expect)
+    assert(got == expect, ("canon: %s is %s, expected %s (change the design, not the constant)")
+      :format(name, tostring(got), tostring(expect)))
+  end
+  mustBe("SILL_X", SILL_X, CANON.absX)          mustBe("SILL_Y", SILL_Y, CANON.absY)
+  mustBe("RAIL_LEN", RAIL_LEN, CANON.rail)      mustBe("SILL_W", SILL_W, CANON.plateW)
+  mustBe("SILL_H", SILL_H, CANON.plateH)        mustBe("H_THREAT", H_THREAT, CANON.hThreat)
+  mustBe("H_HEALTH", H_HEALTH, CANON.hHealth)   mustBe("H_POWER", H_POWER, CANON.hPower)
+  mustBe("H_LANE", H_LANE, CANON.hLane)         mustBe("Y_THREAT", Y_THREAT, CANON.yThreat)
+  mustBe("Y_HEALTH", Y_HEALTH, CANON.yHealth)   mustBe("Y_POWER", Y_POWER, CANON.yPower)
+  mustBe("Y_LANE", Y_LANE, CANON.yLane)         mustBe("PCT_X", PCT_X, CANON.pctX)
+  mustBe("PCT_SIZE", PCT_SIZE, CANON.pctSize)
+  mustBe("SILL_W (as RAIL_LEN + 2 * margin)", SILL_W, CANON.rail + 2 * CANON.margin)
+  mustBe("SILL_H (as the lane stack + 3 gutters + 2 margins)", SILL_H,
+    CANON.hThreat + CANON.hHealth + CANON.hPower + CANON.hLane + 3 * CANON.gutter
+    + 2 * CANON.margin)
+  mustBe("railX(70)", railX(70, 100), CANON.notchX)
+  mustBe("railX(30)", railX(MANA_CONSERVE_PCT, 100), CANON.conserveX)
+  mustBe("RIM", RIM, CANON.rim)
+  mustBe("ALARM_W", ALARM_W, CANON.alarmW)      mustBe("ALARM_H", ALARM_H, CANON.alarmH)
+  mustBe("ALARM_W (as SILL_W + 2 * RIM)", ALARM_W, CANON.plateW + 2 * CANON.rim)
+  mustBe("ALARM_H (as SILL_H + 2 * RIM)", ALARM_H, CANON.plateH + 2 * CANON.rim)
+
+  -- 1) THE STRIP IS AT (0, -110), walked from the real parent chain and compared with the CANON
+  --    LITERAL, not with SILL_Y. top (0, -140) + layer (0, 180) + sill (0, -150) = (0, -110).
+  --    SILL_LOCAL_Y is computed from SILL_Y, so `sy == SILL_Y` could never have caught a moved
+  --    strip; `sy == -110` does, and check 0 above catches the constant on the way past.
+  local sx, sy = absolute("Mage - Player Sill")
+  assert(sx == CANON.absX and sy == CANON.absY,
+    ("geometry proof: the sill is at (%s, %s), expected (%d, %d)")
+      :format(tostring(sx), tostring(sy), CANON.absX, CANON.absY))
+  assert(nodes["Mage - Player Sill"].parent == "Mage - Sill Layer"
+    and nodes["Mage - Sill Layer"].parent == back.d.id,
+    "geometry proof: the sill no longer hangs top -> layer -> sill")
+  --    ...and each hop of that chain, individually, because both READMEs print the sum as
+  --    `top (0, -140) + layer (0, +180) + sill (0, -150)`. The layer's offset cancels out of the
+  --    total, so only a per-hop check can keep the published arithmetic true.
+  for _, hop in ipairs({
+    { id = back.d.id,             y = CANON.chainTop,   name = "the top group" },
+    { id = "Mage - Sill Layer",   y = CANON.chainLayer, name = "the sill layer" },
+    { id = "Mage - Player Sill",  y = CANON.chainSill,  name = "the sill group" },
+  }) do
+    assert(nodes[hop.id].xOffset == 0 and nodes[hop.id].yOffset == hop.y,
+      ("geometry proof: %s is at local (%s, %s), expected (0, %s)"):format(hop.name,
+        tostring(nodes[hop.id].xOffset), tostring(nodes[hop.id].yOffset), tostring(hop.y)))
+  end
+  assert(CANON.chainTop + CANON.chainLayer + CANON.chainSill == CANON.absY,
+    "geometry proof: the published chain does not add up to the published position")
+
+  -- 2) THE RAIL CANON. Every lane is a LINEAR progresstexture on flat white art, 100px long
+  --    because one pixel is one percent, at the lane offset this file declares — and each one
+  --    lands at the absolute y its lane implies, which is the check that catches a group offset
+  --    and a lane offset drifting in opposite directions.
+  --    Every number compared below is a CANON literal, never the constant that produced it.
+  local LANES = {
+    { id = "Mage - Threat Rail", h = CANON.hThreat, y = CANON.yThreat },
+    { id = "Mage - Health Rail", h = CANON.hHealth, y = CANON.yHealth },
+    { id = "Mage - Mana Rail",   h = CANON.hPower,  y = CANON.yPower  },
+    { id = "Mage - Arcane Lane", h = CANON.hLane,   y = CANON.yLane   },
+  }
+  for _, want in ipairs(LANES) do
+    local n = assert(nodes[want.id], "geometry proof: no such aura " .. want.id)
+    assert(n.regionType == "progresstexture",
+      ("rail canon: %s is a %s, not a progresstexture"):format(want.id, tostring(n.regionType)))
+    assert(n.orientation == "HORIZONTAL_INVERSE",
+      ("rail canon: %s fills %s, not HORIZONTAL_INVERSE (Left to Right)")
+        :format(want.id, tostring(n.orientation)))
+    assert(n.foregroundTexture == RAIL_TEX and n.backgroundTexture == RAIL_TEX
+      and n.sameTexture == true,
+      "rail canon: " .. want.id .. " is not drawn on the flat white square, fill and track alike")
+    assert(n.backgroundOffset == 0, "rail canon: " .. want.id .. " has a fattened track")
+    assert(n.smoothProgress == true, "rail canon: " .. want.id .. " lost smoothProgress")
+    assert(n.progressSource[1] == -1 and n.progressSource[2] == "",
+      "rail canon: " .. want.id .. " does not take automatic progress from trigger 1")
+    assert(n.width == CANON.rail,
+      ("rail canon: %s is %s long, expected %d (one pixel is one percent)")
+        :format(want.id, tostring(n.width), CANON.rail))
+    assert(n.height == want.h,
+      ("rail canon: %s is %s tall, expected %d"):format(want.id, tostring(n.height), want.h))
+    assert(n.xOffset == 0 and n.yOffset == want.y,
+      ("rail canon: %s sits at local (%s, %s), expected (0, %s)")
+        :format(want.id, tostring(n.xOffset), tostring(n.yOffset), tostring(want.y)))
+    local ax, ay = absolute(want.id)
+    assert(ax == CANON.absX and ay == CANON.absY + want.y,
+      ("rail canon: %s lands at (%s, %s), expected (%d, %s)")
+        :format(want.id, tostring(ax), tostring(ay), CANON.absX, tostring(CANON.absY + want.y)))
+  end
+
+  -- 2b) THE PLATE AND THE ALARM RIM: TWO CONCENTRIC RECTANGLES, THE ALARM 6px BIGGER IN BOTH AXES
+  --     AND DRAWN FIRST. This assert used to pin something else entirely, and it pinned it on a
+  --     false premise, so it is worth recording what it said: it required the plate and the alarm
+  --     to be on DIFFERENT ART, because the file claimed Square_White_Border was "an OUTLINE, the
+  --     interior is transparent" and called that "not a guess". It was inverted. Decoded from the
+  --     client's own file, Square_White_Border.tga is 256x256 32bpp RLE with 64516 of 65536 pixels
+  --     (98.44%) at alpha 255; every pixel inset 8px or more has min alpha 255 and min RGB 167
+  --     across n = 57600; the centre pixel is rgba(255,255,255,255). It is a FILLED square with a
+  --     dark bevel baked into its edge. NO SINGLE REGION ON IT TRACES A HOLLOW EDGE.
+  --
+  --     So an art check can never make this alarm safe, and v14 proved it: the alarm shipped on
+  --     the border art at the plate's own 102x37 with blendMode ADD, LAST in controlledChildren,
+  --     and therefore drew a full-area red quad over every rail, every number and every pip
+  --     whenever threat >= 80% — washing out the readouts at exactly the moment they matter most.
+  --     The art assert passed the whole time.
+  --
+  --     WHAT ACTUALLY MAKES IT A RIM is geometry plus z-order, and BOTH HALVES ARE PINNED HERE:
+  --       * SIZE:  alarm.width == plate.width + 2 * RIM and alarm.height == plate.height + 2 * RIM.
+  --                Only the 3px band protruding on each side can be seen.
+  --       * ORDER: cc[1] is the alarm and cc[2] is the plate. Everything else in the strip draws
+  --                over the alarm, so nothing is composited on top of a readout.
+  --     Drop either one and the rim silently becomes a wash again, which is why they are asserted
+  --     together, off the decoded string, against CANON literals. The art is deliberately NOT
+  --     asserted: this construction is correct whether the texture is filled or hollow.
+  local plateN = nodes["Mage - Sill Plate"]
+  local alarm  = nodes["Mage - Alarm Frame"]
+  local RECTS = {
+    { id = "Mage - Sill Plate",  w = CANON.plateW, h = CANON.plateH },
+    { id = "Mage - Alarm Frame", w = CANON.alarmW, h = CANON.alarmH },
+  }
+  for _, want in ipairs(RECTS) do
+    local n = nodes[want.id]
+    assert(n.regionType == "texture",
+      ("rail canon: %s is a %s, not a texture"):format(want.id, tostring(n.regionType)))
+    assert(n.width == want.w and n.height == want.h,
+      ("rail canon: %s is %sx%s, expected %dx%d")
+        :format(want.id, tostring(n.width), tostring(n.height), want.w, want.h))
+    assert(n.xOffset == 0 and n.yOffset == 0,
+      "rail canon: " .. want.id .. " carries a local offset; the group must carry position")
+    local ax, ay = absolute(want.id)
+    assert(ax == CANON.absX and ay == CANON.absY,
+      ("rail canon: %s lands at (%s, %s), expected (%d, %d) — the rim is only a rim while it is "
+        .. "CONCENTRIC with the plate"):format(want.id, tostring(ax), tostring(ay),
+        CANON.absX, CANON.absY))
+    assert(type(n.color) == "table" and #n.color == 4,
+      "rail canon: " .. want.id .. " ships without an explicit 4-component colour")
+  end
+  --     HALF ONE — THE SIZE, stated as the relationship and not just as two literals, so that a
+  --     future edit which grows the plate without growing the rim fails here.
+  assert(alarm.width == plateN.width + 2 * CANON.rim,
+    ("rim proof: the alarm is %s wide and the plate is %s; a %dpx rim needs plate + %d")
+      :format(tostring(alarm.width), tostring(plateN.width), CANON.rim, 2 * CANON.rim))
+  assert(alarm.height == plateN.height + 2 * CANON.rim,
+    ("rim proof: the alarm is %s tall and the plate is %s; a %dpx rim needs plate + %d")
+      :format(tostring(alarm.height), tostring(plateN.height), CANON.rim, 2 * CANON.rim))
+  assert(alarm.width > plateN.width and alarm.height > plateN.height,
+    "rim proof: the alarm does not protrude past the plate at all, so it can never be seen")
+  --     HALF TWO — THE ORDER. cc[1] is the alarm, cc[2] is the plate. Checked here as well as in
+  --     the draw-order proof below, because on its own the size check licenses a full-area wash.
+  local ccSill = nodes["Mage - Player Sill"].controlledChildren
+  assert(ccSill[1] == "Mage - Alarm Frame",
+    ("rim proof: cc[1] is %s, not the alarm frame. A FILLED ADD quad anywhere but the bottom of "
+      .. "the stack covers the readouts it is warning about"):format(tostring(ccSill[1])))
+  assert(ccSill[2] == "Mage - Sill Plate",
+    ("rim proof: cc[2] is %s, not the sill plate. The plate is what hides the alarm's middle; "
+      .. "without it directly above the alarm, the whole quad shows"):format(tostring(ccSill[2])))
+  for i = 3, #ccSill do
+    assert(ccSill[i] ~= "Mage - Alarm Frame" and ccSill[i] ~= "Mage - Sill Plate",
+      "rim proof: the alarm or the plate appears twice in the draw order")
+  end
+  --     ...and the alarm's colour and blend are EXPLICIT. A texture that ships `color = {}` draws
+  --     in WeakAuras' default, i.e. a white flash where a red alarm was intended, so the check is
+  --     on the four numbers rather than on the presence of the field.
+  assert(alarm.color[1] == 1 and alarm.color[2] == 0.1 and alarm.color[3] == 0.1
+    and alarm.color[4] == 0.85,
+    ("rim proof: the alarm is (%s, %s, %s, %s), expected the explicit (1, 0.1, 0.1, 0.85)")
+      :format(tostring(alarm.color[1]), tostring(alarm.color[2]), tostring(alarm.color[3]),
+        tostring(alarm.color[4])))
+  assert(alarm.blendMode == "ADD",
+    "rim proof: the alarm frame stopped being additive, so the rim no longer glows")
+  --     The plate is BLEND, not ADD: an additive black is a no-op, so a plate that picked up the
+  --     alarm's blend mode would draw nothing at all while still passing every size check — and
+  --     an invisible plate is an exposed rim, i.e. the wash again by another route.
+  assert(plateN.blendMode == "BLEND" and plateN.color[4] > 0 and plateN.color[1] < 0.3
+    and plateN.color[2] < 0.3 and plateN.color[3] < 0.3,
+    "rail canon: the sill plate is not a BLEND-mode dark slab")
+
+  -- 3) THE LANE STACK, MEASURED EXACTLY. 1 + 4 + 1 + 11 + 1 + 11 + 1 + 6 + 1 = 37: a 1px margin,
+  --    four lanes, a 1px gutter between each adjacent pair, a 1px margin. The earlier version of
+  --    this check only forbade OVERLAP, which let the gutters collapse to zero silently — the
+  --    lanes would touch, the instrument would read as one smeared block, and the build would
+  --    still print "0 overlaps". Every gap is now measured against CANON.gutter / CANON.margin,
+  --    and the spans are read out of the DECODED string rather than recomputed from the
+  --    constants, so a hand-edited string fails here too. The stack is walked top-to-bottom in
+  --    declaration order and that order is itself asserted, because "the next lane down" is only
+  --    meaningful if the list really is sorted.
+  local plateTop, plateBottom = CANON.plateH / 2, -CANON.plateH / 2
+  local spans = {}
+  for _, want in ipairs(LANES) do
+    local n = nodes[want.id]
+    spans[#spans + 1] = {
+      id = want.id, top = n.yOffset + n.height / 2, bottom = n.yOffset - n.height / 2,
+    }
+  end
+  assert(plateTop - spans[1].top == CANON.margin,
+    ("lane stack: the top margin is %s, expected %s")
+      :format(tostring(plateTop - spans[1].top), tostring(CANON.margin)))
+  assert(spans[#spans].bottom - plateBottom == CANON.margin,
+    ("lane stack: the bottom margin is %s, expected %s")
+      :format(tostring(spans[#spans].bottom - plateBottom), tostring(CANON.margin)))
+  for i = 2, #spans do
+    local gap = spans[i - 1].bottom - spans[i].top
+    assert(gap == CANON.gutter,
+      ("lane stack: the gutter between %s and %s is %s, expected %s (a collapsed gutter is not "
+        .. "an overlap, which is why this is measured and not merely tested for intersection)")
+        :format(spans[i - 1].id, spans[i].id, tostring(gap), tostring(CANON.gutter)))
+  end
+  local stacked = CANON.margin * 2 + (#spans - 1) * CANON.gutter
+  for _, s in ipairs(spans) do stacked = stacked + (s.top - s.bottom) end
+  assert(stacked == CANON.plateH,
+    ("lane stack: the lanes, gutters and margins add up to %s in a %s plate")
+      :format(tostring(stacked), tostring(CANON.plateH)))
+
+  -- 4) THE SUBREGION CANON, read positionally because conditions address subregions as sub.N.
+  --    The threat number is switched OFF and still at index 1; the notch is APPENDED at 2.
+  local th = nodes["Mage - Threat Rail"]
+  assert(#th.subRegions == 2, "subregion canon: the threat rail should carry the % and the notch")
+  assert(th.subRegions[1].type == "subtext" and th.subRegions[1].text_text == "%threatpct%%"
+    and th.subRegions[1].text_visible == false,
+    "subregion canon: the threat percentage is not a switched-off subtext at index 1")
+  assert(th.subRegions[2].type == "subtexture"
+    and th.subRegions[2].xOffset == CANON.notchX
+    and th.subRegions[2].height == CANON.hThreat and th.subRegions[2].textureVisible == true,
+    "subregion canon: the 70 notch is not a full-height mark at x = +20")
+  --    ...and WHERE the switched-off number would land if a user ticks Show Text in /wa. A
+  --    subtext anchors to its own REGION's centre, so this offset stacks on the threat rail's
+  --    +15.5 and not on the group: at the value v14 first shipped it landed 23px above the
+  --    instrument, in the open screen the whole design exists to clear. Re-derived here from the
+  --    decoded string so the README sentence "it returns just above the plate" stays true.
+  local thAbsY = select(2, absolute("Mage - Threat Rail")) + (th.subRegions[1].anchorYOffset or 0)
+  assert(thAbsY == CANON.threatPctAbsY,
+    ("subregion canon: the threat number would appear at absolute y %s, expected %s")
+      :format(tostring(thAbsY), tostring(CANON.threatPctAbsY)))
+  assert(thAbsY > CANON.absY + CANON.plateH / 2,
+    "subregion canon: the threat number would appear on top of the plate, not above it")
+  --    Health and mana: the number at the right-hand end, then the three ruler hairlines.
+  for _, want in ipairs({
+    { id = "Mage - Health Rail", token = "%percenthealth%%", h = CANON.hHealth },
+    { id = "Mage - Mana Rail",   token = "%percentpower%%",  h = CANON.hPower  },
+  }) do
+    local n = nodes[want.id]
+    assert(#n.subRegions == 4,
+      ("subregion canon: %s carries %d subregions, expected the %% plus a 3-tick ruler")
+        :format(want.id, #n.subRegions))
+    local st = n.subRegions[1]
+    assert(st.type == "subtext" and st.text_text == want.token and st.text_visible == true,
+      "subregion canon: " .. want.id .. " lost its percentage at index 1")
+    assert(st.anchorXOffset == CANON.pctX and st.anchorYOffset == 0
+      and st.text_fontSize == CANON.pctSize and st.text_anchorPoint == "CENTER",
+      ("subregion canon: %s's number is at (%s, %s) %spt, expected (%d, 0) %dpt")
+        :format(want.id, tostring(st.anchorXOffset), tostring(st.anchorYOffset),
+          tostring(st.text_fontSize), CANON.pctX, CANON.pctSize))
+    assert(st.text_fontType == "OUTLINE",
+      "subregion canon: " .. want.id .. " lost the outline that makes it read on a bright floor")
+    --    The number must stay INSIDE its own rail: two digits at 11pt are ~14px wide and three
+    --    are ~21px, so the widest case spans pctX +/- 10.5 and has to clear the rail's right end
+    --    at +50. This is what stops a later edit pushing the number back out onto open screen.
+    assert(CANON.pctX + 10.5 <= CANON.rail / 2,
+      "subregion canon: a three-digit number at PCT_X would hang off the end of the rail")
+    for i, x in ipairs(CANON.rulerX) do
+      local tick = n.subRegions[i + 1]
+      assert(tick.type == "subtexture" and tick.width == 1 and tick.height == want.h
+        and tick.xOffset == x and tick.yOffset == 0 and tick.textureVisible == true,
+        ("subregion canon: %s's ruler tick %d is not a 1x%d hairline at x = %d")
+          :format(want.id, i, want.h, x))
+    end
+  end
+  --    The arcane lane: three pips, all shipping dark, each addressed by its own condition.
+  local lane = nodes["Mage - Arcane Lane"]
+  assert(#lane.subRegions == 3, "subregion canon: the arcane lane should carry exactly 3 pips")
+  for i, x in ipairs(CANON.pipX) do
+    local pip = lane.subRegions[i]
+    assert(pip.type == "subtexture" and pip.width == 7 and pip.height == CANON.hLane
+      and pip.xOffset == x and pip.textureVisible == false,
+      ("subregion canon: arcane pip %d is not a dark 7x%d block at x = %d")
+        :format(i, CANON.hLane, x))
+  end
+  local drives = {}
+  for _, c in ipairs(lane.conditions) do
+    assert((c.check.trigger == 1 and c.check.variable == "stacks")
+      or (c.check.trigger == 2 and c.check.variable == "inCombat"),
+      "subregion canon: an arcane lane condition reads neither `stacks` off trigger 1 nor "
+      .. "`inCombat` off trigger 2")
+    drives[c.changes[1].property] = true
+  end
+  assert(drives["sub.1.textureVisible"] and drives["sub.2.textureVisible"]
+    and drives["sub.3.textureVisible"] and drives["foregroundColor"],
+    "subregion canon: the arcane lane's pips or its at-cap colour are not driven by `stacks`")
+  assert(lane.triggers[1].trigger.auraspellids[1] == "36032"
+    and lane.load.spellknown == 12042,
+    "subregion canon: the arcane lane lost its Arcane Blast trigger or its Arcane-only gate")
+  --    The lane's progress must come from the AURA, so the aura trigger has to stay at index 1;
+  --    the fade feeder is trigger 2 and the trigger logic has to stay conjunctive, or an
+  --    always-active feeder would pin the lane on screen with no stacks up.
+  assert(lane.triggers[2].trigger.event == "Unit Characteristics"
+    and lane.triggers.disjunctive == "all" and lane.triggers.activeTriggerMode == -10,
+    "subregion canon: the arcane lane's fade feeder is not a conjunctive trigger 2")
+
+  -- 5) THE CONSERVE WATERLINES cross the mana rail at 30%, full height, still Arcane-only, and
+  --    still two separate auras — a subregion cannot carry a load gate.
+  for _, want in ipairs({
+    { "Mage - Mana Conserve Line", MARK_DIM }, { "Mage - Mana Conserve Lit", MARK_LIT },
+  }) do
+    local n = nodes[want[1]]
+    assert(n.width == want[2] and n.height == CANON.hPower,
+      ("waterline canon: %s is %sx%s, expected %dx%d"):format(want[1], tostring(n.width),
+        tostring(n.height), want[2], CANON.hPower))
+    assert(n.xOffset == CANON.conserveX and n.yOffset == CANON.yPower,
+      ("waterline canon: %s is at (%s, %s), expected (%s, %s)"):format(want[1],
+        tostring(n.xOffset), tostring(n.yOffset), tostring(CANON.conserveX),
+        tostring(CANON.yPower)))
+    assert(n.load.use_spellknown == true and n.load.spellknown == 12042,
+      "waterline canon: " .. want[1] .. " lost its Arcane-only gate")
+  end
+
+  -- 5b) THE OUT-OF-COMBAT FADE, stated as a contract rather than as a sentence in the README.
+  --     There is no parent that can carry it: the plate is a SIBLING of the rails, so its alpha
+  --     does not propagate, and every region that can be seen out of combat has to carry the
+  --     condition itself. So the instrument is partitioned, exhaustively, into the regions that
+  --     fade and the regions that cannot be on screen out of combat at all — and the second list
+  --     has to PROVE that claim rather than assert it:
+  --       Threat Rail        hides itself at threatvalue <= 0, which is every out-of-combat frame
+  --       Mana Conserve Lit  load.use_combat
+  --       Alarm Frame        its trigger only fires above 80% threat
+  --     Add a lane without one or the other and this fails, which is what v14 needed: the arcane
+  --     lane arrived in the strip carrying neither, and drew at full brightness over a faded
+  --     plate whenever a stack window outlived the pull.
+  local FADERS = {
+    "Mage - Sill Plate", "Mage - Health Rail", "Mage - Mana Rail",
+    "Mage - Mana Conserve Line", "Mage - Arcane Lane",
+  }
+  local COMBAT_ONLY = { "Mage - Threat Rail", "Mage - Mana Conserve Lit", "Mage - Alarm Frame" }
+  local classified = {}
+  for _, id in ipairs(FADERS) do
+    classified[id] = true
+    local found = false
+    for _, c in ipairs(nodes[id].conditions or {}) do
+      if c.check.variable == "inCombat" and c.check.value == 0
+        and c.changes[1].property == "alpha" and c.changes[1].value == 0.5 then found = true end
+    end
+    assert(found, "fade contract: " .. id .. " does not fade to 50% out of combat")
+  end
+  for _, id in ipairs(COMBAT_ONLY) do
+    classified[id] = true
+    local n = nodes[id]
+    local proof = n.load.use_combat == true
+    for _, c in ipairs(n.conditions or {}) do
+      if c.check.variable == "threatvalue" and c.changes[1].property == "alpha"
+        and c.changes[1].value == 0 then proof = true end
+    end
+    for i = 1, 10 do
+      local t = n.triggers[i]
+      if not t then break end
+      if t.trigger.use_threatpct then proof = true end
+    end
+    assert(proof, "fade contract: " .. id .. " carries no fade and is not in-combat-only either")
+  end
+  for _, id in ipairs(SILL_CHILDREN) do
+    assert(classified[id],
+      "fade contract: " .. id .. " is in the strip but in neither the fading nor the "
+      .. "in-combat-only list; every lane has to be one or the other")
+  end
+
+  -- 6) DRAW ORDER. controlledChildren IS the z-order (+4 frame levels per entry, later on top),
+  --    so the ALARM RIM must be first, the plate second, and every readout after both — and the
+  --    flat child list WA rebuilds the order from must agree with it, depth-first.
+  local order_ = nodes["Mage - Player Sill"].controlledChildren
+  assert(#order_ == #SILL_CHILDREN,
+    ("draw-order proof: the sill has %d children, expected %d"):format(#order_, #SILL_CHILDREN))
+  for i, id in ipairs(SILL_CHILDREN) do
+    assert(order_[i] == id,
+      ("draw-order proof: child %d is %s, expected %s"):format(i, tostring(order_[i]), id))
+  end
+  local flat = {}
+  for _, ch in ipairs(back.c) do
+    if ch.parent == "Mage - Player Sill" then flat[#flat + 1] = ch.id end
+  end
+  assert(#flat == #order_, "draw-order proof: sill child count differs between c and CC")
+  for i = 1, #order_ do
+    assert(flat[i] == order_[i],
+      ("draw-order proof: child %d is %s in controlledChildren but %s in the flat list")
+        :format(i, order_[i], flat[i]))
+  end
+  --    ...and the Arcane Blast aura really did leave the buff row.
+  assert(nodes["Mage - Arcane Lane"].parent == "Mage - Player Sill",
+    "draw-order proof: the arcane lane is not in the sill")
+  assert(#nodes["Mage - Buffs"].controlledChildren == 3,
+    "draw-order proof: the buff row should hold 3 icons once the stack lane moves out")
+
+  -- 7) THE RECTANGLE SCAN, RUN AGAINST THE ALARM ENVELOPE AND NOT THE PLATE. The plate is 102x37
+  --    at (0, -110) — x -51..+51, y -128.5..-91.5 — but the widest thing the strip ever draws is
+  --    the 108x43 alarm rim, x -54..+54, y -131.5..-88.5, and it appears exactly when the player
+  --    is least able to absorb a surprise. Scanning the plate would have declared 3px of the rim
+  --    "clear" without ever testing it. Every other region in the pack is boxed and tested
+  --    against the ENVELOPE. Dynamic-group children
+  --    ignore their own offsets — WA lays them out — so each dynamic group is PROJECTED as a
+  --    band `max(children, 6)` deep: six is the floor, because that is the depth at which an
+  --    alert stack stops being hypothetical, but a group that OWNS ten icons is projected ten
+  --    deep, because all ten can be on screen at once. An earlier pass in this repo shipped a
+  --    layout that only cleared while a single prompt was showing; that is why depth is projected
+  --    rather than assumed. Every box is printed below with the depth it was projected at, so
+  --    the table in the README is a transcript rather than a retelling.
+  local DEPTH = CANON.scanDepth
+  local function box(x, y, w, h)
+    return { l = x - w / 2, r = x + w / 2, b = y - h / 2, t = y + h / 2 }
+  end
+  local function overlaps(a, b)
+    return a.l < b.r and b.l < a.r and a.b < b.t and b.b < a.t
+  end
+  --    The scanned box is the ENVELOPE — the alarm rim, which is the biggest thing in the strip —
+  --    and it is derived from the ALARM's own decoded size, not from a constant, so a rim that
+  --    grows is a rim that gets re-scanned. The plate box is kept alongside it for the printout.
+  local strip = box(CANON.absX, CANON.absY, alarm.width, alarm.height)
+  local plateBox = box(CANON.absX, CANON.absY, CANON.plateW, CANON.plateH)
+  assert(strip.l <= plateBox.l and strip.r >= plateBox.r
+    and strip.b <= plateBox.b and strip.t >= plateBox.t,
+    "collision scan: the envelope does not contain the plate, so it is not an envelope")
+  local inSill = {}
+  for _, id in ipairs(SILL_CHILDREN) do inSill[id] = true end
+
+  local boxes, hits = {}, {}
+  for _, ch in ipairs(back.c) do
+    if not inSill[ch.id] and ch.id ~= "Mage - Player Sill" and ch.id ~= "Mage - Sill Layer" then
+      if ch.regionType == "dynamicgroup" then
+        local ax, ay = absolute(ch.id)
+        local widest, tallest, n = 0, 0, #ch.controlledChildren
+        for _, cid in ipairs(ch.controlledChildren) do
+          widest = math.max(widest, nodes[cid].width or 0)
+          tallest = math.max(tallest, nodes[cid].height or 0)
+        end
+        local depth = math.max(n, DEPTH)   -- project at least six deep, never fewer than it has
+        local space = ch.space or 4
+        local runW = depth * widest + (depth - 1) * space
+        local runH = depth * tallest + (depth - 1) * space
+        if ch.grow == "UP" then
+          boxes[#boxes + 1] = { id = ch.id .. " (stack x" .. depth .. ")",
+            l = ax - widest / 2, r = ax + widest / 2, b = ay - tallest / 2, t = ay + runH }
+        elseif ch.grow == "DOWN" then
+          boxes[#boxes + 1] = { id = ch.id .. " (stack x" .. depth .. ")",
+            l = ax - widest / 2, r = ax + widest / 2, b = ay - runH, t = ay + tallest / 2 }
+        elseif ch.grow == "HORIZONTAL" then
+          boxes[#boxes + 1] = { id = ch.id .. " (row x" .. depth .. ")",
+            l = ax - runW / 2, r = ax + runW / 2, b = ay - tallest / 2, t = ay + tallest / 2 }
+        else
+          error("collision scan: unhandled dynamic group growth " .. tostring(ch.grow))
+        end
+      elseif ch.regionType ~= "group" and ch.width and ch.height then
+        local parent = nodes[ch.parent]
+        if not (parent and parent.regionType == "dynamicgroup") then
+          local ax, ay = absolute(ch.id)
+          local b = box(ax, ay, ch.width, ch.height); b.id = ch.id
+          boxes[#boxes + 1] = b
+        end
+      end
+    end
+  end
+  --    ...and the TIGHTEST CLEARANCE is measured, not just the absence of overlap. A layout that
+  --    clears by 0.5px is one edit away from not clearing at all, so the number is printed per
+  --    box and the minimum is named. Separation on either axis is enough to be clear, so the gap
+  --    for a non-overlapping pair is the LARGEST of the four one-sided distances.
+  local closest, closestId = math.huge, nil
+  for _, b in ipairs(boxes) do
+    if overlaps(strip, b) then
+      hits[#hits + 1] = ("%s (x %s..%s, y %s..%s)")
+        :format(b.id, tostring(b.l), tostring(b.r), tostring(b.b), tostring(b.t))
+    else
+      b.gap = math.max(strip.l - b.r, b.l - strip.r, strip.b - b.t, b.b - strip.t)
+      if b.gap < closest then closest, closestId = b.gap, b.id end
+    end
+  end
+  assert(#hits == 0, ("collision scan: the alarm envelope (%sx%s) overlaps %d element(s): %s")
+    :format(tostring(alarm.width), tostring(alarm.height), #hits, table.concat(hits, "; ")))
+  assert(#boxes > 0, "collision scan: nothing was scanned")
+  assert(closest > 0, "collision scan: the tightest clearance is not positive")
+  --    The neighbour the margin actually depends on, named so a future edit that moves it fails
+  --    here instead of on a live client. Measured from the ENVELOPE's bottom edge, not the
+  --    plate's: the rim reaches 3px lower than the plate does.
+  local buffY = select(2, absolute("Mage - Buffs"))
+  local gapBelow = (strip.b) - (buffY + 40 / 2)
+  assert(gapBelow > 0, "collision scan: the alarm rim has eaten into the buff row")
+
+  print(("geometry: sill (%d, %d) plate %dx%d, alarm envelope %sx%s (rim %dpx/side); lanes "
+    .. "threat %d@%s health %d@%s power %d@%s arcane %d@%s; %d neighbours scanned, 0 overlaps; "
+    .. "tightest clearance %.1fpx (%s); %.1fpx to the buff row")
+    :format(sx, sy, CANON.plateW, CANON.plateH, tostring(alarm.width), tostring(alarm.height),
+      CANON.rim,
+      CANON.hThreat, tostring(CANON.yThreat), CANON.hHealth, tostring(CANON.yHealth),
+      CANON.hPower, tostring(CANON.yPower), CANON.hLane, tostring(CANON.yLane),
+      #boxes, closest, tostring(closestId), gapBelow))
+  print(("  %-32s x %s..%s  y %s..%s"):format("ALARM ENVELOPE (scanned)",
+    tostring(strip.l), tostring(strip.r), tostring(strip.b), tostring(strip.t)))
+  print(("  %-32s x %s..%s  y %s..%s"):format("plate (inside it)",
+    tostring(plateBox.l), tostring(plateBox.r), tostring(plateBox.b), tostring(plateBox.t)))
+  for _, b in ipairs(boxes) do
+    print(("  %-32s x %s..%s  y %s..%s   clear by %.1fpx")
+      :format(b.id, tostring(b.l), tostring(b.r), tostring(b.b), tostring(b.t), b.gap))
+  end
+  print(("draw order (bottom -> top): %s"):format(table.concat(order_, " -> ")))
+end
+
 -- uid continuity vs the previously shipped string, checked BEFORE overwriting,
 -- so every future version gets the "same id keeps its uid" check for free.
 --
--- v12 is the first version to pass an allowance. The default contract is missing == 0 — no uid
--- may ever disappear — and it is the right default, but it is not a law: enforced absolutely it
--- means a HUD can only grow, and every retired region has to be replaced by a made-up one to
--- hold its slot. These four ids are the deliberate deletions, listed one by one so the removal
--- is a reviewable line rather than a count, and duplicated as WA-REMOVED comments at the top of
--- this file for tools/verify-packs.lua, which repeats the same check against the last COMMITTED
--- string. Anything not on this list that disappears is still a hard failure, and `changed` (an
--- id that kept its name and swapped uid) is never forgivable.
--- Re-running this script against its own output is a no-op for the check: by then the removal
--- has already happened on both sides, so missing drops to 0 and the allowance goes unused.
-local REMOVED_IN_V12 = {
-  "Mage - Target Cluster",
-  "Mage - Target Health Ring",
-  "Mage - Target Ring Track",
-  "Mage - Target Portrait",
-}
+-- v14 hands NO allowance list, and that is the point of the version. v12 deleted four regions
+-- and declared them one id at a time; that licence expired at v13, and the four ids are absent
+-- from both sides of the comparison now, so the strict default is back: no uid may disappear,
+-- full stop. v14 adds nothing and removes nothing — it re-types, resizes, re-parents and
+-- re-orders, none of which touches the uid stream — so this must report changed = 0 AND
+-- missing = 0 against v13. The `-- WA-REMOVED (v12):` tags at the top of this file stay as
+-- lineage and are inert: tools/verify-packs.lua only honours tags matching the version the
+-- README currently ships.
 local cont = W.uidContinuity(encoded, OUT)
-W.assertUidContinuity(cont, "mage", REMOVED_IN_V12)
+W.assertUidContinuity(cont, "mage")
 
 local out = io.open(OUT, "w")
 out:write(encoded)
