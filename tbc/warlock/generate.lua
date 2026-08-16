@@ -290,13 +290,13 @@ local SHADOW = { 0.7, 0.3, 1, 1 }  -- shared shadow-purple glow
 local FILL_TEX = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth.tga"
 local RIM_TEX  = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth_Border.tga"
 
-local GLOBE_MAIN = 116   -- life and power globes
-local GLOBE_TGT  = 76    -- target globe
-local RIM_PAD    = 6     -- rim texture is its globe's size + 6, at frameStrata 2
-local GLOBE_X    = 300   -- life at -X, power at +X, target at 0
-local GLOBE_Y      = -280  -- ABSOLUTE screen y for all three (see the derivation below)
-local PCT_MAIN   = 18    -- percentage font inside a main globe, CENTER, yOffset 0
-local PCT_TGT    = 13    -- percentage font inside the target globe
+local GLOBE_MAIN = 72   -- life and power globes
+local GLOBE_TGT  = 44    -- target globe
+local RIM_PAD    = 4     -- rim texture is its globe's size + 6, at frameStrata 2
+local GLOBE_X    = 150   -- life at -X, power at +X, target at 0
+local GLOBE_Y      = -262  -- ABSOLUTE screen y for all three (see the derivation below)
+local PCT_MAIN   = 13    -- percentage font inside a main globe, CENTER, yOffset 0
+local PCT_TGT    = 10    -- percentage font inside the target globe
 local PCT_THREAT = 11    -- threat percentage, ABOVE the target globe
 local PCT_THREAT_Y = 52
 

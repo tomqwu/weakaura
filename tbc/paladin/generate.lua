@@ -416,11 +416,11 @@ end
 local FILL_TEX = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth.tga"
 local RIM_TEX  = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth_Border.tga"
 
-local GLOBE_MAIN = 116   -- life and power globes
-local GLOBE_TGT  = 76    -- target globe
-local RIM_PAD    = 6     -- a rim is its globe's size + 6, drawn at frameStrata 2
-local GLOBE_X    = 300   -- life at x = -300, power at x = +300, target at x = 0
-local GLOBE_Y      = -280  -- ABSOLUTE screen y for all three. See the assembly section: the
+local GLOBE_MAIN = 72   -- life and power globes
+local GLOBE_TGT  = 44    -- target globe
+local RIM_PAD    = 4     -- a rim is its globe's size + 6, drawn at frameStrata 2
+local GLOBE_X    = 150   -- life at x = -300, power at x = +300, target at x = 0
+local GLOBE_Y      = -262  -- ABSOLUTE screen y for all three. See the assembly section: the
                          -- cluster groups carry it and every globe carries y = 0, so the
                          -- parent chain sums to exactly -150 and not to -150 PLUS whatever
                          -- this pack's own groups happen to be offset by.

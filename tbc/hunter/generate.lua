@@ -305,11 +305,11 @@ local IV, TOC = 45, 20501
 -- Circle_Smooth2 the rest of this repo uses for pips: the border art is cut for the former.
 local FILL_TEX   = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth.tga"
 local RIM_TEX    = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth_Border.tga"
-local GLOBE_MAIN = 116   -- the life and power globes
-local GLOBE_TGT  = 76    -- the target globe
-local RIM_PAD    = 6     -- a rim texture is its globe's size + 6, drawn at frameStrata 2
-local GLOBE_X    = 300   -- ABSOLUTE screen x: life at -300, power at +300, target at 0
-local GLOBE_Y      = -280  -- ABSOLUTE screen y of all three globe centres
+local GLOBE_MAIN = 72   -- the life and power globes
+local GLOBE_TGT  = 44    -- the target globe
+local RIM_PAD    = 4     -- a rim texture is its globe's size + 6, drawn at frameStrata 2
+local GLOBE_X    = 150   -- ABSOLUTE screen x: life at -300, power at +300, target at 0
+local GLOBE_Y      = -262  -- ABSOLUTE screen y of all three globe centres
 
 -- The readouts, and the whole point of losing the portrait: the number goes INSIDE the
 -- glass, dead centre, where the eye already is.

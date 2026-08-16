@@ -287,15 +287,15 @@ local RIM_TEX  = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth_B
 -- declared as named constants so a later edit cannot drift them apart again: change them in
 -- all seven packs or not at all — a local "improvement" here silently re-breaks the one thing
 -- this shared geometry exists to fix.
-local GLOBE_MAIN   = 116        -- life and power globes
-local GLOBE_TGT    = 76         -- target globe, secondary by size
-local RIM_PAD      = 6          -- every rim texture is its globe's size + 6, at frameStrata 2
+local GLOBE_MAIN   = 72        -- life and power globes
+local GLOBE_TGT    = 44         -- target globe, secondary by size
+local RIM_PAD      = 4          -- every rim texture is its globe's size + 6, at frameStrata 2
                                 -- (= BACKGROUND, i.e. BEHIND the fill — see rim() for why that
                                 -- is the right way round for a disc-with-border texture)
-local GLOBE_X      = 300        -- life at x = -300, power at x = +300, target at x = 0
-local GLOBE_Y      = -280       -- ABSOLUTE screen y for all three (see GLOBE_LAYER_Y below)
-local PCT_MAIN     = 18         -- percentage inside the life and power glass
-local PCT_TGT      = 13         -- percentage inside the target glass
+local GLOBE_X      = 150        -- life at x = -300, power at x = +300, target at x = 0
+local GLOBE_Y      = -262       -- ABSOLUTE screen y for all three (see GLOBE_LAYER_Y below)
+local PCT_MAIN     = 13         -- percentage inside the life and power glass
+local PCT_TGT      = 10         -- percentage inside the target glass
 local PCT_THREAT   = 11         -- threat percentage, the one read-out with no vessel
 local PCT_THREAT_Y = 52         -- above the target globe (radius 38 + rim), clear of the glass
 local TOP_Y        = -140       -- the pack's top group; the globe layer offsets back out of it

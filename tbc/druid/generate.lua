@@ -208,11 +208,11 @@ local TOP = "Druid TBC - Bear, Restoration & Balance"
 -- reads as liquid inside glass rather than a flat disc.
 local FILL_TEX   = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth.tga"
 local RIM_TEX    = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Circle_Smooth_Border.tga"
-local GLOBE_MAIN = 116  -- life and power globes
-local GLOBE_TGT  = 76   -- target globe
-local RIM_PAD    = 6    -- rim = its globe's size + 6
-local GLOBE_X    = 300  -- life at -300, power at +300, target at 0
-local GLOBE_Y      = -280 -- ABSOLUTE screen y for all three (see localY below)
+local GLOBE_MAIN = 72  -- life and power globes
+local GLOBE_TGT  = 44   -- target globe
+local RIM_PAD    = 4    -- rim = its globe's size + 6
+local GLOBE_X    = 150  -- life at -300, power at +300, target at 0
+local GLOBE_Y      = -262 -- ABSOLUTE screen y for all three (see localY below)
 
 -- Numbers, all anchored CENTER on the region that owns them, so each appears and vanishes with
 -- its vessel. The main and target percentages sit INSIDE the glass (yOffset 0) — the whole
