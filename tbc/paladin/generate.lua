@@ -1,4 +1,4 @@
--- generate.lua — "Paladin TBC - All Specs" (v18)
+-- generate.lua — "Paladin TBC - All Specs" (v19)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code)
 -- except the rail region tables, which wa_factory has no builder for.
@@ -1543,110 +1543,26 @@ end
 -- (-270, 40) — x -312..-228, with its mana percentage bottoming out near y = -40. That is 8px
 -- of horizontal clearance from the cluster's right edge and ~31px of vertical clearance from
 -- its lowest pixel, plus the 7.5px it has always had under the Alerts column.
-local swing = reg(F.aurabar("Paladin - Swing Timer", CLASS, G.swingW, G.swingH,
-  G.swingX, G.swingY, nil, { 0.55, 0.55, 0.62, 1 }))
-swing.triggers = F.triggers({ swingTrigger() })
-swing.subRegions[2] = F.subborder("bar")
--- v16 — THE TWIST WINDOW IS NOW A MARK YOU CAN SEE COMING, not only a colour that arrives.
--- Until now the sole cues were the whole bar turning gold at <= 0.4s and the Twist NOW icon
--- glowing. Both fire INSIDE the window — the moment you needed to have already pressed. A
--- mark on the runway shows the window approaching, so the press can be planned instead of
--- reacted to, which is the entire skill the twist tests.
+-- ===== v19) THE SWING RUNWAY IS GONE =====
+-- WA-REMOVED (v19): Paladin - Swing Timer
 --
--- WHY A STATIC MARK CANNOT WORK, AND WHY THIS ONE DOES. The twist window is an absolute
--- 0.4s, but the runway's length is your weapon speed. A fixed pixel offset would be correct
--- for exactly one weapon and wrong the moment Wrath of Air or Swift Retribution changes your
--- haste. WeakAuras' own `subtick` re-places itself against the LIVE maxValue every update:
---     UpdateTickPlacementOne: local minValue, maxValue = self.parent:GetMinMaxProgress()
---     tick_placement_mode == "AtValue" -> tick_placement = self.tick_placements[i]
---     percent = (tick_placement - minValue) / (maxValue - minValue)
--- On a timed progress the value is remaining seconds, so AtValue 0.4 lands exactly where
--- 0.4s remain — any weapon speed, any haste, nothing to recompute on respec or re-gear.
+-- REMOVED ON THE PLAYER'S REPORT THAT IT DID NOT WORK WELL IN COMBAT. This is a judgement the
+-- string cannot make for itself: WeakAuras' Swing Timer trigger is not obviously broken from
+-- source — GenericTrigger.lua does handle parry haste (it clips lastSwingMain on a PARRY
+-- against you) and re-scales on UNIT_ATTACK_SPEED — but "handles the events" and "reads right
+-- while you are actually swinging" are different claims, and only the second one matters. A
+-- runway you cannot trust is worse than no runway: it invites you to time a 0.4s press against
+-- a bar that may be lying.
 --
--- VERIFIED FROM THE INSTALLED ADDON, NOT INFERRED. WeakAuras 5.21.10,
--- SubRegionTypes/Tick.lua, whose final statements are:
---     local function supports(regionType) return regionType == "aurabar" end
---     WeakAuras.RegisterSubRegionType("subtick", L["Tick"], supports, create, modify, ...)
--- so it is aurabar-only, full stop. This runway is the pack's one aurabar, which is exactly
--- why the twist mark can live here and could never have gone onto a progresstexture rail.
--- `SetTickPlacementAt` calls tonumber() on the placement, so the string form the addon's own
--- default table uses ({"50"}) is the correct shape to emit.
+-- SwedgeTimer (https://github.com/hypernormalisation/SwedgeTimer) exists, is dedicated to this
+-- one job, and carries LibClassicSwingTimerAPI plus a live latency monitor that no WeakAuras
+-- string can reproduce without custom Lua. Swing timing is now its job. This pack keeps the
+-- part it is actually better at: what your seals are doing.
 --
--- THIS RAISES THE CLIENT FLOOR, and that is stated rather than hidden: `subtick` did not
--- exist in WA 3.5.0, the data version these strings declare. It renders on any current
--- client and is simply absent on a genuinely ancient one; nothing else about the bar
--- depends on it, so the gold recolour below remains the fallback cue.
-swing.subRegions[3] = {
-  type = "subtick",
-  tick_visible = true,
-  tick_color = { 1, 0.82, 0.1, 1 },      -- the same gold the bar turns once inside the window
-  tick_placement_mode = "AtValue",
-  tick_placements = { TWIST_WINDOW },    -- seconds REMAINING, not a fraction of the bar
-  progressSources = { { -2, "" } },      -- Automatic, matching the addon's default
-  automatic_length = true,               -- span the bar's full 9px height
-  tick_thickness = 2,
-  tick_length = 30,
-  use_texture = false,
-  tick_texture = "Interface\\CastingBar\\UI-CastingBar-Spark",
-  tick_blend_mode = "ADD",
-  tick_desaturate = false,
-  tick_rotation = 0,
-  tick_xOffset = 0,
-  tick_yOffset = 0,
-  tick_mirror = false,
-}
--- v18 — the PRESS mark, dimmer, sitting to the left of the gold LAND mark. See PRESS_LEAD.
--- Same subregion type, its own placement, so the pair reads as a band: enter it and press.
-swing.subRegions[4] = {
-  type = "subtick",
-  tick_visible = true,
-  tick_color = { 1, 0.82, 0.1, 0.45 },   -- the twist gold at 45%: the same event, less certain
-  tick_placement_mode = "AtValue",
-  tick_placements = { PRESS_LEAD },
-  progressSources = { { -2, "" } },
-  automatic_length = true,
-  tick_thickness = 2,
-  tick_length = 30,
-  use_texture = false,
-  tick_texture = "Interface\\CastingBar\\UI-CastingBar-Spark",
-  tick_blend_mode = "ADD",
-  tick_desaturate = false,
-  tick_rotation = 0,
-  tick_xOffset = 0,
-  tick_yOffset = 0,
-  tick_mirror = false,
-}
--- v18 — the GCD floor. See GCD_FLOOR. Cool white, so it never reads as part of the twist pair.
-swing.subRegions[5] = {
-  type = "subtick",
-  tick_visible = true,
-  tick_color = { 0.6, 0.75, 0.9, 0.5 },
-  tick_placement_mode = "AtValue",
-  tick_placements = { GCD_FLOOR },
-  progressSources = { { -2, "" } },
-  automatic_length = true,
-  tick_thickness = 1,
-  tick_length = 30,
-  use_texture = false,
-  tick_texture = "Interface\\CastingBar\\UI-CastingBar-Spark",
-  tick_blend_mode = "ADD",
-  tick_desaturate = false,
-  tick_rotation = 0,
-  tick_xOffset = 0,
-  tick_yOffset = 0,
-  tick_mirror = false,
-}
--- ...and the exact time left, at one decimal, because a 0.4s window is not learnable from a
--- bar edge alone. The mark says WHERE the window is; the number says how far you are from it.
--- Precision 1 is deliberate: at precision 0 every value inside the window floors to "0".
-local swingLeft = F.subtext("%p", 10, "INNER_RIGHT", "p")
-swingLeft.text_text_format_p_decimal_precision = 1
-swing.subRegions[6] = swingLeft   -- 1 bar, 2 border, 3 land, 4 press, 5 GCD floor, 6 number
-swing.conditions = {
-  F.condition(1, "expirationTime", "<=", TWIST_WINDOW, "barColor", { 1, 0.82, 0.1, 1 }),
-}
-gate(swing, SWING_GATE)
--- adopted into the player cluster at the bottom of this script
+-- THE UID IS BURNED, NOT FREED. F.aurabar consumed a W.uid() here, so deleting the call
+-- outright would shift every later call site and re-number the auras built after it. The draw
+-- is consumed and discarded instead, exactly as the v14 deletions are at the foot of this file.
+W.uid()   -- was: Paladin - Swing Timer (removed in v19)
 
 -- 32) twist armed + NOW: shows while Seal of Command is up and you are swinging
 -- (both triggers required), and glows in the last 0.4s — the press-SoB moment.
@@ -2166,7 +2082,6 @@ adopt(gPlayerOrb, th)          -- 3) lane 1, threat  100x4  @ local y +15.5
 adopt(gPlayerOrb, hp)          -- 4) lane 2, health  100x11 @ local y  +7
 adopt(gPlayerOrb, mp)          -- 5) lane 3, mana    100x11 @ local y  -5
 
-adopt(gRes, swing)             -- sibling of the Sill; see its own note above
 
 -- ===== assemble (v2000 nested), encode, verify, write =====
 local transmit = F.assemble(top, byId)
@@ -2330,58 +2245,12 @@ do
       "alarm canon: the alarm frame lost its Retribution gate")
   end
 
-  -- 2b-ii) THE TWIST CANON. The 0.4s window is the whole Ret rotation, and it is readable
-  --     only if the mark is placed by VALUE. Placement by percent or a raw pixel offset would
-  --     be correct for one weapon speed and silently wrong for every other, which is a defect
-  --     no screenshot would reveal — the bar looks fine, the twist just misses. So the mode,
-  --     the placement value and the aurabar host are all pinned, and the placement is tied to
-  --     the same TWIST_WINDOW constant that drives the recolour, so the mark and the colour
-  --     can never disagree about where the window is.
+  -- 2b-ii) THE TWIST CANON. v19 removed the swing runway, so every check that pinned the bar,
+  --     its three ticks and its countdown went with it — an assertion about a deleted aura is
+  --     just a crash. What survives is the part that still ships: the two prompts, and the
+  --     property that made them worth building, which is that they cover OPPOSITE halves of
+  --     the seal cycle. Swing TIMING now belongs to SwedgeTimer; seal STATE belongs here.
   do
-    local sw = assert(nodes["Paladin - Swing Timer"], "twist canon: the swing runway is gone")
-    assert(sw.regionType == "aurabar",
-      "twist canon: the runway is a " .. tostring(sw.regionType) .. "; subtick supports() "
-      .. "returns regionType == \"aurabar\" only, so the mark would vanish silently")
-    -- THE THREE MARKS, BY NAME AND IN ORDER. v18 added two more ticks, and the first version
-    -- of this check took "the last subtick it saw" — which silently became the GCD mark and
-    -- asserted the wrong thing. Address them by their placement, not their position.
-    local ticks = {}
-    for _, s in ipairs(sw.subRegions) do
-      if s.type == "subtick" then
-        assert(s.tick_placement_mode == "AtValue",
-          "twist canon: a mark uses placement mode " .. tostring(s.tick_placement_mode)
-          .. "; only AtValue is weapon-speed independent")
-        assert(s.tick_visible == true, "twist canon: a mark is not visible")
-        assert(#s.tick_placements == 1,
-          "twist canon: a mark carries " .. #s.tick_placements .. " placements; one each, so "
-          .. "they can be coloured and edited independently")
-        ticks[s.tick_placements[1]] = s
-      end
-    end
-    assert(ticks[TWIST_WINDOW],
-      ("twist canon: no mark at %s, the window the recolour fires on — the tick and the "
-        .. "colour must agree"):format(tostring(TWIST_WINDOW)))
-    assert(ticks[PRESS_LEAD], "twist canon: the latency press mark is gone")
-    assert(ticks[GCD_FLOOR], "twist canon: the GCD floor mark is gone")
-    assert(tonumber(PRESS_LEAD) > tonumber(TWIST_WINDOW),
-      "twist canon: the PRESS mark is not EARLIER than the LAND mark. Latency means you press "
-      .. "before the seal has to land; inverted, the pair teaches the opposite of the truth")
-    assert(tonumber(GCD_FLOOR) > tonumber(PRESS_LEAD),
-      "twist canon: the GCD floor is inside the twist band, so 'a filler still fits' and "
-      .. "'press the seal' would be the same region of the runway")
-    assert(sw.conditions[1].check.value == TWIST_WINDOW
-      and sw.conditions[1].check.variable == "expirationTime",
-      "twist canon: the gold recolour no longer fires on the twist window")
-    local num
-    for _, s in ipairs(sw.subRegions) do
-      if s.type == "subtext" and s.text_text == "%p" then num = s end
-    end
-    assert(num, "twist canon: the runway lost its remaining-time number")
-    assert(num.text_text_format_p_decimal_precision == 1,
-      "twist canon: the countdown is at precision "
-      .. tostring(num.text_text_format_p_decimal_precision)
-      .. "; at 0 every value inside a 0.4s window floors to \"0\" and the number is useless")
-
     -- BOTH HALVES OF THE CYCLE, OR NEITHER. Twist NOW fires while Seal of Command is UP;
     -- RE-SEAL fires while it is MISSING and a twist seal is up. If either loses its shape the
     -- loop goes half-prompted again, which is the exact defect v17 exists to fix — and it is
@@ -2625,15 +2494,8 @@ do
   --     band of screen: 140px of runway at absolute (-150, -76), i.e. x -220..-80. It clears
   --     the strip on BOTH axes and the scan above proves it, but a named assertion is what
   --     stops a future version from nudging one of them into the other unnoticed.
-  local swingNode = nodes["Paladin - Swing Timer"]
-  local sx, sy = absolute("Paladin - Swing Timer")
-  local swingRect = { x1 = sx - swingNode.width / 2, x2 = sx + swingNode.width / 2,
-                      y1 = sy - swingNode.height / 2, y2 = sy + swingNode.height / 2 }
-  local swingGapX = math.max(strip.x1 - swingRect.x2, swingRect.x1 - strip.x2)
-  local swingGapY = math.max(strip.y1 - swingRect.y2, swingRect.y1 - strip.y2)
-  assert(swingGapX > 0 or swingGapY > 0,
-    ("geometry proof: the Swing Timer (x %.1f..%.1f, y %.1f..%.1f) runs through the Sill")
-      :format(swingRect.x1, swingRect.x2, swingRect.y1, swingRect.y2))
+  -- v19: the Swing Timer / Sill separation proof is gone with the runway. Nothing else in
+  -- this pack sits in the band x -220..-80, y -80.5..-71.5 that it used to occupy.
 
   -- 4c) THE ALERT COLUMN, kept from v14/v15 and re-pointed at the strip. It grows UP without
   --     bound from (-150, -44), so only the HORIZONTAL gap is depth-independent — and that gap
@@ -2675,11 +2537,14 @@ local outPath = dir .. "/all-specs.txt"
 -- expired with the version bump, exactly as designed — the three ids are now absent from both
 -- sides of the comparison, so the list is gone and the strict default is back.
 local cont = W.uidContinuity(encoded, outPath)
--- v15 hands NO allowance list: the three ids v14 deleted are absent from both sides of the
--- comparison now, so the strict default is back — no uid may disappear, full stop. v15 adds
--- and removes nothing, and reordering children consumes no uid, so this must report
--- changed = 0 AND missing = 0 against v14.
-W.assertUidContinuity(cont, "paladin")
+-- v19 DELETES ONE REGION, so it spends a licence — one id, named, matching the WA-REMOVED
+-- line beside the burned uid above. This is the only way an aura may ever disappear from this
+-- pack: declared here and declared there, so the removal is a reviewable line in a diff rather
+-- than a count that dropped. `changed` is still unforgivable — an id that kept its name and
+-- swapped uid is an update-flow break, not a removal — and everything else must still survive.
+-- The licence expires at the next version bump, when the id is absent from both sides and the
+-- strict default (no uid may disappear, full stop) comes back on its own.
+W.assertUidContinuity(cont, "paladin", { "Paladin - Swing Timer" })
 
 local out = io.open(outPath, "w")
 out:write(encoded)
