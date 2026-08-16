@@ -1,20 +1,93 @@
-# Druid TBC — Bear, Restoration & Balance (v12)
+# Druid TBC — Bear, Restoration & Balance (v13)
 
 One pack covering **Feral tank (bear)**, **Restoration** and **Balance** for TBC Anniversary
 (2.4.3 / WeakAuras `internalVersion` 45, `tocversion` 20501). Built with
-`tools/tbc-weakaura-creator`, 48 tables (5 sub-groups + 42 elements under one top-level
+`tools/tbc-weakaura-creator`, 45 tables (5 sub-groups + 39 elements under one top-level
 group), **zero custom code**, and locale-proof by construction: every trigger matches by
 exact spell ID — never by name — so it works identically on a zhCN client. Every
 spec-specific element is gated on that build's signature ability, so the HUD reshapes
 itself on respec with no user action; mutually exclusive elements share screen slots.
-Six of the 42 elements are the **PvP layer** and load only inside an arena or a
+Six of the 39 elements are the **PvP layer** and load only inside an arena or a
 battleground — in PvE the pack is exactly what v3 was, minus nothing.
 
 The whole thing hangs off one draggable top-level group anchored at screen centre `(0,-140)`;
-the five sub-groups below can be dragged independently. **From v12 your state is drawn as two
-ring clusters around live 3D portraits** — your health and power as concentric arcs around your
-own face at `(-270, 40)`, your target's threat and health around its face at `(+270, 110)` —
-which replaces the v10/v11 Diablo globes and brings back the portraits the globes had dropped.
+the five sub-groups below can be dragged independently. **From v13 your state is drawn as ONE
+cluster around your live 3D portrait** at `(-270, 40)` — threat, health and primary power as
+three concentric arcs around your own face. The target cluster that flanked it at `(+270, 110)`
+is gone: the target's health was already on your target frame and on its nameplate, so it
+duplicated the default UI for the whole game. Threat did not go with it — it moved *inward*, to
+the outermost ring of your own cluster, which is the more honest reading of what it measures.
+
+## v13 — one cluster, and threat is yours
+
+**The target cluster is deleted.** Its 62px health ring, the 84px track ring that groove ran in,
+and its live 3D portrait are gone — three auras removed, 48 tables → 45. It was the prettiest
+thing in the pack and it never once changed a button press: your target's health is already on
+your **target frame** and on its **nameplate**, and its portrait is on the target frame too, so
+for the whole game that cluster was a second copy of the default UI parked at `(+270, 110)`.
+
+**Threat moves, it does not die.** Threat was the one thing that cluster carried which nothing
+else on screen shows, and a druid who pulls aggro dies. Both threat rings — the bear one and the
+caster one, which are mutually exclusive spec gates and have shared a slot since v7 — become the
+**outermost ring of your own cluster**:
+
+| ring | diameter | shows |
+|---|---|---|
+| **outermost** | **100px** | **your threat** (spec-gated, and absent unless threat is real) |
+| outer | 84px | your health |
+| inner | 62px | your primary power — mana, rage or energy |
+| centre | 44px | your live portrait |
+
+all of it concentric on `(-270, 40)`, which has not moved. `%threatpct` sits at 10pt, anchored
+`CENTER` with a `+58` offset — just clear of the 100px annulus, and still the one number in the
+layer that is above its arc rather than below it, so it can never collide with the health number.
+Ring_20px paints `diameter × 20/256` at the outer edge, so the health band runs from radius 35.4
+to 42 and the threat band from 42.2 to 50: adjacent, never overlapping. There is no threat flash
+halo in this pack to resize — decoding v12 for `alphaPulse` returns zero hits.
+
+**Threat keeps everything else it had**: the same Threat Situation trigger, the same escalations
+on `foregroundColor` (bear: green while you are securely tanking, **red the moment aggro is
+lost**; caster: green → **orange at 70%** of the pull threshold → **red when you pull**), the v5
+not-in-an-arena instance gate, the v7 Bear-form trigger, its spec gate, and the mandatory
+`threatvalue <= 0 → alpha 0` guard without which a progresstexture at total 0 draws **full** and
+reads as complete aggro at exactly zero threat. **No gate was added either.** This pack has never
+carried a party/raid `ingroup` gate on threat — its gates are per-spec — and inventing one here
+would be a behaviour change rather than a preserved one. What keeps the common case to two rings
+and a face is the guard plus the trigger itself: with no hostile target there is no threat state,
+so the third arc simply is not drawn.
+
+**One correction rides along.** v12 wrapped the factory's threat trigger to add `unit = "target"`,
+on the belief that `threatUnit` was dead data. It is the other way round: the Threat Situation
+prototype renamed that argument to `unit` at **internalVersion 51**, and Modernize migrates `< 51`
+data forward — so IV-45 data must emit the **old** `threatUnit` name and let the migration rename
+it on load. The stray `unit` field is dropped and the factory trigger is used unchanged.
+
+**Orphans are expected here, and that is the point.** Every version up to v12 recycled every UID,
+so an update left nothing behind. v13 genuinely *removes* regions, and inventing filler regions to
+absorb their freed slots is how a HUD accumulates junk nobody can explain a year later. Two of the
+three sat **mid-stream** in the seeded UID sequence (slots 8 and 9), so their `W.uid()` calls are
+still drawn and thrown away where they always were — a *retired slot*, which builds nothing and
+ships nothing — and every later UID keeps its value. The third was the very last draw in the file
+and is retired the same way, so no future version can hand a removed aura's UID to a new one.
+The result is `stable=44 changed=0 retained=44 missing=3 parentSame=true` against v12: **every one
+of the 44 surviving auras keeps its UID**, and the only three missing are the ones named below.
+
+### What to delete by hand after updating
+
+WeakAuras **never deletes an aura that an import does not mention**, so after you Update, these
+three still sit in your collection doing nothing. The group that held them, `Druid - Rings`, is
+*not* one of them — it is still your cluster's layer and the rage pips' — so delete the three
+auras individually rather than the group:
+
+- **`Druid - Target Health Ring`**
+- **`Druid - Target Ring Track`**
+- **`Druid - Target Portrait`**
+
+`/wa` → right-click each one → **Delete**. Until you do, you will still see a ring cluster
+floating at `(+270, 110)` with no threat arc on it.
+
+Tick the **Arrangement** category when you update: the threat ring's new size and position *are*
+the arrangement.
 
 ## v12 — the globes become rings again, around a live portrait
 
@@ -629,27 +702,28 @@ current friendly target), a purpose-built Cat rotation, and pre-70 levelling cov
 
 ## Rings — `Druid - Rings` at `(0, 30)`
 
-Since **v12** this group holds two ring clusters instead of the v10–v11 globes (the v8–v9
-clusters before them, and the v7 bar stack before those), drawn at the canonical ring geometry
-shared by all seven class packs:
+Since **v13** this group holds **one** cluster — yours — instead of v12's matched pair (the
+v10–v11 globes before that, the v8–v9 clusters before them, and the v7 bar stack before those),
+drawn at the canonical ring geometry shared by all seven class packs:
 
-| | absolute screen position | outer ring | inner ring | portrait |
-|---|---|---|---|---|
-| your cluster | `(-270, 40)` | **84px** health | **62px** power | **44px** you |
-| target cluster | `(+270, 110)` | **84px** threat | **62px** health | **44px** your target |
+| | absolute screen position | outermost | outer ring | inner ring | portrait |
+|---|---|---|---|---|---|
+| your cluster | `(-270, 40)` | **100px** threat | **84px** health | **62px** power | **44px** you |
 
 Those are **absolute** coordinates. The group itself sits at `(0, 30)` inside the top-level
-group at `(0, -140)`, and WeakAuras adds every offset down the parent chain, so your cluster
-carries a *local* `y` of `+150` and the target's `+220`; `generate.lua` converts absolute → local
-in exactly one place and then re-walks the assembled string and asserts both centres — and all
-four rage pips — before it will write a file. Twelve auras in all: five rings, one track, two
-portraits, four rage pips.
+group at `(0, -140)`, and WeakAuras adds every offset down the parent chain, so every member of
+the cluster carries a *local* `(-270, +150)`; `generate.lua` converts absolute → local in exactly
+one place and then re-walks the assembled string and asserts the centre — and all four rage pips
+— before it will write a file. Nine auras in all: four rings (two of them the mutually exclusive
+threat pair), one portrait, four rage pips.
 
-`|x| = 270` is the tightest collision-free arrangement in this pack, and it is dictated by two
-*vertically growing* dynamic groups: the Alerts column occupies `x` `-170..-130` and the PvP
-column `182..218`. An 84px ring spans 42px either side of its centre, so at `|x| = 190` it
-reaches 148 — inside the alert column as soon as two prompts stack. At `|x| = 270` its inner edge
-is at 228.
+`x = -270` is unchanged from v12 and is not an eyeballed number. The Alerts column occupies `x`
+`-170..-130` and is a *vertically growing* dynamic group. The threat ring spans 50px either side
+of the centre, so the cluster now occupies `-320..-220` — a **50px gap** to the alert column, and
+depth cannot close it: a dynamic group with `align = CENTER` and `stagger = 0` cannot move a
+clone sideways, so the column is `-170..-130` whether one prompt is up or nine. The build asserts
+exactly that, projecting the stack six clones deep (at which point it reaches `y = 226`, well
+into the cluster's `y` range of `-10..90` — and still 50px clear of it horizontally).
 
 Every ring is a `progresstexture` in **`CLOCKWISE`** orientation on the bundled `Ring_20px.tga`
 annulus (the number is the stroke weight of the source art, so the drawn band is
@@ -660,14 +734,14 @@ keeps the unfilled arc the same annulus as the fill instead of a halo around it.
 is black at 55% alpha on every ring, which is what makes a half-empty arc read as *half* rather
 than as a shape that shrank.
 
-Each portrait is a `model` region at `frameStrata 2` (so nothing draws over a face) with
+The portrait is a `model` region at `frameStrata 2` (so nothing draws over your face) with
 `modelIsUnit` and `portraitZoom` set, and it emits the unit string in **both** `model_fileId` and
 `model_path`: current WeakAuras reads the former, WA 3.5.0 read the latter, and the migration
 between them is gated on `IsClassicEra()`, which a 2.5.x TBC client is not.
 
-**Your cluster** — always loaded, for every spec and every level:
+**Always loaded**, for every spec and every level:
 
-- **Health**, the 84px outer arc in green, with `%percenthealth` at 13pt just under the ring.
+- **Health**, the 84px arc in green, with `%percenthealth` at 13pt just under the ring.
   It keeps the low-health escalation added in v8: **amber under 50%, red under 25%** (severe
   condition last, so it wins), plus a `maxhealth <= 0 → alpha 0` guard, because a
   progresstexture with a zero total draws a *full* ring rather than an empty one.
@@ -684,21 +758,21 @@ between them is gated on `IsClassicEra()`, which a 2.5.x TBC client is not.
 Both rings and the portrait carry the extra Unit Characteristics trigger that has fed the
 out-of-combat fade since v1 and drop to **50% alpha out of combat**.
 
-**Target cluster** — the same three sizes at `(+270, 110)`, and it **self-hides entirely with no
-target**, because the Health prototype's hidden `UnitExistsFixed` test produces no state for an
-absent unit:
+**Threat is the 100px outermost arc, and it is *yours*** (v13 — before that it was the target
+cluster's outer ring). Two mutually exclusive auras share that one slot, as they have since v7,
+and at most one of them ever loads:
 
-- **Health**, the 62px inner arc in the same green, `%percenthealth` at 13pt under the ring — the
-  mirror of your own cluster one ring in.
-- **Its portrait is a live 3D render of whatever you are fighting**, which is how the target side
-  identifies NPCs and mobs the pack has no gate or icon for.
-- **Threat is the outer arc.** Three auras share that ring. The plain **track** is always there
-  whenever the cluster is; over it, two mutually exclusive threat rings draw when their spec gate
-  passes. The **bear** ring (Feral-gated, Bear-form-gated) is tank-inverted: green while you are
-  securely tanking, **red the moment aggro is lost**. The **caster** ring (Balance-gated) is
-  green, **orange at 70%** of the pull threshold and **red when you pull**. `%threatpct` sits at
-  10pt just *above* the ring — the one number in the layer that is above its arc, so it can never
-  collide with the health number below.
+- the **bear** ring (Feral-gated, Bear-form-gated) is tank-inverted: green while you are securely
+  tanking, **red the moment aggro is lost**;
+- the **caster** ring (Balance-gated) is green, **orange at 70%** of the pull threshold and **red
+  when you pull**.
+
+`%threatpct` sits at 10pt just *above* the ring (`+58`, clear of the annulus) — the one number in
+the layer that is above its arc, so it can never collide with the health number below. There is
+**no track ring** under it any more: v12 needed one so the target cluster still looked like a
+matched pair for a resto druid who loads neither threat aura, and with the target cluster gone
+there is no pair to match. When threat is not real, the arc is simply not there and you see two
+rings and a face.
 
 Every one of those recolours is on **`foregroundColor`**, the progresstexture spelling. It is
 `barColor` on an aurabar and `color` on a plain texture, and `Conditions.lua` skips a change whose
@@ -712,10 +786,11 @@ pure clutter in the one place screen space is scarcest; everywhere else, includi
 world (`size` is the string `"none"` there) and battlegrounds, it behaves as it did in v4. Both
 also carry a `threatvalue <= 0 → alpha 0` guard: `threattotal` is derived from `threatvalue`, so
 it is zero exactly when your threat is zero — post-Vanish, post-Feign, before your first hit —
-and without the guard the ring would read as **full aggro** at exactly that moment. When either
-guard fires, the track underneath shows through, which is precisely the "no threat table" state.
-That track is also why a resto druid — who loads neither threat aura — still sees two rings on
-the target instead of one lone arc.
+and without the guard the ring would read as **full aggro** at exactly that moment. Their trigger
+reads the **target**'s threat table via the era-correct `threatUnit` argument (v13 dropped the
+`unit` field v12 also emitted: that spelling only exists from `internalVersion` 51 on, and
+Modernize renames the old one forward on load), so with no hostile target there is no state and
+the ring is not drawn at all.
 
 Four bear-only **rage pips** sit on the power ring. A threshold on a ring is a point on the
 circumference, so each is placed from the ring's own radius —
@@ -803,10 +878,10 @@ they are counting back down.
 
 | Gate | Spell ID | Gates |
 |---|---|---|
-| Feral tank — Mangle (Bear), 41 pts + Bear form 1 | 33878 | The four rage marks, bear threat rim, Lacerate, Mangle debuff, bear Faerie Fire, Demoralizing Roar, Frenzied Regen prompt, Maul prompt, Mangle / Enrage / Frenzied Regen cooldowns |
+| Feral tank — Mangle (Bear), 41 pts + Bear form 1 | 33878 | The four rage marks, bear threat ring, Lacerate, Mangle debuff, bear Faerie Fire, Demoralizing Roar, Frenzied Regen prompt, Maul prompt, Mangle / Enrage / Frenzied Regen cooldowns |
 | Restoration — Swiftmend, 31 pts | 18562 | Lifebloom, Rejuvenation, Regrowth, Swiftmend cooldown |
 | Restoration — Tree of Life, 41 pts | 33891 | Tree of Life Missing alert |
-| Balance — Moonkin Form, 31 pts | 24858 | Caster threat rim, Insect Swarm, Moonfire, balance Faerie Fire |
+| Balance — Moonkin Form, 31 pts | 24858 | Caster threat ring, Insect Swarm, Moonfire, balance Faerie Fire |
 | Omen of Clarity, 11 pts | 16864 | Clearcasting proc, OoC Missing alert |
 | Nature's Swiftness | 17116 | Nature's Swiftness cooldown |
 | Force of Nature | 33831 | Force of Nature cooldown |
@@ -825,8 +900,8 @@ Life prompts load **in** combat only, and the Enrage cooldown icon loads **out**
 only (WeakAuras load booleans are tri-state — `use_combat = false` means "must not be in
 combat"). OoC Missing carries no combat gate at all.
 
-Ungated by spec: the whole ring layer except the two threat rings — both clusters' health and
-power arcs, the target's track and both portraits load for every druid at every level, which from
+Ungated by spec: the whole ring layer except the two threat rings — your health arc, your power
+arc and your portrait load for every druid at every level, which from
 **v8** is the first time a Feral in Cat form has any resource display at all. Plus the five v4 PvP elements
 that carry no talent gate — those are instead gated on the **instance type**, so in PvE they load
 for nobody. `tools/spec-preview.lua` evaluates the combined level-70 exemplar profile,
@@ -840,7 +915,7 @@ there. The two threat rings do the opposite from **v5** on: they list every TBC 
 declares no inverse flag and no custom test, so multi mode is a plain OR over raw string
 equality and the complement has to be enumerated by hand. Both threat rings keep their spec gate
 on top of it (Mangle (Bear) for the bear ring, Moonkin Form for the caster ring).
-All 42 element children additionally carry the `DRUID` class load gate; the five sub-groups
+All 39 element children additionally carry the `DRUID` class load gate; the five sub-groups
 and the top group carry no load conditions of their own (they inherit visibility from what
 they contain — the same arrangement as the field-proven rogue pack).
 
@@ -917,7 +992,7 @@ whether to be on screen, so it is another clean Update with Arrangement left unt
 simply starts out shorter, and fills up as you spend things. **v7 is another gating-only Update**:
 all existing UIDs remain stable, and Bear elements now disappear when the player shifts to Cat.
 
-**v8 through v12 are the versions where you should tick Arrangement.** v8 is still a clean
+**v8 through v13 are the versions where you should tick Arrangement.** v8 is still a clean
 Update — every v7 UID survives, because the eleven Resources tables were repurposed in place
 rather than deleted and re-created — but the entire resource layout moved from a centre bar
 stack to two orbs at `x = ±250`, and with Arrangement unticked WeakAuras keeps the old
@@ -933,19 +1008,27 @@ carries the position change: untick it and the globes stay on v10's band under t
 still get the highlight, which travels with the display data). **v12 is the largest of them
 and also adds and removes nothing**: the globes become ring clusters, both cluster positions and
 every size change, and the two rims become portraits again — untick Arrangement and you keep
-v11's globe geometry wearing v12's region types, which is not a layout anyone wants. Tick it
+v11's globe geometry wearing v12's region types, which is not a layout anyone wants. **v13 is the
+first version that removes auras rather than recycling them**: the target cluster is deleted and
+threat becomes a new 100px ring on your own cluster, so untick Arrangement and the threat rings
+stay 84px over at `(+270, 110)`, orbiting a cluster that no longer exists. Tick it
 once, then drag `Druid - Rings` wherever you want it.
 
-**What to delete after updating: normally nothing.** Because no aura was removed, an Update
-replaces each old region with its replacement in place and leaves no orphans — including the two
-globe rims, which go back to being the player and target portraits, and the target globe's brass
-rim, which becomes the target's outer track. WeakAuras never deletes auras it does not recognise,
-though, so if you import as **new** rather than Update — or if you had previously renamed or
-dragged the old group out of the pack — the older group survives alongside the new one. The
-symptom is obvious: you will see *both* the old layout and the new one. In that case delete the
-leftover group by hand: `/wa` → right-click the stale group (**`Druid - Resources`** from v7,
-**`Druid - Unit Orbs`** from v8–v9, **`Druid - Globes`** from v10–v11) → **Delete**, confirming
-that it deletes the children too.
+**What to delete after updating, from v13: three auras.** WeakAuras **never deletes an aura that
+an import does not mention**, and v13 stops mentioning the target cluster's three regions — so an
+Update leaves them behind, still drawing a lone ring cluster at `(+270, 110)`. Delete them by
+hand: `/wa` → right-click each of **`Druid - Target Health Ring`**, **`Druid - Target Ring
+Track`** and **`Druid - Target Portrait`** → **Delete**. Do **not** delete the group they sit in,
+`Druid - Rings` — that is still your own cluster's layer and the rage pips'.
+
+Before v13, nothing needed deleting after an update, because no aura had ever been removed: each
+constructor drew the same UID and an Update replaced each old region with its replacement in
+place. The one exception was and still is importing as **new** rather than Update — or having
+renamed or dragged the old group out of the pack — in which case the whole older group survives
+alongside the new one and you see *both* layouts at once. Delete the stale group by hand:
+`/wa` → right-click it (**`Druid - Resources`** from v7, **`Druid - Unit Orbs`** from v8–v9,
+**`Druid - Globes`** from v10–v11, **`Druid - Rings`** from v12) → **Delete**, confirming that it
+deletes the children too.
 
 One warning about the editor: selecting a group in `/wa` force-shows **every** aura with
 fake data — both threat rings, all three specs' buff rows and every rage pip at once, all with
@@ -964,7 +1047,11 @@ seeds `math.randomseed(20260812)` and draws UIDs in a fixed construction order (
 the four sub-groups, then the ring layer → Buffs → Alerts → Cooldowns, then the v2 block, the
 v4 block and the v8/v10/v12 block at the bottom of the file), which is what makes a re-import offer
 *Update* instead of duplicating the pack. Keep that seed and never reorder or remove an existing
-element's construction; new auras append their constructor calls at the end and are
+element's construction — **and note what "never remove" means from v13 on**: where a region is
+genuinely deleted, its `W.uid()` call stays where it was and the value is thrown away (a *retired
+slot*, marked as such in the source). The stream is positional, so dropping the call outright
+would renumber every UID drawn after it and turn the next import into a duplicate rather than an
+Update. New auras append their constructor calls at the end and are
 re-parented into the right group there — which is why the v2, v4 and v8 additions are built last
 and not next to their siblings. v3 added no constructors at all — it only set load fields on
 three existing elements — so the uid stream is untouched, and **v5 likewise adds no
@@ -1020,11 +1107,31 @@ portraits, which are handed back the two uids they held in v8–v9:
 | 33–36 | `Druid - Rage Mark …` ×4 (lines) | `Druid - Rage Mark …` ×4 (round pips) |
 | last 2 | `Druid - Life/Power Globe Rim` (texture) | `Druid - Player/Target Portrait` (model) |
 
+**v13 is the first version that deletes.** Three regions are removed rather than recycled, and
+because two of them sat mid-stream their draws remain as *retired slots* — `W.uid()` is still
+called in place and the value discarded, so nothing after them shifts:
+
+| uid slot | v12 | v13 |
+|---|---|---|
+| 6 | `Druid - Player Health Ring` (84px) | unchanged |
+| 7 | `Druid - Player Power Ring` (62px) | unchanged |
+| 8 | `Druid - Target Health Ring` (62px) | **removed** — retired slot |
+| 9 | `Druid - Target Ring Track` (84px) | **removed** — retired slot |
+| 10 | `Druid - Threat (Bear)` (84px, target cluster) | `Druid - Threat (Bear)` (**100px**, your cluster) |
+| 11 | `Druid - Threat (Caster)` (84px, target cluster) | `Druid - Threat (Caster)` (**100px**, your cluster) |
+| last−1 | `Druid - Player Portrait` (model) | unchanged |
+| last | `Druid - Target Portrait` (model) | **removed** — retired slot |
+
+A retired slot is not a filler region: it builds nothing and ships nothing, and it also means the
+three freed UIDs can never be handed to a future aura and silently "Update" over the leftovers in
+somebody's collection.
+
 Construction order is UID order and is fixed; **display** order (which controls frame level, +4
 per child in `controlledChildren` order) is set separately by the `adopt()` calls, which is why
-the five arcs are adopted first, the target's track before the two threat rings that draw over
-it, the rage pips after the power ring they mark, and the two portraits last — on top of
-`frameStrata 2`, so nothing ever draws over a face.
+the four arcs are adopted first, the rage pips after the power ring they mark, and the portrait
+last — on top of `frameStrata 2`, so nothing ever draws over your face. (The three arcs are
+concentric at three different diameters and their annuli do not overlap at all, so their relative
+order is cosmetic; it is kept in UID order.)
 
 The script round-trip verifies with `W.verify` before writing and reports `W.uidContinuity`
 against the previously shipped `all-specs.txt` (v4 reported `stable=38 changed=0
@@ -1037,15 +1144,25 @@ missing=0 parentSame=true`**; **v10 renames eleven, so it reports `stable=36 cha
 retained=47 missing=0 parentSame=true`** — same shape as v8, same conclusion; **v11 renames
 nothing either, so it is back to the full `stable=47 changed=0 retained=47 missing=0
 parentSame=true`**; **v12 renames seven, so it reports `stable=40 changed=0 retained=47
-missing=0 parentSame=true`**). A re-run with no source change reproduces the file byte for byte.
+missing=0 parentSame=true`**; **v13 is the first with a non-zero `missing`, and it is declared:
+`stable=44 changed=0 retained=44 missing=3 parentSame=true`, the three being exactly
+`Druid - Target Health Ring`, `Druid - Target Ring Track` and `Druid - Target Portrait`**). A
+re-run with no source change reproduces the file byte for byte.
+
+A removal is only allowed when it is **declared, one id at a time**. `generate.lua` lists the
+three ids in `WA-REMOVED (v13):` comment lines and hands the same list to
+`W.assertUidContinuity`; `tools/verify-packs.lua` reads those comment lines independently and
+honours them only while the pack still ships v13, so the licence expires by itself at the next
+version bump. An *undeclared* disappearance is still a hard build failure, and `changed` — an id
+that keeps its name and swaps UID — is never forgivable at all.
 
 Since **v10** the script also proves the layout, not just the encoding: after assembling, it
 re-walks the parent chain summing every `xOffset`/`yOffset` exactly as WeakAuras does, and from
-**v12** asserts that every member of your cluster lands at `(-270, 40)`, every member of the
-target's at `(+270, 110)`, and that each rage pip lands at its computed point on the arc. A group
-offset edited later, or a coordinate written locally instead of converted, fails the build instead
-of quietly sliding the HUD. **v12 replaces v11's highlight proof with three of its own**, because
-the failure modes moved with the shape:
+**v13** asserts that every member of the one cluster lands at `(-270, 40)` — with the canonical
+`-270 / 40 / 100 / 84 / 62 / 44` spelled out as literals once, so a sign flip in the constants
+block cannot pass a proof written in terms of those same constants — and that each rage pip lands
+at its computed point on the arc. A group offset edited later, or a coordinate written locally
+instead of converted, fails the build instead of quietly sliding the HUD. **v13 ships six proofs:**
 
 - **the breakpoint proof** measures each rage pip back from the cluster centre and asserts *both*
   polar components — the angle within a degree of `360 × f` measured clockwise from 12 o'clock,
@@ -1054,11 +1171,19 @@ the failure modes moved with the shape:
 - **the cluster proof** asserts every ring's region type, `CLOCKWISE` orientation, canonical
   diameter, ring texture, `0.41` crop and that its percentage is still `sub.1` — a stray
   `VERTICAL` here would silently draw a filled disc instead of an arc;
+- **the concentricity proof** (v13) asserts that both threat rings share the health ring's exact
+  centre, that the 100px annulus starts outside where the 84px one ends, and that the threat
+  percentage's `+58` offset clears the new ring;
+- **the clearance proof** (v13) computes the alert column's real width from the assembled tables
+  and asserts the cluster clears it, **projecting the stack six prompts deep** — an earlier pass
+  in this repo shipped a cluster that only cleared while a single alert was showing;
+- **the removal proof** (v13) asserts that no region whose id names the target survives in the
+  assembled child list, so a stray `adopt()` cannot ship a cluster the release notes say is gone;
 - **the portrait proof** asserts that both `model_fileId` *and* `model_path` carry the unit
   string, since emitting only the latter is a silent no-op on a 2.5.x client.
 
-## Import string (v12)
+## Import string (v13)
 
 ```
-!WA:2!T3xd4XrX59ZOZgSfqWs4padeoKXgzcXCFQtNlKYDNo9T0DAVt2yd162725UDT2B317UNKoLqiiieLVlIesc5BvcjMqiT6PLN00M0w3escn9FNQN8q3N2MwQsAcjnnnXnTp9FEAt6mZU79LoDsww(dCHNhgT3SZm7oZ7V3FVVZ8oZAWHAnZN6oN9MxmnBMX5uLvIilkR2VdhoI7W1b8R0AgzjDvzrrixeEbrovO0lQS7UuliW58n6mUiBrOQZEHSI68ozeKYPC91CV4YtItP3Qu1sYQMdQx)QzDpsMotQIFPu2rPBXRcz1D2EyiR6(v2vTzhHvthIVX1zFdg2CqNdXQooorkNiuzN17ofevUXvQgohuqV8RD11IEVDTSERQUkBL3WQ)yFJLslRYbvdBnARSTWIctpnRkNZKYYI6ckQtflBwnOoiTclEWwx52mBPKHJGBnsx)oCYa10Lvz1fKLCUpNHzfzLYatB2Y8QfnBG7EEvyoCjswubYKtvUGY8MLiHW0WnVGGuwz1802O5fmVHPOhaaowKTGoVSAmfYT1AongeKvixZyXbnJoy00zv1BoDwbjbn(MdJ)JEZZORkKlhuvB49PAD5tewN80zlOY65uKunfOOOaN2UB1v4c4kLwHoUndn)(40AEjTcPHtG73jkKnRWulmwKqjsowIKHysw6wXvH4BXKiE0bh80f0GrNc)ELWSfsXiXMhQ188CW04wG05v7n6GX7E0bNRGK1RvZlWjOD8cs4EZeqpSIIkTWsVoP59hsMd(SxM1WvuUCqLwsCIcyXHZUlik68W8c6WtzExZX6TohRKG5GzhOxF3NcYQbtOJfF505Vc0EcljlbxKRGPiBmYyIQgepOYPndPOK3s0bdNNvqQBuqCfqhe9BGUl0DJ)7nxBoZPbfZgxwqspDKOdNmktBcClwcIIvB0on(EqvjwXdHFm4h49Tqwv8Gc(fIvN1XPXGfSSTBswKhC6eryIgD451LZmHz53s8D4b3Clmrpjp6adkhDWJFygTmSIqhZJfbmuuLMnOPpjC)3X8KoJGjAjSOmlxZly(yOVOO7z2dMglOuhRiW8VtbqT8t22cSChVawPLBi2PAQ8peKAcTdUTIggDpkBNdQXQtg5GeDgcowIJFbnYlpCk8nGPQSmDlJb9MLHrdRwOdMbkXfIOl)i7ef((wsrvoNkutlHCb1mWB)gVSMq)MO7b1kke6gBgDdnpJQSovkbyyfv4zDGgS)9XKHhMz8UrTT5zMGvvGnTiCgbPiY5tZQZmbRybiOnzL2U77wndpM3aQT79HogL)Cg8ZdlS1lIo6(q3hUfCGU)fXzKbdJ5P0FOJ1MFx4A36DHgJuT(DeFtUoqh(jv3TduQtNTuxIQFwQzqS4Q6XFLvLuNGKQ72JzkU(O0LQXC5zNY(H2k5z22DD3M1eGl3rr9V7z3PsR64H1X04z5KN8ETOIMJMhjrzB7TQ3(9UxLTvrfkZGSKzU2q1WHgnzmLRLMjMBrMORK5WcC68HdH)5PP3aRud5Oz(qlAIEoI5lGOJtrlabFiKTi6EMNkLOiGWdhB4OO9OIrMKYmpTGzSnI5W8vpl2iMY26wvyANJuGLJOh4mzsfxL6xJzsgowvDUX4GzWA1IJPOIVGOzaQA4X6TdSinVjXQdhwLvzMdBDXILE0uwOyJMCW(goQ14vvAhk7FvErOIFkVbtwrzzvZHJjWVtyOyQYpic1(nyn2zl8u27Q04MzME4c5tdvtZdfYXRFsuNeISAjJEtRo9u6mye)yfj4pFUr3eUvAgDZnJC2SY2WA(HS0XPQ88kTKUKoTL2SsG(iKxzzZaV)qCCXK0U)ddzhpeX2X9peKtG9(TkP29ti7gZJlLPoGEowu3yAR5P2LOQ7a0qhAo8tCSmISAAPsRJ5VK03jt(cyRSnZqZDFP1eiLLPlMr7Rl07ENO3xQWytrz2j6D3Cyn8Gj5c0TCS9HA7jWDY9H2p62zO2GsB68coRBd1EZZqEqe7zPqVb0DGoqZO7e5c5U5kRh6Xu2(O4I4mcplXqkuvaJMZOz1eOhVM6I8G8I89Sxw68cQQYQ81o(jiXJ25PT5Z0nhuMrgZHJnPQ18CyKHehXsgt4bJoCxuZVm2KBlPLxwwNpUvTtnpLSSBbvnD(fSAJmIck8OUqrpTvJta1Kguz7rgm0qXtgl8GHImqOU6QVK9DimWUSW0c6D6Y5uIzGam87FMmY5vipzES1lKdu6(Pew(jPDsjV80PduehmtsOdoPslLzbTe)O3bQNfModV6W6DW37rX0YseZxq(5ODfY7z6(gorFDfDbzvbSeJ2XNlYGXImWH7lrutC6uw40RVzvA1GC8ZEqumako1afAKMqmLmgHsWJsMcnkp6qa0HP2tq37YnHGocaDuQDdkX7MXu1)wykwtleM8TuBdeo3YCZke)KjA4OJ5OYIshyc4V8WJB)vZQJEo0XUIQRb1maoPtssngbMbBeG(SW2aCxFBaioacEABIEAH37Er5O86iEKa64OXrIpekV4Mqs4EUmsbdYpbs9v6aPH0rtauAFL4COTwf8zOhanjAkur00O3mUPERPuU1gxvZ8qZGEWDGEBaL7SXLE5m4Oh(bw3CBOhz50AO3op6rXGrc9dAwcRd6DMc9UOehVN9HEVO3NjVc69tZ63UomkOhJHolPvIjO6YI(aRgJb6dYJEcm5a6dH(WnJ(iONe9rbOpwk0hNh9jOk0Opj6tH(0a08Vss0VdvdCtenqcyH2bP4SG(jkGON6bqFgQUMCU0ro6Xf9CVXsI(S8Oph6KONb95rpBjni0xOcDNVFjDNV2vVo0DU9ZeDhuMv2FgkwgLTUOxh1f9waGbWvbkFlyq6Bnf6bVbmGd9qyO3fJqi0CO9HnYrMS5fim0MrPFLrRcYeCKJetJfMWt0rxziZTqbl2WKkhwQxxe98Bi9om6dJ7MV8eh4jiV(Bg9WNmTPVL8RnXazuapuTtvlBK0HQVmU3tG04XcImLm4C5muFsXdwy49tDscuVNfA)qtOgVRJ2v009JH)kTGNvAgvOoCSstcz9JZ2yuHWIiSSEJwTg)azyZHnNxZ71RCGQmvTGoDLDOtWAv0Wp1EnlRsg9sMQuUJLzBOuHQNHHk5gYBtnOClnOrkzlQARFvsEuhVVlx)QmdsTNr4zE4tEULD5rXWAQdRehC5TqZuy(s0CjlKY4sYtkLQky)8LVXwEKdrH)tWOGD3UykpktOKAgC3tVyEwPuE0HsPMxFsSv4IzfMaID(MEDk0btzQu)02kRZBoyq8lgRzFaZ3GY5LIOet05FmLTzTmFje0lq1nOA2lx9pmzug)A7G0RWvlHozXXUZUX5ENKzrqidSCyNuYuv0mNfCFxHLhSE8xYVlVMMppPfxypDnz84sHvdumW5EZNhSSFLLqBOJ1waQk0B6UlTsd4xZoSxOHkDP8RwJtO1OyI(twndU)P2gC)Zwb9k0PAOAd6p)8Tgb6RvLQa6Rxn6h9cBHD3MGE03if6BMc9TsHEXuO)IuOVTjUE4kX1O)skCg9)Rmcg9xTXa12ck9pdSRQWwjtlnAUogCGy9RVYylNuycP5OQGpFf2l)9P2lFohvzYCrIksPzLKQEwArL0Zq)1M6vOfRRcf(n4pYw)G6Azz3m97NGBXdd74xSv84WxMaKjJdd286xM)vavjU)Yk31AFrfIiOMreowc68J9uALfikC4HCS2grgSvul3X1q00(su)g6zbpT3vHyb186ECwQuJOY(Wxj6pe7fXeeW1x32rI3)YDN4fSPtBg9ux5zSyc9sBaIghwtY0EgaLfkFNTCUsOG(BQZaBZOwE2wRCGnB7kjehC04dxSRn2b2FG9q1sMZuKSmTS6YQy6X5kH8tzpQZq)zBECDoz4F5AgoAOsrw0Estw9eSR(3TkjacXkOtgU)UP14vfKgFg7qneM0UujqDKq4wb9DPxsQA4SSCq0l7bxdArwtIRRSw9a35MCs(E905qjduwCDnN5IRRzffxO)wIbS)Ussg0Fp2S25CLchnuFWEK8FGosI(hrVm6FATnQJwcx2V3AFa)QQv)GlZaSfI4P7ibIEwoG7DH8YCqX(0mD86AqBZdRIapDzWSwamvAjibVz3LIq8QpJTnK104ukwbq9OYYyN2cFFNY8DjRGiSpo0TnV5pvy15r3MzpzmnSV2fb4XPk(9uMZY7iRTz3bk1nNrdEIcqSNKoQWBRTZJ8hEyzjiANm0hb66ULYpRcAJGbsL)T60avwUjiUJYV(PrJSz0a7Ysqmnaf4klnfZR2k3Iv0FvNc7j5tDek0ONfIM1h3Hs4BqyUCeaLY2OLRlbnsuy7tkRm)g2IVuXq(0v((uemRx0pGcVq)q(QM6)RCMbR2ywiGFeblH(X4w7Fb)))ecAb9VUoXiOFATGd0)gMT4NHrfOFoblGona9VF2k7r)IQK6Vo0)ba9FwPuUWror4rIf7Ohpxq6Sd(V24KQO))a0Vem7nxzNUPNrzB2HFEqShwKvtP8E2WAFu0fnA8L3kfDZcvfGo7wqfAVFoAPuJiKfMweRMRS9sH1gE8ctaLO20k)0yireysD(YLJem6m45iojRA(YLBizY2xqfQCt1)XBU)j2F59GsxW8YQSIctt2ekmYSQu4AlaS09AjY1DCvaSCDxORBZeH6UnNPdwKJf8vbBh2coERO9U7wDzJfjqtcy8nMQo4r)Ooqb266hIyANO0(bimEuxZYecbDqTO0Zchjw7Xu9oGy8EKq95GG2hWbXy2qnt0eNDpZlKrwYme534Lr6z7aqUXIzKLf5KNukXKc4PeCk7Fs2Ie8lxJ9PT66mE9gWNFSOskMKyXu26U1moO2BiMH6E0bx3gTdFFNECiujejaE6meScpf)Jnv2F)V0I5eLNSBvtw8IMECfMKh)PWU71JOvWR5NJKxcZD7a5YbPBIJDSa5A7a(sltPnkLd69Sd3QzOOj5qFIj5fYmUeutZXm0FINk1IPlORllfZmkB02AqbCrAH(8cBUlEM9APtKUT9QvVLUgu9kxtFlQ3SOFWBXCg0LAnL1DRDQ(gE4OmJfowYKXgc9G7YSHXEZmhU7AUvqw08pJjBosyTdzScgpDtbyLJDGRT2cjJbX4huh2)ISSuoqp8iNzEWSZWemlQvdWLJDkDtKvx1DWWXc1XiThIN4nh()cpnMvHU2mZydDtvIi9)wz72zsMmi2QizFEWLIUGTJyaU1ue97pRn9nrHBpMEXzPBwto38YYHOawXsGMwtNnZ4AyI2k3ehPW8SFPsLzj4ukcM(YNuip0QSLiLXfMSLCoG7dqGoeYOioMDpgGTuPwRbyRPmanVYkOheRG2zGoXPb7SdAAadWvTs6PgGR(Sqf1a86kRvEWxYaCnMQIgGTXBaAb))T6WaCT7WaSDGbyhuXMbyNy1kdWUmaxh(hxVby3gGBOfdWnYVbaSna3e6bVPsWzdWR3aCZ4NTtA7zaUf8GxBOoma7zDakXWgliPiXB9j4U3(JMjQ32Z73csAa2hfqAaUTYqX)hdq7B04UMpJrhwwUEgpbc4c))DgoyaFbdhmORamE6iyqVmU7Ot)byChWBqx0u30upmEc4YT7xd9SrIEEJyWt(o2FUEg4qC(s6RrGNF15aWZUlrizaU96qczaEdNrWRHRX7Go82acNgcc6FJdeCXILwkKAxBOqQENz5qQVDtK1T849QYjQ0L(a90im1V(CaM62RatTFmMY7kAe0eZ5zJdZ93IPZ8f2Tl)Dg2TpVUc7XvqAI7WE7WtGWDg0TRWb70lMSRtFKR85MXJFpbds4960nn1Z6fWEPkRv9GyetEq(9ZpKNSh5WAjBacZaCzNhOT8UXbHEgmkXBhKKojjbXjyOcoXn2mPFcOXFhKKaKKoPqgxVgKz1HmhbdzoCrPc8Q5Dpox7neYaE1fK54H97pGlgp(W(rrt9tt7GMgG61K3v1V7)VggXkORl3YftH0E7pQOq7N4eneK00fCFPRac8IygcpUjj(ij(jjeseQrhpeMepeJoE9ss8rs8tPoOEC3zNVg6ynGoigDAFkpU6k(GhEQjeAi4WXftGJNXaGnr42aG9Ta)E6ZaGfw4Hd8KXXs(GVMWFni8jMpgi(j84jlRFUesnu4VPxfmrPkMh(XBlyWW4jy7pCqFy3vXgri(weK6BrWoFTPBVroD73oggLiwC1j18n6Hh1DdHrB(ckmYvysmqAB04OMEYkIVHkuAAbihjejqjNXvLZROxomjreHSQzy10jN82R1o3yYrCoKGg5iXu(m02NKeuDcwDODJCTLJStbr7mlDaAtQcHoLZsJHtPgRuGyIeXPSKZHGLJduyw1X1gxqYz7j0lGFuC7VIJ7R5jNTV85libPrGHOS8NrJvOzmxy0uyZaV6Z2GUSqgzXc5LsqAmh0TgCAZL5MHvuihgvQQPZsoxO04couLH8t18CFctrdnuFoMblmSAhA8)6aTZtXvuInVqg6rWfDDBoSMSQo6GZLtvW8WUDLZqUKezG2y6IruiVG(vs2FIdsUIFPmYs4hVKE3Sz0LvtZeQR(gnrAvwoHcApYvHcS15WYsZOu8i70gwUK9GyirOQU28zlikAUZMszhkOJaib9PfXZIGnHH6MM76zbF(sONwoj)H4In7TIP2aRgZMewm9cLiLyBZNRsBxatsjI06XtP0cDZ4u5bwlLYoR(aSzV1DA9Ukhf4zBHrNC6XdtoTHMncwtaQkKjbV8KXKsTyv)Cbn6FyGSCfjVdZr3SRdZMhULJCq0EyO)06uCD9rSctGt7Jpfg9sU)(vAL8CWqgzvi5quHfRWulQIFlty3Ck7OADtO5I7VyPDElPq0nniPRygZA6(rI2BsPCTKRHKd8CLfFdII)2ltXBrH3cwYD9mXfMckwjrV5(BLK6Js4JniKY0yaHZ3KTFTqp)OM0ZZtpNE0Jt7ANQMCgUP7BbScIIZYBWpYV1UF20cIc6fhlng4RwqJNqS)EmDom7a3B)hQJ(yhVNPwoXoFzID1vKyV697ZcAIy5CAzDD580nqLx79(tTK9ZUT5ONJAAua1iBNLC860ynI2t6mf0WnqAAbkshAjpbZFpL5VF5wDJokGchOzNQ1ICBT1PaZrpQYKwDg7wL8SxeFTKMi5GYIVLsl23lPD24xSfTWwMzKI220wl161BwBUxs4bcS2c69k7PrLWqdWNSkNnONvqRTN1kbcVa4YHfM2a8PAiwo0lxJBhwOZ0t4EKogkTYOd5VHUDOTgrNgGNc9YgGpZkJjnapTb4Zs6zFodWjlH8maptLOodWN3gUzaEwdWxG0sgGNZa8fXTLb43f3J)9Qb0SMmeuvSaWyMo8Ti2IAgEOMj18IMuZwotSEWt3(Ahpv6iwE2WQTgC6SkPVb4tR0ETeyu29XKihpjm3OArSpaIPzXgHkdv2FKdLns8Jl4vozdjY0VubQu1gbvzhvDspl7eWPQmFYw21ANIspa1vD8qtHEoWkVVrNflWFmdWCgGhh)U8bmaFqsRyaEITCIFkzi4dz6pGb4dBa(i4s8KZvYzzdWhRgB4gGpoUiFIuN1Wu6anjjGJZAtVM(RijRx5H(zPQ)nXOlfitj0wXDbNnoEFnehlsm)iruJlJIJDVr6VqKKUCn6XBikUWLKO4ZlBN51pFyhBe8HRrlIv5Dhbl12k5uhhzYnJLhpb0kWr8WGXc0HsC3AmnehnXLKgo96TZGUna)bgGN)CNjssb8w95u48bUiZQzRSACHUkekNvuilSc0X0673ZX7wlBW93yBLt(Qa0XA3x8jOCfwybBJrpMY2IOkpjNZiL(0UraiBi(JVQ(pDbWH8SwNUVgUpU3h6BMIH8bxdpXNA8iFWq(6oEVt0z(rvAOh5tDrm05jlFOQT(G(r)MJDSWjso6Wv9XdXrnFProD59xy1F)PmaFl0XwKu)XgkAKEdnCFrAydza(lQUUH7oAiML9HljG5AluVkSiPc1)HTk1unsSH7E0erxwD8zrMrwlV6(oYelwYLvlVw(FvVNuI(gm6WrIU8Hc7PQwVow8qr6R7JSEQQY2seP3yXgCS(iFk4ygnEYvP6NXHFyLDd(i3yDDdEg7f1THEbxPNm4EIb4fjTXly6hZPnxqOsa1noVAOs6sFGCo7w9QNUmRIjrY7exGVs1ojBa(QehB(6edz4XlBQgdW3yz8m5hyAgVrJ5ruMVHMOkEjLjkRLl6j90HppHD7YJlsINW(9hmid(QaDY4ZVpVDY41Thp(yCh0FaFmE95lG7ZYDsZL0wYQh8sr4ezoIWi9dvA8UQz6xfaVCzaoX89gJPVJgB4KHge107Y(4dfPRsh6OQYkQKkBoO9r8HMv1leVD0XO3kXKcz1ZdL4SdPgn3HPtI920mVn5qDyhilZ2twndn4xMLZosz07ztjw1tP0Yfuk4w3XMQi6wgG38wpBdTLb4T4W6JDJb4TssEWLheldWBZo(vgGhQCKRmaZGUUnBaEy0bnapYvAaE7TX0Lb4rXx9o4naZAaENgG3fngugG3D5Gpv(OCzhPendW7T2apb2qI7uep5ZazgwoCip0znT6Kosl3M28KLymK4KSf1STTH5SRNTTfTopBMNzT1SbUgDuepFpLE)1qSXFgB6l06lU6)ysyES(khNYKtAKPHNiuH9Zk3ExnKtAjmNe9um(uH2WIXE5VrkZllzduR57EsT7d5FwnhCsZqXVYhSs(kdv)TUED5AjZvaV07OfeD75RlenTjv3AhBUbG5wNBiK1csR8IeWFMH2ma)uluw7q)dlLjA4dX34ne037CakR5ZwHVb4NxYF7dwxbUb4JEPIWEDrRuwqNFKEJxCYUY1dFpnuq)9VGlOhUHc6ENP(XxOKBjNTXx4cRiCz777keHduSd)tfGFYIzd1qr4)8f5IWW)91veQ06YDI8v3ctChDffMAjInHimRUMAJNYXp4ICH5JCB1vyE6A84)v3csCNCffKhTJjhVyxJ0tqzFnuq(dVixqUcRyLb47CrUSJUUswHHLUGsnmqS1i98jCIJQmu(jshntdLEVYf5sVviS7gG)4lLLEJ4sAu)9YoE3UGnu69Johk9iR3s4UID4HrnDWY7n44te3zsY3BmOUZUWtmP8w3nQemFr77TufB)xYhQS6TtEnaV5REdBTo8Kmw8ZFR2XcvmCuNL5GBJz)1o0j48F8JmI3y3BNRXfx9lD5nr((boJGompDJSknG5AT)4PqpMY1vNnXAF4sUFZjfyP4HhQpfDlTA1gPq7jm56YlDXZB00M2I0iLBzJM2CTnHrtxoUIgnDf1uTh)vwFv7hTUQwFFX1x1(mNrvd5XdRuXLr3K68fDZ6AjIBQjtQMopuSUGde)OUCxSHun)QZHunR9ihq294pMQ1)YrTBgFE8e0dLG4L94MSRVu2oDxx7K8Vlyotuitgi5F3mq7d3ZxO02TUpUuRYhk8Z32m6Bnke3z9KGs9QK4458vusO3gkb)1LKG9Dbuc(s0fEnIOmEAqPm56)LKpheD2HhVEdg2TRo8e2V7G(jj0ttThsIx6HHmiJ7Gbd4IM6MM6HM6LM6JM6NEOADTGcuL8rnK8VjiZWMnlmJoKZ840HhdxISXZfKGXnluQxfF(6U(1yOKoRGyrhxFixEhb6EyxncI1u5d0)goeR18TY1k3SV(Q(m0DueMm6YnaVhI3t4xwRpzBKpxBF7TCX9NRnSZil7t0wNzuMkAiHEdLR368jARvngVhW)bC16eB6b(Fp
+!WA:2!T31F0XXr99m(Ij2NZpSL)vIXHCXj2roK4C)uNo3yG7xY60VUt7DYk2ofD7D7C3Uw7T76D3tsNiPKicbv(rkiGaeAbIkeij8E0Q2cuOuiMF0sFu6GAB6wcqPU86l9hV(h(1xlqPqNz2DVFPtNLLKDSDtEVm62zNz2DMVF((573z(oZAWX6i)N4EM92wmhB(X5uLvIklkR2Ndhos5W9HcO0rEzjDvzrrixuEbrovO0tPSNyQLf4CDVUsjYwbQ6QxiROoVlgbPIk3st3lL8K4u6T2P9TYWRcz1D1zeiR6bv2DZzhLvthIVXnBFdg2IqxdYQooorQOiuzxT6oLfv27YvdxdiOx71UXArV3UxYRTQUkRG(zZjRYbvJyn6OS1iIctpnRkNRmYYI6ckQtLSqbnOoiNclEWrx5UmBPmrIIBnsp8ECXa10Lvz1fKLCDaxryfzLYdZz2Y8QvmBGJmVkSiUezQOazkQkxwzEZsKwyA4gxqqQGSAjAB4CbZBykQaaGJfzlRZlRMuHCBnN5WcTccfDQYMNMrxmA6SQ6oZvqqsqJ3ze8F0DoJUQqXIqvTHoGQ1pFYi6KNoBzvwVNHKQPafff402thUJugxPCk0HNzO5NGtZ5z1kNdobUFNUCHcctTWyrdNoZyPZeMjt1BLsfIVft6uXhyGZvwdgFk87vAZwilJeBjOMZ55G5WTaPZR2B8bs1ZidmxzjRxlNlWjODQYs4EZeqVSIIkBJL(7mM3Fqzo4N9ASgUIZveQST0NUmwC4QNYIIUgLxqhEgZ7AowV55yLemhm7c9A75mqwnyADS4ROo)1HCfrswcUixztr2yKXevniEqLtBgsrjVLOGrkXki1dQlCfqbrDJcHom(V7T5CMtdkwiLSGKEUOXhktCM9jWTyvKiwVq7C47bvLyfpg(XGFGNCHcQ4bf8leRoRJZHblyzBpKSip4CPJYep(qZRlNFcZYVPu70lU5wyIJM5e9pGC8bo1OmA5zfHoMhlcyOOknBqtcjC)3X8KoJGjAjIOmlNZfmFm0xu0rM9W5Wck1XQam)7ua0n(VV1fy5ovzSUj3GStTHAxiiTbuhCBg1p6ik7GdQXQtg5GeDgcowIJFbnYlpCk8nGzRVm9iJb9MLHrdRwOdMbkXfMOY(y7c9gp5zvuLlQc10slxwnp8U371Sb09Joc6MqVb0T4eDZoNrvwNkLamSIk8Soqj67am55H5hVh0TTXzMGvvGnNiCgbPOYLYXQZmbRyziyFYk77ihrnppMEaQTNdGojLVBg8ZdlS1RGg9aOha3coqhFrCg5XWyEklh6K7lGBCT74(rpiPA95i116(qDfGuDpoq)6NRq1Uev)SAZGEZ4Q6nq9vLuNqKQ7XRzkU(OXQwJ5kXoL9dTdYZCF3)rmRjaxUrrhDpZUlLo0XdRJPXZYjp5dyrfnhnpsIYw3FdV97F)kBTUkuJb5SM5AdvJeEKmjv2ontm3Imrxj)OcC68rcJV8C0BGvQHC0mF0fnrph38fq0XzOfGGpekubHP2isjkciYqjhkoYLkgzskZ80cM32OJdZx9cyJokBThvHPDnCzwoIEGRmzuCxTFnMjz4yn05gJdMhRvloMIk(hendqddpwVDGfP5njwDyuvwLzg16hlw9rtzHsosMbsmuCRXRg0ouo455fHk(P8gmfeLLvnhoMa)oHHIzR9Giu7VwRXoBHNY(ppnUzM5gQCPCq1C8qHI86plkaHiRzYOFTZp9uU8ye)yvi4p)Eq7b3kor71j6wDQSvSMFylDCQkpVY2YvvN2sBwjycc5vb28WhmmhxsjThCui74Hj2oEWbHCcSpOvj1Eqcz3yEDRm1H0lYIIIPTMNAxIQUdq9DS5WpXXYlYQPLnNoM)ssFxmLkJTY6KHM7bYPjqkltmMrsedn7UqVRSrWMIYVl0SoJOHhmj)a96EZhaDBpjUtEhOdGUlgQnOCM(OGZ6or735mKheXEwwuNOdIE9or3d6ErhYz91d9ek7yeCrCfLNLyifQkGrZ51SAc07TP6IUpKBKNp71KRKGQQSkFZJFcs8OTFoB(mDZbLzKXC4ytQAoNdJmK4iwYyImq8HIrn)YytUDwTsYY68PSQD25PKL9iOQPZVGvBKxuqHhfgf5CwnobutAqLDeDGWdMktYideoA)HJflrMehddSRjmTGENRwovzgiaJabMjVCjfYtMhB9c5anwFucRaK0UPKxE72b6n5GzscDWZQSTASGwIF0JHITW055vhsVl(EpbMwwIy(cYphTRqEpZLyO0jIfFbzvbSeJ2XNl6ajJ2)Ojsh3eNoLfoDxovPvdYXp7HrdaqdsnqHgAdOKvngHsXJgolIHhLgGYqTNGgzPMqqhdGgLA3Gs8Urmv9jWuSMwim5BP2giCU14Mvi(1s0WrN0r9fLoWemqTHhpbAKvh98OtEDnwdQzaCs3KKMmcmd2ia9zHTb4P12aqSauUZzt0tl8(3pIJYRJGOcOIiEKWJIoL41Igh3ZfrLWGCjK8l3fsbDAKgqPZLJZH2A1XNHMgPJkJManjAkCt9wYQCNTVQM5HEROhANOhgOCFTV0lLbh9ip8QMBd9OlLwdndp6THbJe6h0BNW6GE8SO3bL4438aO3j6DzYRGE30SEpTGrb9em0z1SCmbnww0778XyGMJh9(XKdOpa6d6e9KOpe6ddqFKSONIh9rPk0OFB0Vd6JbqF8xod6tq1aVwIgibSq7GuCwOaefq0t)WO5P6AYfZf9eNs07dKmd6tYJ(uONb9PrFg0Zwvdc9CRF6o3Dv8kEUvy9(M0FE5d1aMEbD6m9OEIT8U2qH1Nz)MLvjVEvmTY9Sequ1c1keu9QaLT1auU920ivbTnQMup0VfMPRv)g0xOaFSMc6r(2xCrYpogjtTSrSeYBbGPi7ZsZLmJRXLKNukBdi95RDJn9yhJI4NGbpzw9kz9QmHs2zWDp9kLyLY6vhkLDE9jXQRvkGN(f2kn93zrbZ2KoY8MdgedOyt5QfH6yCp91O2nYsukEcLTAnV)0c6LPK(uTKLQkfHmmJFVDq6w4QLwNmn67dpfIs3hXFdIILLPDsjZwxZSg002OLToVbQYq7Zur7BBPOD0ytMkLue1GvcEXxr7W1SavfUHNxrqQo0B4ivNtc(1Sl7PKuVXN)GMmx1KMj6p88OpI(JSnS85xgfl0xOT6nOV4LAvc0FCd6cOVuJWF0xEtS7Xe1J(tYI(kzr)PzrF1SOVww0lycShQbc9ZG(6eK23We9I(MRpWSxdASx(R2aSktoPrk21a9NSp9Lhw5IIqiTgv97ZxNzNFFQzNN3rdwEwKODu11LSTYG13QQkg6pZuLc9N3sDPDH9kN6LOL6b1gun7rbcqGT4rIo(p3mA7Qw(KsqZKbKeox1cELTXjOLxfQdhR6K)Bae8DvU)v(KsIkOMxeowAQ)1ERoZeIAiwAG1bjsNRdDJ3ZnH1)MV2kxWt0iJTG3oJvozinFEgNLkyjA0pYwYzoFxEuFtqaGFjBhmE3l1nJVSnNRt0tVLly5j67SwLHO)sZvWiyGQ(tutY93Sjmi(7UoiZq)vnjIqOwmmVj0n(z7GqZ99SgDl0PsAXbgj1qvIv3Ol6VEnpW(pBpuDwt)ojl6dRUSkMcDUQQizTh1zOxUpVUVOm8Vu1hh1R5SKX)cix5iZfdBs9WQKLJmzzDYWTronE8SQgFg7fUmcPDPsGwiHWTcYG(tsvJuGLdIEjV4AqlYksCTzlTIQIlpfNCs(E929GzcwtCDtx4IRBAzfxO)wIrUxSQKb93Hn9DrxPWrB1hShj)7PJKOVp6Lq)Gv2Oo6hIl7pALpG7Sz9dU89ZwoQ3EIgm(ACa33cLWZaxmHMPJzxp6g8YQiWt9xXYtfvAjilf8URgFOgEPBEwsOFR1RziDgfRWXCczzSJDVXtEgZ3LccIWeCO7CEZlvy15r3PzpzmnSd5va4XP6Ug)UFuNOh54RSz9bQ2nNrdE6YqS3MoQZJSTXJ8gzizjiA7m0hbAN3ETNvzTHXaPAxRonqLLBcIlR8REA030gr9UBlbX0aK)TqrjeSXwSYTsD9x1P(jBf90hNcnITq8c(5owA)dalwKaOu2kTCXe0iX0jHubz(6Nk3kBzqqzBP)I1nKpD9VpvaZEB1nSI2WZPSv7qHma2AnXWATWeAf6Uy0idvl6D9WcvfGU6rqfAhcXTvTrekaZjIbjk7OAiwGNQ8eqjkJyTNgdz1PMuNVw5ibgjpEwitYQwQw5guMeknvOYT26hVzS8oyTWEgdwswLvuyAbPIUyKzvj6sOBeGboBLaz646byoKDG25gj8m720xAmAcJPAqxY2PZBhTV90HBBfeI(crd5UZ2ILrWlYhY)Mx9GltwMQXMkcEuxZIaIGGO8rXw44j7mPQV(ftDujupoi6t96Gqf2NtcjXS3X8c5LLmdxZEVgspRda5glMxwwKdphZ0tkG988m2xscxh)sPrEgRUoJpFb9halQKskjINO5DG9(EPJdQ9gMzWEgzGvnL)B8KNBCiujmzXK1ziyfE68VWeThTVxCXIIYt2JQjhqft71ri5XFgSZchv0kqk8ZrYlTzK3i)CaAaf35cKFBh8bAzQgKDh07zV0)MHfHKd9jMHxi)4sqnnhZqVe7X(I5kRRllL0CfFPT1ac4ISn6ZlIzeLND70PQTV9R1Qfbe04AasFlA180EOB3CoAvBnLvDRDMednuCMXIKmtMKdIEODB2WyBHZH7UMHLCrZ)mMS5iHv0ATcmenavw5yhefRWzogeJFq(SVISYhoqpYWxy2)2EecMfDtgGRb7sZ1Ib5D6juKKH7A4odZt8fa)FrMgZQqN9)m2q3SvjF)Vu2HDMKjwG5ujXCKllHq9Ph2a86Ys0V)K2e)efoxM(ayPB2uo7Dj5quaRBv2YPPZMFCnm5B9bumlM797vTmNfoLIGPNGzekbTkBvIACHjHh(qEoeb6qiJEtoM9omaBOETwdGJSgGRD5vqpmwbT7GDJtd1Dx00GgGxZYPNAaUU1GkQbyt10kp8lAa2SPQObWjVbyl4))6DyaUHDAaUrGb4MOIndWwXQvgGTza6aFX2na7WaSt8v7IFDayBa2n6HU1QWzdWnBaUf8ZEp02Za8AXdE7f5ZaCRRcqjg2ybjfj(6nb3d0x88X91zPawqsdGlkG0aC71GI)3gG9TEJ7CEbJoSSC9CEdg0n()7osOG(dfjui3bz82vOq(y80v3bcY4jOVqUPPEOPEz8g0ThpVk6z9e9CVyWtPUoyXJ2)X48NXF7ap)0lcGN9uLqYaCNTGeYaS)li41qn5Dqx(AdHtBbb9T(bcUCXslfsT71vivVZSui13zdKL(6u9QYjQetV)J2om1p7IaM6URdtDhymLVL1iOjMZ76hM77JPZ8hXJ7aDhXJFFUJ41DiAINi(6YBWiDhYJ7iH62hMSRB)KF53dJ3aEdfIW71ThAQ3vlG9QvwRwbXiM8G8hKFqVfo(OAzAhc7NFjG1Y36hc65WGeFDrs6MKecNGrk4epyRKbiyMaDrscss6MIyC)QiMZpI54yeZOvKkZRwYZ4CD2oeZ)ZvwiMtfjqGGUz86h7ffnnanTlAAqQpt(oVED))3Giwb1BP2TykNZxFXff680NUDyKFXR4osxhc4VaZp41djXpjjajHqHqT44LWJ4LyXXNpsIFssakXb1D7U7(vbhRaWbXItNt51DSudm6uti0oSX)7LtyJNZaC3gGxVballVxdWHma3NbaBXWJba7PXRsmSsK9eBh9N60E9wGnaxAP2j7)LxbmhP6Mc(P2xOqrWZToqKq(XEQITGq8Rie1VIqD)QZ0E9CM2VDmkkDYuQtQ5FKrhXt7qr)QxrrrUJqI(X(gjfAdpvDr2qfknTaKJeCeOKRuQYLu0RfGKOIqw18SA6KZY12TZnPCuxdkOr2y21oWwjKKGQtWQdTBKTxlMoLfTZS6P1kJke6sUan6nvBSQHGjAuxYsUgewlcqryvhxBCbjxDMwVm(rXDW6oBz0nBMReLkvwcsJ9crx5fOHg1mAlmAkS5H3WAnCllKxwSCjP0KgZbjmj3FoZf4MHvuOOe6iQA6SKtNenMJ9vF4evnp9rWS0Gc1JJzWcdR2HeurKp02pdxfj2sc5Phem0o3yenzvDuW5kQkyEKl2YmKFsIjW(yIXikusqFlK9(2aKFXF28Ys4hVKEpS51LvZXeowIrsNtLLtOS2JD9i)BEoSS0m(ep2USrLN1EqmSiuvxB(cLffn3FmzTdc0XaKW9CJIRHWmHH6Mg7ITGF)P1ZjNH)yCjN9oXmBGZhXMewm9TQYj9M3NF3vdZSjNerA9EZQSn6M4O(JnrwLD14XOWElF0X9xlO0ZUngDv28JhHCMxmBeSMauviFAE5jtkLDXgUCbn6FyGSCviVdZr3jLdXwcUPJFyKlg6LwNLGBjQvacCzVj(XOxY9pOshKNdgYiRcjBLFSyfMDrv8BzA7MtzNnQBcnxw)fRUTojfIUH0iDfZqOt3hl0EtwLTt(nKCS7QV4Rtm83DngElg8TGLCBNjLWuqX655n37KKu)u(ES9GSM2ciu(MK9Re25h3KDEE6PfHEOUw5m1KtsinE3yfefx12MyKR1Eq2CcIc6vglhg4RwwJNWR)4MEgwO)hOVJ1vc2Xp6ulLxN3wdYaiUSe7nUprwqtelNZjRRlxIUXB8zVNrAMSF2Toh908rJ)NgzBquKxNgLrKRC5lRHBGC0cuHo0sEcMxpL51VuhEqJcOWbA2z7Oc3M7ykWC0dmhPvNXUvjp7fX)wstKCCTW3szB23lJD24xSfTWwMzKL220wl7Q1xwBUxsGbcUYc39Y7Or9WqdWhPbFnONyfRT1ZYbcFfWJdlmTb4PAlwo8pUjVoSqN5MWZWDnyoLrgSDbhYauAfIonaFm0lza(4lpM0a8jmapnPNnVb43TkYZa8jRh1za(u2WndWZya(0KwYa8zmaplUTmaphUh)8nbAwrgcAikaymtx(xeBrnppuZKAErtQzlNjwn4P7ELJNQEqFwlSARaFoBq6Ba(OkD2mbgLDFmjYEufZnQwb7dGyowSrOAqLdg9yfIM6uc(KZ0wImPRwGknSbcv2zdN3OAobCM6ZNSvpT2HH0JXxdhsPSONhS873WzXc83Lb4DBaEp43LNWaq9oXa8E30P)pidbVpt)bmaZzaE)4s8bMRQZYgGNSjB4gGpeUiF4SRzykDGMKe0XA20RP)ksY61FIsoBJxtm6sbYucTLDh2zJJpqBXXIeZpse14AO4Kpq0(khnJB3JCQ2IILVQefFjzBWU65d7A9GpCfArSbV7iyP9TCo1XrMCZyLWtaToCepmuYGDPKYJgtBXrkxvA40NVUd5Xa85ma)Ex8mrskGVg3F7xkWf5pF2kBexORcHYfefkaRdDmT(b9EQE0ke6GT3w5PVcaDSY9fFckxHfwW2y0tOS1OQYtY5kA1piqeaY6I)4Nx)NEfWH8cwNCS2UhXpa6RKLH8z)bpXNM8iFGW(7jvVt0DPruARh5QxgdDEQANyxRpdu0V8nNms6mJmudhHDhnDE3pxTDwyJFfumaFD0jxKu)XgmE0EdpuIOTTHmaFZgRBKEIhMzjhF(GMRTqRQWIKk06h25PMQrtoupJKo(sQJFlYmYA51Y3rMKjZSKA5ZY)Rw9KsNyG4dfn(shkSNQAR6yPchnrphF1uvLTMoAVjtoWyjiFqIygjvMZt1VGJ(WY7g8X3BlDdEg7f1TTEbxVNm4EIb4BqAJVMPFmNZCbHQcux)8QHkPR(zAyTT6vptnwftIKhhxGVqJojBa(IehB(sedz4XlBQgdWlSeEMs9pnJV4j9kkZ3wtuAxvzIYA5IEkVD53BepU96MK4nsGaHcXG)vWUz8hWVVUz85XRx)mEcfiOFgF(9h0ZACt0CvTLSwbVueoD(JlmCFqLoBRzm9RaGxUnaJpFVjzsCIKdLj8aOn8oTp4qrJv94g1qwXLuzlcTpCp0SACH4TJog9wPNuOGEjOeNDi1O5oeDsS3LM5TjhNd7azz2EYQ5Pb)YSC2rkJEpBkXgEkvxUGQb36EU26IULbO8MxRH2YamHzeTiQGtrsQS0GyzaM2o(vgG3sTixzaEi0o3Ob4Hrbna)gBXa8w3htmdWJG)1JYBaMXa82mapgngugG3ETGpv7qCzhPemL17O5apbwxI7uuVLYdzgsosyV0znD(jDKwQnT5jlXyyXjzROzBBdZz3kBBlADs2mpTARydCT7KrEPEk9bAIyJ)c20x4vxy1)jKW8y9T2mRjN0WtdpD4YhKvUZyTLt6hG5KONPXNo86wm2R993yEzjBGAtFtnAEhi)V20XO0mu8l)XSKV(q1FNRwxUoR5kGx9D0cIUJsTeIMZKQBLJnxhWCRY9dYkbPvBrc4VWqBgGx2cL1jmWqs5Jh5y8sTfL9dViGYCUwf(gG)TQ(BF4wkWnaFWRwe2RkALAc6sd3BQktgR4r5pABf0)OxXf0d1wbDVZ064lu1TK1A8fELveUKT8DDIW(R0vGPcYpzLcHBRi8F4YCryKFqlfHkDSuNiVYwyI7OlRWulDYjeHf01uB)uo(XxMlmFS7QLcZZ1Kh)xzliXDYLvqEIUMC8kXg(OHK93wb5)4L5cYLzfRmaF3lZLD01vYkmS0fuQTbITjPNFHtFcLblnrU45BR07SxMl9wMWUBa(8xnl9g2T0ib6LD8ECdBR07F6IO0JSElrILC0HqB4W12BWPMiLRmKVtvqDxXWtmP2w3nUeSuf77D262(VKpWvTAN8AakFdRBR1H3mjtDPB1owOUHJwSmhCRp7V2bpnxGtD8H9L8b6EfU4QFXxZgiF35MrqhwIUrwL63CT2FpzrpHYn3InXAcCjpO5KcSu8Wd1NHULwTAJSixri)U2sxGv9(LBsA4ATSb4x1CtySHRbxrJnaAQAV)xE1vT)Lvv1s85wDv7tDbvn095LvQYsOBYEPIUz1TeX)ctQMUpwYyW(tDc3EQ0wQMF6frQMvEKdi7E8Nq16F)s2dJFVEd5Lsq8sE9q21xk7GURRDr(hHgxPlNppK81BhHFaVWcv3U1j4Y22pOZx6TzKyfke3vRKGs9QK(uf9xrsO32kb)zvLGjEfuc(I0fEnQOmEAqzn56)5KpeeD3LxF(cfXJ7U8gjGNqbij0dsTxsIp6jHmeJNqHc6MM6HM6LM6JM6NMgGEGADVGcuL8XWJ8LPFg2cfG51HCMhMo8y4zjB8CbjykZcL9k4tx3TScdL0AcIfFC9bD7ByONHC3wiwTZY)6oeRJsDW1b3SVUg(a0Dc0BWaGDc4XPEp9lS)yTr(qT9D20L3FO2WoJSKpoBDNxzQ4Hf6nCXEBXhNTo0y8DOahYDhtCTp8)h
 ```

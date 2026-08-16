@@ -168,14 +168,43 @@ for _, p in ipairs(packs) do
         end
       end
 
+      -- DELIBERATE REMOVALS. The default contract is that no uid ever disappears, which
+      -- is what makes an in-game re-import an Update. A version that genuinely DELETES a
+      -- region breaks it, and the honest fix is not to invent a filler region to absorb
+      -- the freed slot — it is to say out loud which auras are going, one id per line, in
+      -- the build script that drops them:
+      --     -- WA-REMOVED (v12): Mage - Target Cluster
+      -- Only entries tagged with the version this pack currently ships are honoured, so
+      -- the licence expires by itself at the next version bump rather than standing open
+      -- forever. Anything else that vanishes is still a hard failure.
+      local removals, removalCount = {}, 0
+      for tag, id in gen:gmatch("%-%-%s*WA%-REMOVED%s*%((v%d+)%)%s*:%s*([^\n]-)%s*\n") do
+        if version and tag == version and not removals[id] then
+          removals[id] = true
+          removalCount = removalCount + 1
+        end
+      end
+      local shipped = {}
+      for _, aura in ipairs(all) do shipped[aura.id] = true end
+      for id in pairs(removals) do
+        if shipped[id] then
+          fail("%s: %q is declared WA-REMOVED but is still in the shipped string", p.name, id)
+        end
+      end
+
       local previous = previousCommittedString(p.txtPath)
       if previous then
         local okCont, cont = pcall(WA.uidContinuityStrings, s, previous)
         if not okCont then
           fail("%s: could not compare previous committed UIDs: %s", p.name, tostring(cont))
         else
-          local okAssert, contErr = pcall(WA.assertUidContinuity, cont, p.name)
+          local okAssert, contErr = pcall(WA.assertUidContinuity, cont, p.name,
+            removalCount > 0 and removals or nil)
           if not okAssert then fail("%s", tostring(contErr)) end
+          if removalCount > 0 then
+            print(string.format("  %-14s     %d declared removal(s), %d uid(s) actually gone",
+              p.name, removalCount, cont.missing))
+          end
         end
       end
 

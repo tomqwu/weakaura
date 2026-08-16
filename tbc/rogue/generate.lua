@@ -1,7 +1,23 @@
--- generate.lua — Rogue TBC All-Specs HUD (v51).
+-- generate.lua — Rogue TBC All-Specs HUD (v52).
 -- Reproducible lineage build: start from the committed v41 snapshot, then replay
--- the reviewed v42 through v51 Lua migrations in order. The snapshot lives
+-- the reviewed v42 through v52 Lua migrations in order. The snapshot lives
 -- inside this script so the class still ships exactly one importable all-specs.txt.
+--
+-- v52 is the first version of this pack that REMOVES auras: the target cluster goes
+-- (its health arc and face duplicated the target frame and the nameplate all game, and
+-- its ring track existed only to keep a spare uid alive), while threat — the one thing
+-- that cluster showed that nothing else in the game does — moves to the player cluster
+-- as its outermost 100px ring. Four uids therefore have no home, and nothing is invented
+-- to absorb them. WeakAuras never deletes an aura an import does not mention, so these
+-- four stay in the player's collection until they delete `Rogue - Target Cluster` by
+-- hand; the pack README says so in its "After updating" section.
+--
+-- The licence for the four disappearing uids, read by tools/verify-packs.lua. These lines
+-- are honoured only while this pack ships v52, so they expire at the next bump:
+-- WA-REMOVED (v52): Rogue - Target Cluster
+-- WA-REMOVED (v52): Rogue - Target Health Ring
+-- WA-REMOVED (v52): Rogue - Target Portrait
+-- WA-REMOVED (v52): Rogue - Target Ring Track
 math.randomseed(20260809)
 
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -27,6 +43,7 @@ local ok, result = pcall(function()
   for _, patch in ipairs({
     "patch-v42.lua", "patch-v43.lua", "patch-v44.lua", "patch-v45.lua", "patch-v46.lua",
     "patch-v47.lua", "patch-v48.lua", "patch-v49.lua", "patch-v50.lua", "patch-v51.lua",
+    "patch-v52.lua",
   }) do
     arg[0] = dir .. "/" .. patch
     dofile(arg[0])
@@ -43,7 +60,16 @@ local ok, result = pcall(function()
   local transmit = W.decode(final)
   W.verify(transmit, final)
   local cont = previous and W.uidContinuityStrings(final, previous) or nil
-  W.assertUidContinuity(cont, "rogue")
+  -- The four v52 deletions are the ONLY uids allowed to disappear; anything else that
+  -- vanishes, and any id that keeps its name but swaps uid, is still a hard failure.
+  -- Declared-but-still-present ids are not an error, so this list is harmless once the
+  -- shipped string no longer carries them (this script replays against its own output).
+  W.assertUidContinuity(cont, "rogue", {
+    "Rogue - Target Cluster",
+    "Rogue - Target Health Ring",
+    "Rogue - Target Portrait",
+    "Rogue - Target Ring Track",
+  })
   return { encoded = final, transmit = transmit }
 end)
 

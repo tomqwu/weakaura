@@ -1,4 +1,4 @@
--- generate.lua — Priest TBC All-Specs HUD (v11).
+-- generate.lua — Priest TBC All-Specs HUD (v12).
 -- Run: lua5.1 tbc/priest/generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import -> paste).
 --
@@ -291,6 +291,46 @@
 --     fade, buffs, alerts, the cooldown row, procs and the whole PvP layer. No aura
 --     added or removed, no uid() call added or reordered: all 44 uids are exactly
 --     v10's, so this imports as an Update with nothing left to delete.
+--
+-- v12 (the TARGET cluster is deleted; threat comes home as YOUR outermost ring):
+--   * THE WHOLE TARGET CLUSTER IS GONE — target health ring, target track and target
+--     portrait, three auras, deleted rather than repurposed. The target's health is
+--     already on the Blizzard target frame and on its nameplate, an arm's length from
+--     where this pack drew it a second time, so for the entire game the cluster was a
+--     duplicate of the default UI wearing a nicer ring. A HUD earns its space by
+--     showing what nothing else shows.
+--   * THREAT IS THE ONE THING THAT SURVIVES, because it is the one thing that cluster
+--     carried that no default UI element shows, and a dps who cannot see aggro coming
+--     dies. It becomes the OUTERMOST ring of the PLAYER cluster at THREAT_RING = 100,
+--     concentric with health (84), mana (62) and the 44px face at absolute (-270, 40).
+--     That is also the more honest place for it: it is YOUR threat, so it belongs on
+--     your own body, and the v7 argument that it "belongs at the target" only ever
+--     held while there was a target cluster to hang it on.
+--   * Threat changes SIZE and POSITION and NOTHING ELSE. Same uid, same id, same
+--     Threat Situation trigger with `threatUnit` (renamed to plain `unit` only at
+--     internalVersion 51, and Modernize migrates < 51 data by copying threatUnit ->
+--     unit, so IV-45 data must keep emitting the OLD name), same escalation on
+--     `foregroundColor` (`barColor` is aurabar-only and a SILENT no-op on a
+--     progresstexture), same not-arena load gate, same mandatory
+--     `threatvalue <= 0 -> alpha 0` guard — without which a progresstexture draws
+--     FULL at total == 0 and zero threat reads as "you are at the pull threshold".
+--     Its percentage moves from y = +54 to y = +58, clearing the bigger ring.
+--   * There is no threat flash halo in this pack to resize: the only alphaPulse
+--     animation priest ships is on Priest - Holy Procs, which is not a cluster
+--     region. Decoding v11 for `alphaPulse` returns exactly that one hit.
+--   * SOME UIDS ARE NOW ORPHANS, ON PURPOSE. Three regions are genuinely deleted, so
+--     three uids have no home, and no filler region was invented to absorb them —
+--     that is precisely how a HUD accumulates junk. Their uid() slots are BURNED in
+--     place (W.uid() called and discarded, at the exact positions they occupied) so
+--     that no surviving aura shifts in the seeded stream and no future version can
+--     ever hand a deleted region's uid to a new aura. The 41 surviving uids are
+--     byte-identical to v11's; see README "After updating" for the three auras the
+--     player must delete by hand, because WeakAuras never deletes an aura an import
+--     does not mention.
+--   * Untouched: every trigger, gate, condition and colour outside the clusters —
+--     buffs, alerts, the cooldown row, procs and the whole PvP layer, plus the player
+--     cluster's own health/mana rings, their 40%/50% breakpoint marks, the Desperate
+--     Prayer danger tier, the zero-total guards and the out-of-combat fade.
 
 math.randomseed(20260815)  -- FIXED pack seed; the uid() call order below is append-only forever
 
@@ -307,6 +347,32 @@ local W = F.W
 
 local CLASS = "PRIEST"
 local TOP = "Priest TBC - All Specs"
+
+-- ===== DELIBERATE REMOVALS, DECLARED ONCE =====
+-- tools/verify-packs.lua grants a version its licence to drop a uid by scanning THIS
+-- FILE for tagged comment lines, one aura id per line, carrying the version the pack
+-- currently ships; anything else that disappears from the string is still a hard
+-- failure. The build needs the same list to pass to W.assertUidContinuity, and two
+-- hand-kept copies of a list are two lists that drift, so the list is READ BACK OUT of
+-- the source instead of retyped. (The scan pattern below contains no literal two-hyphen
+-- run, so it cannot match itself and declare a phantom removal.)
+--
+-- The three ids are the entire target cluster. Nothing replaces them.
+local VERSION = "v12"
+-- WA-REMOVED (v12): Priest - Target Health
+-- WA-REMOVED (v12): Priest - Target Track
+-- WA-REMOVED (v12): Priest - Target Portrait
+local REMOVED = {}
+do
+  local selfPath = realArg0 or (dir .. "/generate.lua")
+  local src = assert(io.open(selfPath, "r"), "cannot read own source: " .. selfPath)
+  local body = src:read("*a"); src:close()
+  for tag, id in body:gmatch("%-%-%s*WA%-REMOVED%s*%((v%d+)%)%s*:%s*([^\n]-)%s*\n") do
+    if tag == VERSION then REMOVED[#REMOVED + 1] = id end
+  end
+  assert(#REMOVED == 3,
+    ("expected 3 declared %s removals, found %d"):format(VERSION, #REMOVED))
+end
 
 local byId = {}
 local icons = {}  -- ordered icon list for the polish pass (deterministic iteration)
@@ -369,10 +435,9 @@ local function fadeOutOfCombat(a)
 end
 
 -- =====================================================================
--- v11 ring toolkit. wa_factory.lua has no progresstexture builder and no model
--- builder, so the ring and portrait tables below are written out in full; the
--- target's outer track goes through F.texture and every other piece (triggers,
--- subtext, conditions, load gates, assembly) still goes through the factory.
+-- Ring toolkit. wa_factory.lua has no progresstexture builder and no model builder, so
+-- the ring and portrait tables below are written out in full; every other piece
+-- (triggers, subtext, conditions, load gates, assembly) still goes through the factory.
 -- Field names verified against the CURRENT WeakAuras source, which is what
 -- actually runs: internalVersion 45 only drives migration, and no Modernize block
 -- at IV >= 45 renames any progresstexture fill field or any model field.
@@ -390,45 +455,53 @@ local RING_TEX = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Ring_20px.tga"
 -- and the whole point of naming them is that the seven copies cannot drift apart:
 -- change them in all seven or in none. (Five earlier passes drifted because they
 -- were handed intent instead of dimensions.)
-local OUTER     = 84   -- outer ring diameter, BOTH clusters
-local INNER     = 62   -- inner ring diameter, BOTH clusters
-local PORTRAIT  = 44   -- live unit portrait, BOTH clusters (44/84 = the approved ratio)
-local CLUSTER_X = 270  -- player cluster at x = -270, target cluster at x = +270
-local CLUSTER_Y = 40   -- ABSOLUTE screen y for the player cluster
-local TARGET_Y  = 110  -- ABSOLUTE screen y for the target cluster
+local THREAT_RING = 100  -- v12: OUTERMOST ring, YOUR threat, player cluster only
+local OUTER     = 84   -- health ring diameter, unchanged
+local INNER     = 62   -- primary power ring diameter, unchanged
+local PORTRAIT  = 44   -- live unit portrait (44/84 = the approved ratio), unchanged
+local CLUSTER_X = 270  -- the ONE cluster, at x = -270; nothing is drawn at +270 now
+local CLUSTER_Y = 40   -- ABSOLUTE screen y for the player cluster, unchanged
 
 -- THE ABSOLUTE-POSITION RULE, written as arithmetic instead of as a comment.
 -- A child anchored anchorFrameType = "SCREEN" inside a group anchors to THAT GROUP's
 -- frame (GetAnchorFrame returns the parent region for "SCREEN"), so offsets ADD all
--- the way down the parent chain. CLUSTER_Y/TARGET_Y are the ABSOLUTE numbers, so the
--- local ones are DERIVED — type 40 straight into a child of these two groups and the
--- cluster lands at -44, which is how a "one canonical layout" pass ends up with seven
--- different HUDs.
+-- the way down the parent chain. CLUSTER_Y is the ABSOLUTE number, so the local one is
+-- DERIVED — type 40 straight into a child of these two groups and the cluster lands at
+-- -44, which is how a "one canonical layout" pass ends up with seven different HUDs.
 --   top (0, TOP_Y) + Resources (0, RES_Y) + region (x, LOCAL_Y) = (x, absolute y)
+-- All four cluster regions take the SAME x and the SAME local y, which is what makes
+-- them concentric: one shared centre, four diameters.
 local TOP_Y = -140       -- the top-level group, unchanged since v1
 local RES_Y = 56         -- the Resources group inside it, unchanged since v1
 local CLUSTER_LOCAL_Y = CLUSTER_Y - (TOP_Y + RES_Y)   -- = 124  -> absolute  40
-local TARGET_LOCAL_Y  = TARGET_Y  - (TOP_Y + RES_Y)   -- = 194  -> absolute 110
 
--- x is not a taste call and it is not symmetric by accident. The Alerts column is a
--- dynamic group at x = -150 carrying 40-44px icons (span -172..-128) and the PvP
--- column mirrors it on the right; both GROW VERTICALLY, so a cluster at +-190 has the
--- prompt stack climbing into it from the second simultaneous prompt onward. +-270 is
--- the tightest symmetric position that is clear at any stack depth.
+-- x is not a taste call. The Alerts column is a dynamic group at x = -150 carrying
+-- 40-44px icons (span -172..-128) and it GROWS VERTICALLY, so a cluster parked closer
+-- in has the prompt stack climbing into it from the second simultaneous prompt onward.
+-- The cluster's widest ring is now THREAT_RING, so it spans -320..-220 rather than
+-- v11's -312..-228 — still 48px clear of the alert column's inner edge, and the build
+-- proves it at the bottom of this script with the stack projected six children deep
+-- instead of assuming the single-prompt case.
+local ALERTS_X    = -150  -- the Alerts dynamic group's absolute x
+local ALERT_W     = 44    -- widest alert icon (the four 44px PvP prompts)
+local ALERT_SPACE = 6     -- dynamic-group spacing, matches the F.dynGroup call below
+local ALERT_DEPTH = 6     -- how deep the stack is projected in the clearance proof
 
 -- Percentage read-outs, also shared across the seven packs. A `model` region cannot
 -- carry a text sub-region at all (SubText's supports() lists texture / progresstexture
--- / icon / aurabar / text / empty — not model), so with the portrait back in the
--- middle every number rides on its own RING and sits just OUTSIDE the cluster: health
--- under the outer ring, power under that, threat above.
-local PCT_HP     = { size = 13, y = -54 }   -- health, just under the outer ring
+-- / icon / aurabar / text / empty — not model), so with the portrait in the middle
+-- every number rides on its own RING and sits just OUTSIDE the cluster: health under
+-- the health ring, power under that, threat above.
+--   Threat moves +54 -> +58 in v12. Its ring grew from 84 to 100, so the old offset
+--   sat 4px INSIDE the new stroke (radius 50, band 42.2..50) instead of clear above it.
+local PCT_HP     = { size = 13, y = -54 }   -- health, just under the health ring
 local PCT_POWER  = { size = 10, y = -70 }   -- power, under the health number
-local PCT_THREAT = { size = 10, y =  54 }   -- threat, above the ring
+local PCT_THREAT = { size = 10, y =  58 }   -- threat, above the 100px outermost ring
 
 local COL = {
   life   = { 0.15, 0.82, 0.28, 1 },   -- health green, both clusters
   mana   = { 0.20, 0.45, 0.95, 1 },   -- mana blue; every priest spec runs on mana
-  track  = { 0, 0, 0, 0.55 },         -- the UNFILLED arc, and the target's outer track
+  track  = { 0, 0, 0, 0.55 },         -- the UNFILLED arc behind every ring's fill
   threat = { 0.25, 0.80, 0.30, 1 },   -- threat ring base, unchanged since v1
   warn   = { 1, 0.6, 0.1, 1 },        -- threat >= 70%
   danger = { 0.9, 0.12, 0.12, 1 },    -- health < 40%, and aggro
@@ -536,24 +609,14 @@ local function portrait(id, unit, x, y)
   }
 end
 
--- THE TARGET'S OUTER TRACK. A plain texture region: the same Ring_20px annulus at
--- OUTER, in the same dark the rings use for their unfilled arc, drawn UNDER the
--- threat ring. It exists because the threat ring self-hides — the Threat Situation
--- trigger produces no state unless you are on a hostile threat table, which for a
--- healer is most of the time — and without it the target cluster would drop to a
--- bare inner ring and a face whenever threat is absent, while the player cluster
--- next to it still showed two rings. It occupies exactly the circle the threat arc
--- sweeps, so it adds no element to the design: it is the outer ring's track, kept
--- alive by the target's own Health trigger.
-local function track(id, size, x, y)
-  local t = F.texture(id, CLASS, size, size, x, y, nil, RING_TEX, COL.track)
-  t.subRegions = {}
-  t.triggers = nil
-  return t
-end
+-- v11's separate "target track" texture region is gone with the cluster it padded. It
+-- existed only so the target side never dropped to one ring while the player side
+-- showed two; with one cluster on screen there is nothing to keep symmetric, and the
+-- threat ring already carries its own dark backgroundTexture annulus, so a second
+-- region drawing the same circle would be a duplicate rather than a track.
 
 -- The percentages ride on their own ring and so appear and disappear with it: no
--- target, no target number; no threat, no threat percentage.
+-- threat, no threat percentage.
 --
 -- THE OFFSET KEY IS A TRAP, and it is the exact silent-no-op shape this repo keeps
 -- getting caught by. SubText's modify() reads `data.text_anchorXOffset` /
@@ -625,25 +688,33 @@ local top = F.group(TOP, 0, TOP_Y, nil)
 top.uid = W.uid()
 
 -- =====================================================================
--- Resources (0,56): since v11 this group holds TWO CLUSTERS, each a live unit
--- portrait with two rings around it — the player's at absolute (-270, 40), the
--- target's at (+270, 110). Two rings and a face on each side is what makes them
--- read as a matched pair; a third ring is what made the earlier version look
--- busy and uneven, which is why no target power ring is built.
---   PLAYER: outer = health, inner = mana,          centre = your face
---   TARGET: outer = THREAT, inner = target health, centre = their face
--- The player's two rings are built here (they are the v6 health and mana auras,
--- converted in place so they keep their uids); the target cluster and both
--- portraits are built at the bottom of this script, after every pre-existing
--- W.uid() call, and are re-parented here.
+-- Resources (0,56): since v12 this group holds ONE CLUSTER — yours, a live 3D
+-- portrait of you inside three concentric rings, all four regions sharing the one
+-- centre at absolute (-270, 40):
+--   THREAT_RING 100  your threat on your target   (outermost)
+--   OUTER        84  your health
+--   INNER        62  your mana
+--   PORTRAIT     44  your face
+-- The target cluster that used to sit at (+270, 110) is deleted: the target's health
+-- is already on the Blizzard target frame and its nameplate, so it duplicated the
+-- default UI for the whole game.
 --
--- Threat stays with the TARGET, as it has since v7: it is your threat ON THAT
--- TARGET, so it belongs at the target, not on your own body.
+-- THREAT COMES HOME. It is the only thing the target cluster carried that nothing
+-- else on screen shows, and losing it would be a real regression — a dps who cannot
+-- see aggro coming dies — so it moves to the outermost ring of YOUR cluster, which is
+-- also the more honest reading: it is YOUR threat. Because it is gated out of arena
+-- and self-hides whenever the Threat Situation trigger has no hostile target to
+-- report on, the common solo case is still just two rings and a face; the third arc
+-- appears only when threat is real.
+--
+-- Health, mana and threat are built here (they are the v6 bar auras, converted in
+-- place so they keep their uids); the portrait is built at the bottom of this script,
+-- after every pre-existing W.uid() call, and is re-parented here.
 -- =====================================================================
 local gRes = reg(F.group("Priest - Resources", 0, RES_Y, nil))
 adopt(top, gRes)
 
--- HEALTH — the player cluster's OUTER ring (absolute -270, 40). Trigger 1 is the
+-- HEALTH — the cluster's MIDDLE ring (absolute -270, 40). Trigger 1 is the
 -- progress source; trigger 2 (Unit Characteristics) feeds the inCombat fade, exactly
 -- as the v6 bar did. Conditions apply in order and a later match wins, so the alpha
 -- guard is LAST.
@@ -665,7 +736,7 @@ health.conditions = {
 }
 adopt(gRes, health)
 
--- MANA — the player cluster's INNER ring, concentric inside health at the SAME
+-- MANA — the cluster's INNER ring, concentric inside health at the SAME
 -- centre (absolute -270, 40). Priest is mana in every spec and every form, so this
 -- ring is blue with no recolouring condition — a druid's is what needs one.
 local mana = reg(ring("Priest - Mana", INNER, COL.mana, -CLUSTER_X, CLUSTER_LOCAL_Y))
@@ -675,16 +746,27 @@ mana.subRegions[2] = mark(INNER, 50)     -- the Shadowfiend window, on the ring
 mana.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
 adopt(gRes, mana)
 
--- THREAT — the target cluster's OUTER ring (absolute +270, 110), sweeping over the
--- dark track built at the bottom of this script. The trigger only produces a state
--- for a hostile unit you are on the threat table of, so the ring self-hides out of
--- combat and while you have a friendly targeted (no fade condition needed) and the
--- track shows through underneath.
+-- THREAT — v12: the cluster's OUTERMOST ring (THREAT_RING = 100) at YOUR centre,
+-- absolute (-270, 40), concentric with health, mana and your face. It moved off the
+-- deleted target cluster and it is the only thing that came with it: nothing else in
+-- this HUD or in the default UI tells you that you are about to pull, and that is the
+-- one number a dps dies for not watching.
+--
+-- SIZE AND POSITION ARE THE ONLY FIELDS THAT CHANGED. Same uid, same id, same Threat
+-- Situation trigger (threatUnit = "target"), same escalation on foregroundColor, same
+-- not-arena load gate, same threatvalue guard, same green/orange/red. The trigger only
+-- produces a state for a hostile unit whose threat table you are on, so the ring
+-- self-hides out of combat and while you have a friendly targeted — no fade condition
+-- needed, and no dark track region needed either: a progresstexture's own
+-- backgroundTexture annulus is the track, and when the ring is stateless there is
+-- nothing left on screen to leave a hole in.
+--
 -- Green -> orange at 70% -> red on aggro; conditions run in order, most severe last.
--- It is adopted at the very BOTTOM of this script rather than here: adoption order
--- is draw order within a frame strata (+4 frame levels per child), and this ring has
--- to sit above the track it sweeps over.
-local threat = reg(ring("Priest - Threat", OUTER, COL.threat, CLUSTER_X, TARGET_LOCAL_Y))
+-- It is adopted at the very BOTTOM of this script rather than here: adoption order is
+-- draw order within a frame strata (+4 frame levels per child), and the outermost ring
+-- is the one that should draw last.
+local threat = reg(ring("Priest - Threat", THREAT_RING, COL.threat,
+  -CLUSTER_X, CLUSTER_LOCAL_Y))
 threat.triggers = F.triggers({ threatTrigger("target", nil) })
 threat.subRegions[1] = pct("threatpct", PCT_THREAT, COL.thText)
 threat.conditions = {
@@ -1303,69 +1385,39 @@ emana.load = pvpLoad(true)
 adopt(gPvP, emana)
 
 -- =====================================================================
--- The rest of the ring cluster. Created after every earlier W.uid() call, so
--- all 40 v6 uids keep their positions in the seeded stream, then re-parented
--- into the Resources group. Adoption order is also draw order:
--- FixGroupChildrenOrder adds +4 frame levels per child as it walks
+-- THE FACE, and the three uid slots the target cluster used to occupy. Created after
+-- every earlier W.uid() call, so all 40 v6 uids keep their positions in the seeded
+-- stream, then re-parented into the Resources group. Adoption order is also draw
+-- order: FixGroupChildrenOrder adds +4 frame levels per child as it walks
 -- controlledChildren, so EARLIER = further behind.
 --
--- These four uids have now been RECYCLED twice and never appended to or dropped:
--- the two portraits the globes retired come back to being portraits, in the same
--- four W.uid() slots they have occupied since v7. Deleting a region and appending
--- a replacement would leave an orphan aura in every installed copy of this pack;
--- recycling leaves none, and the uid() call ORDER is byte-identical to v7-v10.
---   v7/v8 slot                 v9/v10 region              v11 region
---   Priest - Target Health     the target globe        -> target INNER ring (health)
---   Priest - Target Mana    -> "Priest - Target Rim"   -> "Priest - Target Track"
---   Priest - Player Portrait-> "Priest - Life Rim"     -> "Priest - Player Portrait"
---   Priest - Target Portrait-> "Priest - Power Rim"    -> "Priest - Target Portrait"
--- The v9 note that "three vessels is the canonical set and a target power globe is
--- not one of them" still holds for exactly the same reason on rings: the approved
--- design is TWO rings and a face per cluster, and the third ring is what made the
--- earlier version look busy and uneven. In arena the Mana Burn scoreboard
--- (Priest - Enemy Mana, v5) still covers the target-mana case that decides a press.
+-- BURNED SLOTS, AND WHY THEY ARE NOT FILLED. v12 deletes three regions, so three uids
+-- from this seeded stream have no home. The tempting fixes are both wrong:
+--   * inventing a filler region to absorb a slot is how a HUD accumulates junk, and
+--   * simply deleting the three ring()/track()/portrait() calls would SHIFT every
+--     later call in the stream — Priest - Player Portrait sits BETWEEN two of them and
+--     would silently inherit Priest - Target Health's uid, which WeakAuras would then
+--     match against the installed target ring and "Update" a face over it.
+-- So the calls are replaced by bare W.uid() calls whose result is discarded, at the
+-- exact positions they held since v7. The surviving portrait keeps the uid it has had
+-- for five versions, and no future version can ever hand a deleted region's uid to a
+-- new aura, because these three draws stay burned forever.
+--   slot 1 (was Priest - Target Health)    burned
+--   slot 2 (was Priest - Target Track)     burned
+--   slot 3      Priest - Player Portrait   KEPT
+--   slot 4 (was Priest - Target Portrait)  burned
+-- The three deleted ids are declared at the top of this file in the WA-REMOVED lines
+-- tools/verify-packs.lua reads, and named in README "After updating" — WeakAuras never
+-- deletes an aura an import does not mention, so the player deletes them by hand once.
 -- =====================================================================
 
--- TARGET HEALTH — the target cluster's INNER ring (absolute +270, 110). This is the
--- whole self-hide mechanism for the target side: the Health prototype ends in a
--- hidden always-on test,
---   WeakAuras.UnitExistsFixed(unit, smart) and specificUnitCheck
--- ANDed into the trigger function, so unit = "target" with no target produces NO
--- STATE and every region carrying it disappears. No condition, no load gate, no
--- custom code. The factory's healthTrigger is hardwired to the player, so the
--- unit is overridden here — the same one-line pattern the v5 Enemy Mana bars use.
--- It is health, so it is health green like yours, and it takes the same 13px number
--- at the same offset as yours: the two clusters are a matched pair.
-local tHealthTrigger = F.healthTrigger(nil)
-tHealthTrigger.unit = "target"
-local tHealth = reg(ring("Priest - Target Health", INNER, COL.life,
-  CLUSTER_X, TARGET_LOCAL_Y, tHealthTrigger))
-tHealth.subRegions[1] = pct("percenthealth", PCT_HP, COL.hpText)
--- same zero-total guard as your own health ring, and it matters more here: a target
--- whose max health has not streamed yet would otherwise flash a full circle
-tHealth.conditions = { F.condition(1, "maxhealth", "<=", "0", "alpha", 0) }
-adopt(gRes, tHealth)
+W.uid()  -- burned: the v7-v11 "Priest - Target Health" slot (target inner ring)
+W.uid()  -- burned: the v7-v11 "Priest - Target Track" slot (target outer annulus)
 
--- TARGET TRACK — the dark outer annulus under the threat ring (the recycled
--- target-mana uid). Without it the target cluster would drop to one ring and a face
--- whenever you are not on a threat table, which for a healer is most of the time:
--- the threat ring only exists while the Threat Situation trigger produces a state.
--- It carries the target's Health trigger, so it appears and vanishes with the
--- cluster it belongs to, and the same zero-total guard, so the pair hides as one
--- object. It draws in exactly the circle the threat arc sweeps, so the design is
--- still two rings and a face.
-local tTrackTrigger = F.healthTrigger(nil)
-tTrackTrigger.unit = "target"
-local tTrack = reg(track("Priest - Target Track", OUTER, CLUSTER_X, TARGET_LOCAL_Y))
-tTrack.triggers = F.triggers({ tTrackTrigger })
-tTrack.conditions = { F.condition(1, "maxhealth", "<=", "0", "alpha", 0) }
-adopt(gRes, tTrack)
-
--- THE TWO FACES. Each portrait takes the same triggers as the rings around it, so a
--- cluster lives and fades as ONE object: yours gets the player Health + Unit
--- Characteristics pair (hence the same out-of-combat fade your rings have, and the
--- same zero-total guard), the target's gets the target Health trigger and vanishes
--- with the rest of its cluster when you have no target.
+-- YOUR FACE. The portrait takes the same triggers as the rings around it, so the
+-- cluster lives and fades as ONE object: the player Health + Unit Characteristics
+-- pair, hence the same out-of-combat fade the rings have and the same zero-total
+-- guard. The target's face is gone with the rest of its cluster.
 local pPortrait = reg(portrait("Priest - Player Portrait", "player",
   -CLUSTER_X, CLUSTER_LOCAL_Y))
 pPortrait.triggers = F.triggers({ F.healthTrigger(nil), F.unitCharTrigger() })
@@ -1375,17 +1427,11 @@ pPortrait.conditions = {
 }
 adopt(gRes, pPortrait)
 
-local tPortraitTrigger = F.healthTrigger(nil)
-tPortraitTrigger.unit = "target"
-local tPortrait = reg(portrait("Priest - Target Portrait", "target",
-  CLUSTER_X, TARGET_LOCAL_Y))
-tPortrait.triggers = F.triggers({ tPortraitTrigger })
-tPortrait.conditions = { F.condition(1, "maxhealth", "<=", "0", "alpha", 0) }
-adopt(gRes, tPortrait)
+W.uid()  -- burned: the v7-v11 "Priest - Target Portrait" slot (target face)
 
--- The threat ring goes in LAST, so it draws over the target track it sweeps: same
--- frame strata (1), and within a strata the later child carries the higher frame
--- level (+4 per child, in controlledChildren order).
+-- The threat ring goes in LAST: same frame strata (1), and within a strata the later
+-- child carries the higher frame level (+4 per child, in controlledChildren order), so
+-- the outermost ring of the cluster is also the one drawn on top.
 adopt(gRes, threat)
 
 -- ===== icon polish: crop + 1px outline on every icon =====
@@ -1421,15 +1467,13 @@ local function absolute(id)
   return x, y
 end
 
-for _, want in ipairs({
-  { "Priest - Health",          -CLUSTER_X, CLUSTER_Y, OUTER },
-  { "Priest - Mana",            -CLUSTER_X, CLUSTER_Y, INNER },
-  { "Priest - Player Portrait", -CLUSTER_X, CLUSTER_Y, PORTRAIT },
-  { "Priest - Threat",           CLUSTER_X, TARGET_Y,  OUTER },
-  { "Priest - Target Health",    CLUSTER_X, TARGET_Y,  INNER },
-  { "Priest - Target Track",     CLUSTER_X, TARGET_Y,  OUTER },
-  { "Priest - Target Portrait",  CLUSTER_X, TARGET_Y,  PORTRAIT },
-}) do
+local CLUSTER = {
+  { "Priest - Threat",           -CLUSTER_X, CLUSTER_Y, THREAT_RING },
+  { "Priest - Health",           -CLUSTER_X, CLUSTER_Y, OUTER },
+  { "Priest - Mana",             -CLUSTER_X, CLUSTER_Y, INNER },
+  { "Priest - Player Portrait",  -CLUSTER_X, CLUSTER_Y, PORTRAIT },
+}
+for _, want in ipairs(CLUSTER) do
   local id, wx, wy, size = want[1], want[2], want[3], want[4]
   local x, y = absolute(id)
   assert(x == wx and y == wy,
@@ -1437,6 +1481,57 @@ for _, want in ipairs({
   local node = nodes[id]
   assert(node.width == size and node.height == size,
     ("%s is %sx%s, canon is %d"):format(id, tostring(node.width), tostring(node.height), size))
+end
+
+-- CONCENTRIC, stated as its own assertion rather than inferred from the table above:
+-- four regions of four different diameters are only a cluster if they share ONE
+-- centre, and "each is at (-270, 40)" and "all four are at the same point" are
+-- different claims when one of them is typed wrong.
+do
+  local cx, cy = absolute(CLUSTER[1][1])
+  for _, want in ipairs(CLUSTER) do
+    local x, y = absolute(want[1])
+    assert(x == cx and y == cy,
+      ("%s centre (%d,%d) is not concentric with (%d,%d)"):format(want[1], x, y, cx, cy))
+    assert(nodes[want[1]].selfPoint == "CENTER" and nodes[want[1]].anchorPoint == "CENTER",
+      want[1] .. ": a shared centre only means concentric if both anchors are CENTER")
+  end
+end
+
+-- THE TARGET CLUSTER IS GONE, checked against the shipped data rather than against
+-- the source that built it: an id left behind in a table somewhere would otherwise
+-- ship a lone target ring with no cluster around it.
+for _, id in ipairs(REMOVED) do
+  assert(not nodes[id], id .. " is declared removed but is still in the string")
+end
+
+-- ALERT-COLUMN CLEARANCE, with the stack projected ALERT_DEPTH children deep. The
+-- Alerts column is a dynamic group: it is one aura wide in the source and as tall as
+-- the number of simultaneous prompts, so measuring it at rest is what let an earlier
+-- pass ship a cluster that only cleared while a single alert was showing. Growth is
+-- vertical ("UP"), so depth changes the column's HEIGHT, never its width — the proof
+-- therefore computes the projected stack's full bounding box and requires the ring to
+-- clear it in x whatever the height turns out to be.
+do
+  local ringSpan     = THREAT_RING / 2
+  local clusterRight = -CLUSTER_X + ringSpan            -- -220
+  local alertLeft    = ALERTS_X - ALERT_W / 2           -- -172
+  local stackHeight  = ALERT_DEPTH * ALERT_W + (ALERT_DEPTH - 1) * ALERT_SPACE
+  local ax, ay       = absolute("Priest - Alerts")
+  local stackTop     = ay + stackHeight                 -- grow = "UP", selfPoint BOTTOM
+  assert(ax == ALERTS_X,
+    ("Alerts column sits at x=%d, the clearance proof assumes %d"):format(ax, ALERTS_X))
+  assert(clusterRight < alertLeft,
+    ("threat ring reaches x=%d; the %d-deep alert stack starts at x=%d")
+      :format(clusterRight, ALERT_DEPTH, alertLeft))
+  -- The vertical overlap is real and expected (the stack climbs past the cluster's
+  -- band from the third prompt on), which is exactly why the x gap has to be proven
+  -- rather than assumed away.
+  assert(stackTop > CLUSTER_Y - ringSpan,
+    "projected alert stack does not reach the cluster band; recheck ALERT_DEPTH")
+  print(("clearance: threat ring x %d..%d | %d-deep alert stack x %d..%d, y %d..%d -> %dpx gap")
+    :format(-CLUSTER_X - ringSpan, clusterRight, ALERT_DEPTH,
+      alertLeft, ALERTS_X + ALERT_W / 2, ay, stackTop, alertLeft - clusterRight))
 end
 
 -- Each breakpoint mark, checked the other way round: radius and angle are recovered
@@ -1461,8 +1556,11 @@ end
 -- uid continuity against the previous on-disk version, measured BEFORE the file is
 -- overwritten, so every future re-run is checked against the string that shipped
 local txtPath = dir .. "/all-specs.txt"
+-- REMOVED is the licence: exactly the three target-cluster ids may lose their uid, and
+-- any OTHER disappearance still fails here. `changed` (an id that kept its name and
+-- swapped uid) is never forgivable and is asserted independently inside the helper.
 local cont = W.uidContinuity(encoded, txtPath)
-W.assertUidContinuity(cont, "priest")
+W.assertUidContinuity(cont, "priest", REMOVED)
 
 local out = assert(io.open(txtPath, "w"))
 out:write(encoded)  -- single line, no trailing newline
@@ -1471,6 +1569,9 @@ out:close()
 print(("OK: %d auras (top group + %d children), %d chars -> all-specs.txt")
   :format(#transmit.c + 1, #transmit.c, #encoded))
 if cont then
-  print(("uid continuity vs previous: stable=%d changed=%d parentSame=%s")
-    :format(cont.stable, cont.changed, tostring(cont.parentSame)))
+  print(("uid continuity vs previous: stable=%d changed=%d retained=%d missing=%d parentSame=%s")
+    :format(cont.stable, cont.changed, cont.retained, cont.missing, tostring(cont.parentSame)))
+  if cont.missing > 0 then
+    print("  deliberately removed: " .. table.concat(cont.missingIds, ", "))
+  end
 end
