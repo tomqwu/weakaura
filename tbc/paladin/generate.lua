@@ -1,4 +1,4 @@
--- generate.lua — "Paladin TBC - All Specs" (v16)
+-- generate.lua — "Paladin TBC - All Specs" (v17)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code)
 -- except the rail region tables, which wa_factory has no builder for.
@@ -1461,6 +1461,10 @@ end
 -- appears when you start swinging and vanishes when you stop.
 local SWING_GATE = 20375                     -- Seal of Command r1
 local SEAL_OF_COMMAND = { 20375, 20915, 20918, 20919, 20920, 27170 }
+-- The seals you actually twist SoC against: the damage-for-health pair, one per faction.
+-- Deliberately NOT every non-SoC seal — see the RE-SEAL note for why the third trigger is
+-- narrow. Both ids are already in the SEALS census above (Blood 31892 / the Martyr 348700).
+local TWIST_SEALS = { 31892, 348700 }
 local TWIST_WINDOW = "0.4"                   -- seconds before impact
 local function swingTrigger()
   local tr = { type = "unit", event = "Swing Timer", use_hand = true, hand = "main" }
@@ -1598,6 +1602,43 @@ twist.load.use_combat = true
 gate(twist, SWING_GATE)
 polish(twist)
 adopt(gAlerts, twist)
+
+-- 33) v17 — RE-SEAL: the OTHER half of the twist cycle, which nothing prompted until now.
+--
+-- THE GAP THIS CLOSES. `Twist NOW` above requires Seal of Command to be UP (trigger 2) and
+-- you to be swinging (trigger 1). So it tells you to press your second seal — and the instant
+-- you obey, Seal of Command is gone, the prompt vanishes, and NOTHING told you to put it back
+-- on before the next swing. `Seal MISSING (Ret)` does not cover it either: it fires only when
+-- no seal at all is up, and after a twist a seal IS up. The half of the cycle that is easiest
+-- to forget under pressure was the half with no cue. This is its mirror image:
+--     swinging  AND  Seal of Command MISSING  AND  a twist seal present
+-- so between the two auras the SoC -> twist-seal -> SoC loop is prompted end to end.
+--
+-- WHY THE THIRD TRIGGER, RATHER THAN JUST "SoC IS MISSING". Requiring the twist seal makes
+-- this prompt and `Seal MISSING (Ret)` MUTUALLY EXCLUSIVE by construction: with no seal at all
+-- the missing-seal alarm owns the moment, and this stays silent instead of shouting a second,
+-- less urgent instruction over it.
+--
+-- THE ICON IS NOT HARD-CODED, AND THAT IS DELIBERATE. `Paladin - Twist NOW` ships
+-- displayIcon = ability_paladin_sealofblood, which is the HORDE seal — its logic is
+-- faction-correct (it watches Seal of Command, not the seal you twist to) but an Alliance
+-- paladin sees the wrong art, and guessing a Seal of the Martyr texture path is exactly the
+-- kind of unverifiable string that renders as a question mark. So this aura resolves its icon
+-- from the client instead. Verified in the installed WeakAuras 5.21.10:
+--   * Icon.lua UpdateIcon(): iconSource == -1 -> state.icon, 0 -> displayIcon, N -> states[N].icon
+--   * BuffTrigger2.lua GetNameAndIconSimple(): when useExactSpellId is set it walks
+--     trigger.auraspellids and returns GetSpellInfo(spellId)'s icon
+--   * that value becomes `fallbackIcon`, which is what an UNMATCHED (showOnMissing) state
+--     carries (BuffTrigger2.lua lines 978, 1003, 1017-1018)
+-- so iconSource = 2 pulls Seal of Command's real in-game art out of the missing-aura trigger:
+-- correct on every client, every locale, and every faction, with no texture path to get wrong.
+-- IT IS BUILT AT THE FOOT OF THIS SCRIPT, NOT HERE, AND THAT IS NOT A STYLE CHOICE.
+-- F.icon() consumes a W.uid() the moment it is called, so constructing a new aura at its
+-- logical position would shift every uid() call after it and re-number 13 existing auras —
+-- which WeakAuras matches on, so half the pack would import as duplicates instead of an
+-- Update. New auras append their uid AFTER every existing call site, next to the v14
+-- burners. Search "RE-SEAL, built last" below; it is adopted into gAlerts all the same, so
+-- it lands in the alert column exactly as if it had been written here.
 
 -- ===== 34-44) v5: the PvP layer — arena and battleground only =====
 -- Everything below is gated on WeakAuras' `size` load arg (UI label "Instance Size
@@ -1988,6 +2029,29 @@ pPortrait.conditions = { F.condition(2, "inCombat", "==", 0, "alpha", 0.5) }
 -- "Update" over the target portrait still sitting in the player's saved variables.
 W.uid()   -- was: Paladin - Target Portrait (deleted in v14)
 
+-- ===== v17) RE-SEAL, built last =====
+-- The aura this pack adds in v17. Its full rationale sits at its logical position, next to
+-- `Paladin - Twist NOW`; only the CONSTRUCTION lives down here, because F.icon() consumes a
+-- W.uid() where it is called and this must take the NEXT draw from the seeded stream — after
+-- every existing call site, including the three burners above. Built here, the other 45 auras
+-- keep byte-identical uids and the pack imports as an Update.
+local reseal = reg(F.icon("Paladin - RE-SEAL", CLASS, 40, 40, 0, 0, gAlerts.id))
+reseal.iconSource = 2                      -- Seal of Command's own icon, resolved by the client
+reseal.cooldown = false
+reseal.triggers = F.triggers({
+  swingTrigger(),
+  F.auraTrigger("player", true, SEAL_OF_COMMAND, { matchesShowOn = "showOnMissing" }),
+  F.auraTrigger("player", true, TWIST_SEALS),
+})
+reseal.subRegions[1] = F.subglow(false, { 1, 0.82, 0.1, 1 })
+reseal.conditions = {
+  F.condition(1, "expirationTime", "<=", TWIST_WINDOW, "sub.1.glow", true),
+}
+reseal.load.use_combat = true
+gate(reseal, SWING_GATE)
+polish(reseal)
+adopt(gAlerts, reseal)
+
 -- Re-parent the regions into the Sill, BACK TO FRONT. Children draw in controlledChildren
 -- order and later ones draw on top, so this list IS the z-order:
 --   ALARM FIRST   — the 108x37 rim. It is the same FILLED art as the plate, so it cannot trace
@@ -2206,6 +2270,28 @@ do
       "twist canon: the countdown is at precision "
       .. tostring(num.text_text_format_p_decimal_precision)
       .. "; at 0 every value inside a 0.4s window floors to \"0\" and the number is useless")
+
+    -- BOTH HALVES OF THE CYCLE, OR NEITHER. Twist NOW fires while Seal of Command is UP;
+    -- RE-SEAL fires while it is MISSING and a twist seal is up. If either loses its shape the
+    -- loop goes half-prompted again, which is the exact defect v17 exists to fix — and it is
+    -- invisible in testing, because the aura that remains still looks correct on its own.
+    local rs = assert(nodes["Paladin - RE-SEAL"], "twist canon: the RE-SEAL prompt is gone")
+    local tw = assert(nodes["Paladin - Twist NOW"], "twist canon: the Twist NOW prompt is gone")
+    assert(#rs.triggers == 3 and rs.triggers.disjunctive == "all",
+      "twist canon: RE-SEAL must require ALL of swinging + SoC missing + a twist seal")
+    assert(rs.triggers[2].trigger.matchesShowOn == "showOnMissing",
+      "twist canon: RE-SEAL's Seal of Command trigger is no longer the MISSING case, so it "
+      .. "now duplicates Twist NOW instead of mirroring it")
+    assert(tw.triggers[2].trigger.matchesShowOn == nil,
+      "twist canon: Twist NOW's Seal of Command trigger became a missing-check; the two "
+      .. "prompts would then fire on the same half of the cycle and never on the other")
+    assert(#rs.triggers[3].trigger.auraspellids == #TWIST_SEALS,
+      "twist canon: RE-SEAL's third trigger no longer watches exactly the twist seals, so it "
+      .. "can now fire alongside Seal MISSING instead of being mutually exclusive with it")
+    assert(rs.iconSource == 2,
+      "twist canon: RE-SEAL's iconSource is " .. tostring(rs.iconSource) .. "; it must stay 2 "
+      .. "so the icon resolves from the Seal of Command trigger. Hard-coding a texture path "
+      .. "here is how Twist NOW ended up showing Horde art to Alliance paladins")
   end
 
   -- 2c) THE NUMBERS. Each percentage prints INSIDE its own rail at x +32, y 0. The threat one

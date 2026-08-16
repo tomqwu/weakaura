@@ -24,7 +24,7 @@ use GitHub's copy button on the block to grab the whole string in one click.
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
 | Rogue — All Specs | Combat · Assassination · Subtlety | v54 | 58 | [string](tbc/rogue/README.md#import-string-v54) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v16 | 45 | [string](tbc/paladin/README.md#import-string-v16) · [raw](tbc/paladin/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v17 | 46 | [string](tbc/paladin/README.md#import-string-v17) · [raw](tbc/paladin/all-specs.txt) |
 | Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v15 | 45 | [string](tbc/druid/README.md#import-string-v15) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v14 | 40 | [string](tbc/warlock/README.md#import-string-v14) · [raw](tbc/warlock/all-specs.txt) |
 | Hunter — BM & Survival | Beast Mastery · Survival | v15 | 49 | [string](tbc/hunter/README.md#import-string-v15) · [raw](tbc/hunter/all-specs.txt) |
@@ -105,8 +105,13 @@ acceptance note instead of presenting static serialization as an in-game test.
   length is your weapon speed, so the mark is placed by `subtick` at
   `tick_placement_mode = "AtValue"` — re-read against the live `maxValue` every update, correct
   at any weapon speed and under any haste — with the exact time left printed at one decimal
-  beside it. The bar still turns gold inside the window as the fallback cue. 45 auras in, 45
-  out, every UID stable. Plus a 14-icon cooldown row that shows only what is
+  beside it. The bar still turns gold inside the window as the fallback cue. **v17 then closes
+  the other half of the cycle**: `Twist NOW` only ever fired while Seal of Command was *up*, so
+  the moment you obeyed it the prompt vanished and nothing told you to re-apply SoC before the
+  next swing — `Seal MISSING` stayed quiet because a seal *was* up. `RE-SEAL` is its mirror
+  (swinging, SoC missing, a twist seal present), and it resolves its icon from the client rather
+  than a hard-coded path, so it is correct on both factions. 46 auras. Plus a 14-icon cooldown
+  row that shows only what is
   unavailable (rotational buttons stay visible and glow when ready); Holy / Protection /
   Retribution adapt via Holy Shock, Holy Shield and Crusader Strike gates, and the row is
   spec-selective — a healing Holy paladin is not shown Consecration or Avenging Wrath. PvP
