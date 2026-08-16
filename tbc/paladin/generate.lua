@@ -1,7 +1,62 @@
--- generate.lua — "Paladin TBC - All Specs" (v14)
+-- generate.lua — "Paladin TBC - All Specs" (v15)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code)
 -- except the ring and portrait region tables, which wa_factory has no builder for.
+--
+-- v15 — THE HEALTH NUMBER MOVES INTO THE MIDDLE OF THE CLUSTER. No aura is added, removed,
+-- retriggered, regated, recoloured, resized or repositioned. This version changes exactly
+-- three things: two sub-text offsets, two sub-text font sizes, and the ORDER the cluster's
+-- children are drawn in. All 45 auras keep their ids and their uids (changed = 0,
+-- missing = 0).
+--
+--   PCT_HP_Y      -54 ->   0   health %, dead centre, over your portrait   13pt -> 16pt
+--   PCT_POWER_Y   -70 -> -54   mana %, into the slot health just vacated   10pt -> 12pt
+--   PCT_THREAT_Y   58 ->  58   threat %, unchanged, above the 100px arc    10pt (unchanged)
+--
+--   * THE COMPLAINT THIS FIXES. v13/v14 hung both numbers BELOW the rings — health 54px down
+--     at 13pt, mana 70px down at 10pt — on the reasoning that the middle of the cluster is a
+--     face and a `model` region can never carry a text sub-region. That reasoning is still
+--     true about the MODEL, and it was the wrong conclusion about the CLUSTER: the numbers
+--     ended up as two small detached glyphs floating on open screen, with nothing behind them
+--     but whatever the game world happened to be showing. On a snow field, a lit floor or a
+--     Netherstorm skybox they simply vanish. The health percentage is the single most-read
+--     number in the pack, so it goes where the eye already is — the centre.
+--   * A MODEL STILL CANNOT CARRY TEXT, AND IT DOES NOT HAVE TO. The health % is a sub-text of
+--     the HEALTH RING, which is a progresstexture and always could carry one. anchorYOffset 0
+--     puts it at the ring's own centre, which is the cluster's centre, which is where the
+--     portrait is. The text belongs to the ring; it merely LANDS on the face.
+--   * WHY THE OFFSET ALONE DOES NOTHING — THE DRAW ORDER IS HALF THE FIX. Children of a
+--     WeakAuras group draw in controlledChildren order, later on top. Through v14 the face
+--     was adopted LAST, deliberately ("so nothing draws over it"), which also means the face
+--     draws over anything a ring's sub-text puts in the middle. Move the health number to
+--     y = 0 without touching the order and the 44px model covers it: the build changes, the
+--     screen does not. So the portrait becomes the FIRST child of the cluster:
+--         v14  { Threat, Health, Mana, Threat Flash, Player Portrait }
+--         v15  { Player Portrait, Threat, Health, Mana, Threat Flash }
+--   * WHY THAT IS SAFE, FROM THE RADII AND NOT FROM TASTE. Ring_20px is a TRUE ANNULUS, so a
+--     ring drawn above the portrait covers only its own band. At this pack's diameters the
+--     bands are threat 42.19..50.00, health 35.44..42.00, mana 26.16..31.00 and the portrait
+--     is 0..22 — no band reaches the face at all. (The stroke is 20/256 of the drawn size,
+--     hence 3.9px at 100 and 3.3px at 84.) The only ring-owned pixels that now land inside
+--     22px of centre are the sub-texts, which is the entire point. The Threat Flash is the
+--     same annulus at the same 100px radius, so it also cannot touch the face — its old
+--     comment already said so "whatever order it is adopted in", and v15 is the version that
+--     takes it up on that.
+--   * REORDERING CONSUMES NO UID. adopt() only writes `parent` and appends to
+--     controlledChildren; every W.uid() call site and its ORDER is untouched, so the seeded
+--     stream is identical and all 45 uids are byte-for-byte what v14 shipped. F.assemble
+--     walks controlledChildren depth-first, so the flat `c` list reorders WITH the group and
+--     stays consistent — W.verify enforces that pairing, which is why a half-done reorder
+--     fails the build instead of shipping.
+--   * THE MANA NUMBER TAKES THE FREED SLOT rather than staying at -70. Health vacates -54,
+--     which is the slot just under the 84px ring; leaving mana at -70 would strand it 70px
+--     down with nothing above it. 12pt (up from 10) because it is now the only number under
+--     the cluster and no longer has to be the smaller of a stacked pair. It keeps its blue
+--     tint, which is what identifies it now that it does not sit beneath a white sibling.
+--   * NOTHING ELSE. Same triggers, load gates, conditions, colours, diameters, cluster
+--     position, Swing Timer, buff row, alert column, cooldown row and PvP layer as v14. The
+--     Swing Timer clearance is unchanged and unaffected: the mana number rising from y = -30
+--     to y = -14 moves it AWAY from the runway at y = -71.5.
 --
 -- v14 — ONE CLUSTER. THE TARGET CLUSTER IS DELETED AND THREAT COMES HOME. Three auras are
 -- REMOVED — the first deletion this pack has ever shipped — the threat ring moves onto the
@@ -60,8 +115,11 @@
 --     100px ring spans x -320..-220 against the Alerts column's -170..-130, which is a
 --     vertical-growth dynamic group, so the 50px gap holds at ANY stack depth.
 --
--- The three auras v14 removes, declared for the verifier (see tools/verify-packs.lua). These
--- lines are the licence for the three disappearing uids and they expire at v15:
+-- The three auras v14 removed, declared for the verifier (see tools/verify-packs.lua). Only
+-- entries tagged with the version this script currently ships are honoured, so at v15 these
+-- lines are EXPIRED — inert history, not a standing licence. That is the design: the
+-- allowance dies at the next version bump instead of quietly covering a future deletion.
+-- Kept because the README still tells v13-and-earlier upgraders to delete these by hand:
 -- WA-REMOVED (v14): Paladin - Target Rings
 -- WA-REMOVED (v14): Paladin - Target Health
 -- WA-REMOVED (v14): Paladin - Target Portrait
@@ -645,12 +703,18 @@ local PORTRAIT    =  44  -- live unit portrait (44/84 = the approved face-to-hea
 local CLUSTER_X = -270  -- ABSOLUTE screen x of the (only) cluster
 local CLUSTER_Y =   40  -- ABSOLUTE screen y of the (only) cluster
 
--- The numbers hang OUTSIDE the rings, because the middle of the cluster is a face and a
--- `model` region can never carry a text sub-region. Health just under the health ring, power
--- stacked under it, threat above the ring it belongs to — which since v14 is the outermost
--- one, so the threat number moves out with it, 54 -> 58.
-local PCT_HP_SIZE,     PCT_HP_Y     = 13, -54
-local PCT_POWER_SIZE,  PCT_POWER_Y  = 10, -70
+-- WHERE THE NUMBERS GO (v15). Health is the most-read number in the pack, so it sits at the
+-- cluster's CENTRE — anchorYOffset 0 on the health ring's own sub-text, landing on the 44px
+-- portrait, which is the only thing in the middle with enough contrast to read a white 16pt
+-- outline against. The face is not covered: it is the FIRST child of the cluster since v15,
+-- so the rings (and therefore their text) draw over it, and a ring is an annulus whose band
+-- never reaches the middle. See the v15 header for the radii that make that a fact, not a
+-- hope. Mana takes the slot health vacated, just under the 84px ring, at 12pt now that it is
+-- the only number down there. Threat is unchanged: above the 100px arc it belongs to.
+-- These are sub-texts of a `progresstexture`; a `model` still cannot carry text at all, which
+-- is exactly why the health number rides the RING and not the portrait.
+local PCT_HP_SIZE,     PCT_HP_Y     = 16,   0
+local PCT_POWER_SIZE,  PCT_POWER_Y  = 12, -54
 local PCT_THREAT_SIZE, PCT_THREAT_Y = 10,  58
 
 -- The RADIAL fill path. Only CLOCKWISE / ANTICLOCKWISE are radial in
@@ -814,11 +878,12 @@ local function portrait(id, unit, trigs)
   }
 end
 
--- The percentages hang OUTSIDE the rings, because the middle of each cluster is a face again
--- and a `model` region can never carry a text sub-region (SubText's supports() gate lists
--- texture / progresstexture / icon / aurabar / empty — not model). Each number rides on its
--- own ring, so it appears and disappears with it: no target, no number; no threat table, no
--- threat percentage.
+-- Every percentage is a sub-text of a RING, never of the portrait: SubText's supports() gate
+-- lists texture / progresstexture / icon / aurabar / empty — not model — so a `model` region
+-- can never carry text. That constraint is about which region OWNS the text, not about where
+-- the text may land. Since v15 the health number is anchored at the ring's own centre and
+-- therefore draws ON the face; mana and threat sit outside the arcs. Each number rides on its
+-- own ring, so it appears and disappears with it: no threat table, no threat percentage.
 local function pct(sym, size, yOffset, color)
   local st = F.subtext("%" .. sym .. "%%", size, "CENTER", sym)
   st.anchorYOffset = yOffset
@@ -853,7 +918,8 @@ adopt(top, gRes)
 -- v14 does not move it or resize it by a pixel — threat arrives OUTSIDE it, at 100px.
 -- Trigger 2 is the existing Unit Characteristics state feeder and drives the out-of-combat
 -- fade ONLY; progress comes from trigger 1 (Automatic progress = first active trigger).
--- The percentage goes back outside the ring at 13pt — the centre is a face again.
+-- v15 moves this ring's percentage to the CENTRE of the cluster at 16pt (anchorYOffset 0),
+-- where it prints over the portrait. The ring is unchanged in every other respect.
 local hp = reg(ring("Paladin - Health", OUTER, COL.life,
   { F.healthTrigger(), F.unitCharTrigger() }))
 addSub(hp, pct("percenthealth", PCT_HP_SIZE, PCT_HP_Y, COL.pctText))
@@ -1581,23 +1647,27 @@ pvpCd("Hammer of Justice (PvP)", "Hammer of Justice", 853, GATE_HOLY)
 --
 -- Sibling stacking inside a group is exact, not "roughly creation order":
 -- FixGroupChildrenOrder walks controlledChildren and adds +4 frame levels per child, so
--- EARLIER = FURTHER BEHIND. Threat first (the outermost arc), then health, then mana, then
--- the flare, and the FACE LAST so nothing draws over it.
+-- EARLIER = FURTHER BEHIND. v15 uses that deliberately: the FACE IS FIRST — furthest back —
+-- and the four annuli stack in front of it (threat, health, mana, flare). Putting the face
+-- behind is what lets the health ring's centred percentage print ON it; putting it in front,
+-- as v14 did, is what would hide that number completely. Nothing about the face is lost,
+-- because everything now in front of it is a ring band that never reaches the middle.
 --
 -- ABSOLUTE POSITIONS — the whole point of CLUSTER_X / CLUSTER_Y being absolute numbers. The
 -- cluster group carries its screen position ONCE and every region inside it sits at (0, 0),
 -- so a ring cannot drift from its own portrait and the three arcs are concentric by
--- construction. Walk the chain (v14):
+-- construction. Walk the chain (v15 — same coordinates as v14, listed in the new draw order,
+-- back to front):
 --   top ................. (   0, -140)
 --   + Resources ......... (   0, +140)  = (   0,    0)  bandY cancels the top group's drop
 --   + Player Rings ...... (-270,  +40)  = (-270,  +40)  CLUSTER_X / CLUSTER_Y, carried once
+--     + player face ..... (   0,    0)  = (-270,  +40)   44px, FIRST = furthest back (v15)
 --     + threat ring ..... (   0,    0)  = (-270,  +40)  100px, x -320..-220, y -10..+90
---     + health ring ..... (   0,    0)  = (-270,  +40)   84px
+--     + health ring ..... (   0,    0)  = (-270,  +40)   84px, its % at the centre (v15)
 --     + mana ring ....... (   0,    0)  = (-270,  +40)   62px
 --     + threat flare .... (   0,    0)  = (-270,  +40)  100px, ON the threat ring
---     + player face ..... (   0,    0)  = (-270,  +40)   44px
 -- This is verified by decoding the shipped string and summing the parent chain, not by
--- reading it off this comment.
+-- reading it off this comment; v15 additionally proves the child ORDER off the same decode.
 
 -- 44) THE CLUSTER. Its own group, so it can be dragged as one rigid object; every region
 -- inside it is at (0, 0), which is what makes the arcs share a centre. It keeps the id, the
@@ -1626,13 +1696,24 @@ local pPortrait = reg(portrait("Paladin - Player Portrait", "player", { F.health
 -- "Update" over the target portrait still sitting in the player's saved variables.
 W.uid()   -- was: Paladin - Target Portrait (deleted in v14)
 
--- Re-parent the regions into the cluster, back to front. None of these consume a uid — they
--- were constructed in their original positions above.
+-- Re-parent the regions into the cluster, BACK TO FRONT. Children draw in controlledChildren
+-- order and later ones draw on top, so this list IS the z-order and v15 changes it: the face
+-- moves from last to FIRST. Through v14 it was adopted last "so nothing draws over it", which
+-- is also what made it cover the health percentage the instant that number moved to the
+-- centre — the offset change alone would have been invisible. Putting the face at the bottom
+-- of the stack costs nothing, because every region above it is a true annulus (Ring_20px,
+-- and the flare is the same texture): their bands are 42.19..50.00, 35.44..42.00 and
+-- 26.16..31.00 from centre, all clear of the portrait's 0..22. The only ring-owned pixels
+-- that reach the middle are the sub-texts, which is the whole intent.
+-- None of these consume a uid — every region was constructed, in its original position and
+-- in its original order, above. F.assemble walks controlledChildren depth-first, so the flat
+-- child list reorders with this list and W.verify's parent/controlledChildren cross-check
+-- fails the build if the two ever disagree.
+adopt(gPlayerOrb, pPortrait)   -- the face, FIRST since v15, so the rings' text prints on it
 adopt(gPlayerOrb, th)          -- outermost arc: YOUR threat, 100px (v14)
-adopt(gPlayerOrb, hp)          -- health, 84px
+adopt(gPlayerOrb, hp)          -- health, 84px — its % lands dead centre, on the face
 adopt(gPlayerOrb, mp)          -- mana, 62px
 adopt(gPlayerOrb, flash)       -- the >=80% flare, on the threat arc's own radius
-adopt(gPlayerOrb, pPortrait)   -- the face, last, so nothing draws over it
 
 adopt(gRes, swing)             -- sibling of the cluster; see its own note above
 
@@ -1688,8 +1769,49 @@ do
       ("geometry proof: %s is %sx%s, expected %d"):format(id, tostring(node.width),
         tostring(node.height), size))
   end
-  assert(nodes["Paladin - Threat"].subRegions[1].anchorYOffset == PCT_THREAT_Y,
-    "geometry proof: the threat percentage did not move out with its ring")
+  -- 2b) THE THREE NUMBERS, offset AND size, read off the shipped string. v15 exists because
+  --     these were asserted in prose for six versions while the health number sat 54px below
+  --     the cluster on open screen.
+  for _, want in ipairs({
+    { "Paladin - Health", PCT_HP_Y,     PCT_HP_SIZE     },
+    { "Paladin - Mana",   PCT_POWER_Y,  PCT_POWER_SIZE  },
+    { "Paladin - Threat", PCT_THREAT_Y, PCT_THREAT_SIZE },
+  }) do
+    local id, y, size = want[1], want[2], want[3]
+    local st = assert(nodes[id].subRegions[1], "geometry proof: " .. id .. " lost its percentage")
+    assert(st.type == "subtext", "geometry proof: " .. id .. " subRegion 1 is not the percentage")
+    assert(st.anchorYOffset == y,
+      ("geometry proof: %s%% is at y %s, expected %d"):format(id, tostring(st.anchorYOffset), y))
+    assert(st.text_fontSize == size,
+      ("geometry proof: %s%% is %spt, expected %dpt"):format(id, tostring(st.text_fontSize), size))
+    assert(st.text_fontType == "OUTLINE",
+      "geometry proof: " .. id .. " lost its outline, which is what makes it read on open screen")
+  end
+  assert(nodes["Paladin - Health"].subRegions[1].anchorYOffset == 0,
+    "geometry proof: the health percentage is not at the centre of the cluster")
+
+  -- 2c) DRAW ORDER (v15). Children draw in controlledChildren order, later on top, so the
+  --     portrait must come FIRST or it covers the health number the centre offset just put
+  --     on it. A ring above the face hides nothing: the bands never reach the middle.
+  local order = nodes["Paladin - Player Rings"].controlledChildren
+  assert(order[1] == "Paladin - Player Portrait",
+    ("draw-order proof: cluster child 1 is %s, expected the portrait — the face would cover "
+      .. "the centred health percentage"):format(tostring(order[1])))
+  for i = 2, #order do
+    assert(order[i] ~= "Paladin - Player Portrait",
+      "draw-order proof: the portrait is listed twice in the cluster")
+  end
+  --     ...and the flat child list must agree, because WA rebuilds z-order from it.
+  local flat = {}
+  for _, ch in ipairs(back.c) do
+    if ch.parent == "Paladin - Player Rings" then flat[#flat + 1] = ch.id end
+  end
+  assert(#flat == #order, "draw-order proof: cluster child count differs between c and CC")
+  for i = 1, #order do
+    assert(flat[i] == order[i],
+      ("draw-order proof: child %d is %s in controlledChildren but %s in the flat list")
+        :format(i, order[i], flat[i]))
+  end
 
   -- 3) the deleted regions really are gone from the shipped string.
   for _, id in ipairs({ "Paladin - Target Rings", "Paladin - Target Health",
@@ -1723,21 +1845,23 @@ do
   print(("geometry: cluster (%d, %d) concentric 100/84/62/44; alert column x %d..%d clears "
     .. "the cluster's %d by %dpx with a %d-deep stack reaching y %d")
     :format(cx, cy, alertLeft, alertRight, clusterRight, gap, DEPTH, stackTop))
+  print(("draw order: %s"):format(table.concat(order, " -> ")))
+  print(("numbers: health %dpt @ y%+d (centre, on the face), mana %dpt @ y%+d, threat %dpt @ y%+d")
+    :format(PCT_HP_SIZE, PCT_HP_Y, PCT_POWER_SIZE, PCT_POWER_Y, PCT_THREAT_SIZE, PCT_THREAT_Y))
 end
 
 local outPath = dir .. "/all-specs.txt"
 -- Compare against the previously shipped build BEFORE overwriting it: every future version
--- gets the uid-continuity check for free (changed must stay 0). v14 is the first version of
--- this pack that DELETES regions, so it hands the assertion an explicit removal list — the
--- same three ids the WA-REMOVED lines at the top declare to tools/verify-packs.lua. Anything
--- else that loses its uid is still a hard build failure. Once v15 exists this list can go:
--- the three auras will be absent from both sides of the comparison.
+-- gets the uid-continuity check for free (changed must stay 0). v14 was the one version of
+-- this pack that DELETED regions and it passed an explicit removal list here; that licence
+-- expired with the version bump, exactly as designed — the three ids are now absent from both
+-- sides of the comparison, so the list is gone and the strict default is back.
 local cont = W.uidContinuity(encoded, outPath)
-W.assertUidContinuity(cont, "paladin", {
-  "Paladin - Target Rings",
-  "Paladin - Target Health",
-  "Paladin - Target Portrait",
-})
+-- v15 hands NO allowance list: the three ids v14 deleted are absent from both sides of the
+-- comparison now, so the strict default is back — no uid may disappear, full stop. v15 adds
+-- and removes nothing, and reordering children consumes no uid, so this must report
+-- changed = 0 AND missing = 0 against v14.
+W.assertUidContinuity(cont, "paladin")
 
 local out = io.open(outPath, "w")
 out:write(encoded)

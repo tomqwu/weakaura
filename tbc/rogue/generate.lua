@@ -1,23 +1,20 @@
--- generate.lua — Rogue TBC All-Specs HUD (v52).
+-- generate.lua — Rogue TBC All-Specs HUD (v53).
 -- Reproducible lineage build: start from the committed v41 snapshot, then replay
--- the reviewed v42 through v52 Lua migrations in order. The snapshot lives
+-- the reviewed v42 through v53 Lua migrations in order. The snapshot lives
 -- inside this script so the class still ships exactly one importable all-specs.txt.
 --
--- v52 is the first version of this pack that REMOVES auras: the target cluster goes
--- (its health arc and face duplicated the target frame and the nameplate all game, and
--- its ring track existed only to keep a spare uid alive), while threat — the one thing
--- that cluster showed that nothing else in the game does — moves to the player cluster
--- as its outermost 100px ring. Four uids therefore have no home, and nothing is invented
--- to absorb them. WeakAuras never deletes an aura an import does not mention, so these
--- four stay in the player's collection until they delete `Rogue - Target Cluster` by
--- hand; the pack README says so in its "After updating" section.
+-- v53 moves the health percentage into the MIDDLE of the ring cluster at 16pt, hands the
+-- slot it vacates to the raw energy readout at 12pt, and — the half that actually makes
+-- it visible — puts the live portrait FIRST in the cluster so the rings, and therefore
+-- their subtexts, draw on top of the face instead of under it. A ring is an annulus, so
+-- nothing of the face is lost; only the number lands on it. No aura is added or removed.
 --
--- The licence for the four disappearing uids, read by tools/verify-packs.lua. These lines
--- are honoured only while this pack ships v52, so they expire at the next bump:
--- WA-REMOVED (v52): Rogue - Target Cluster
--- WA-REMOVED (v52): Rogue - Target Health Ring
--- WA-REMOVED (v52): Rogue - Target Portrait
--- WA-REMOVED (v52): Rogue - Target Ring Track
+-- v52's WA-REMOVED licence for the four target-cluster uids has EXPIRED with this bump,
+-- which is the design: the allowance is scoped to the version that spends it. v53 removes
+-- nothing, so the strict default applies again — no uid may disappear. (The pack README
+-- still tells anyone updating from v51 or earlier to delete the leftover
+-- `Rogue - Target Cluster` group by hand once; WeakAuras never deletes what an import
+-- does not mention.)
 math.randomseed(20260809)
 
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -43,7 +40,7 @@ local ok, result = pcall(function()
   for _, patch in ipairs({
     "patch-v42.lua", "patch-v43.lua", "patch-v44.lua", "patch-v45.lua", "patch-v46.lua",
     "patch-v47.lua", "patch-v48.lua", "patch-v49.lua", "patch-v50.lua", "patch-v51.lua",
-    "patch-v52.lua",
+    "patch-v52.lua", "patch-v53.lua",
   }) do
     arg[0] = dir .. "/" .. patch
     dofile(arg[0])
@@ -60,16 +57,10 @@ local ok, result = pcall(function()
   local transmit = W.decode(final)
   W.verify(transmit, final)
   local cont = previous and W.uidContinuityStrings(final, previous) or nil
-  -- The four v52 deletions are the ONLY uids allowed to disappear; anything else that
-  -- vanishes, and any id that keeps its name but swaps uid, is still a hard failure.
-  -- Declared-but-still-present ids are not an error, so this list is harmless once the
-  -- shipped string no longer carries them (this script replays against its own output).
-  W.assertUidContinuity(cont, "rogue", {
-    "Rogue - Target Cluster",
-    "Rogue - Target Health Ring",
-    "Rogue - Target Portrait",
-    "Rogue - Target Ring Track",
-  })
+  -- No allowance list: v53 removes nothing, so the strict default is back — every uid the
+  -- previously shipped string carried must still be here, and an id that keeps its name
+  -- while swapping uid is a hard failure either way.
+  W.assertUidContinuity(cont, "rogue")
   return { encoded = final, transmit = transmit }
 end)
 

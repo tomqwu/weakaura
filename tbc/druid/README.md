@@ -1,4 +1,4 @@
-# Druid TBC — Bear, Restoration & Balance (v13)
+# Druid TBC — Bear, Restoration & Balance (v14)
 
 One pack covering **Feral tank (bear)**, **Restoration** and **Balance** for TBC Anniversary
 (2.4.3 / WeakAuras `internalVersion` 45, `tocversion` 20501). Built with
@@ -17,6 +17,65 @@ three concentric arcs around your own face. The target cluster that flanked it a
 is gone: the target's health was already on your target frame and on its nameplate, so it
 duplicated the default UI for the whole game. Threat did not go with it — it moved *inward*, to
 the outermost ring of your own cluster, which is the more honest reading of what it measures.
+**From v14 your health percentage is in the middle of that cluster, printed across your own
+face**, where there is something solid behind it to read it against.
+
+## v14 — the health number is in the middle again
+
+**The complaint was exact: "percentage in middle can't be seen."** It could not, because there
+was no percentage in the middle. v12–v13 parked both of your numbers *outside* the arcs — health
+54px below the cluster at 13pt, power 70px below at 10pt — and left the middle holding nothing
+but the portrait. Two small detached numbers hanging in open space have nothing behind them, and
+against a bright zone or a white-ish mob they are simply gone.
+
+**Where the numbers are now:**
+
+| number | before (v13) | now (v14) | why |
+|---|---|---|---|
+| **health** | 13pt, `y −54` | **16pt, `y 0`** | dead centre, **on your portrait** — the only opaque backdrop the HUD owns |
+| **power** | 10pt, `y −70` | **12pt, `y −54`** | takes the slot health just vacated, right under the 84px health band |
+| threat | 10pt, `y +58` | **unchanged** | still the one number *above* its arc, clear of the 100px annulus |
+
+Nothing else about them changed: same `%percenthealth` / `%percentpower` / `%threatpct` tokens,
+same white, same `OUTLINE` font — and the outline is what does the work now, because a white
+16pt number with a black outline on a lit 3D model is the most readable thing in the pack.
+
+**The half that is not obvious: the draw order had to change too.** Moving the offset alone
+would have looked like *nothing happened*. A group's `controlledChildren` list is its sibling
+stacking order — WeakAuras' `FixGroupChildrenOrder` walks it and adds **+4 frame levels per
+child**, so **first = furthest behind** — and the portrait was adopted **last**, i.e. on top of
+everything. The health number would have been drawn under the face and stayed invisible for a
+second, more annoying reason. So the portrait is now the **first** child of `Druid - Rings`:
+
+```
+v13:  Health Ring, Power Ring, Threat (Bear), Threat (Caster), Rage Mark ×4, Player Portrait
+v14:  Player Portrait, Health Ring, Power Ring, Threat (Bear), Threat (Caster), Rage Mark ×4
+```
+
+**This does not hide your face, and that is not luck — it is what an annulus is.** `Ring_20px`
+paints `diameter × 20/256` at the *outer* edge, so the three arcs occupy radius **42.19–50**
+(threat), **35.44–42** (health) and **26.16–31** (power), while the portrait occupies **0–22**.
+No ring's *art* comes anywhere near the face. The only thing any of them puts over it is text,
+which is the entire point of the change. The build asserts exactly this — every band's inner
+radius against the portrait's — so a future size change cannot quietly paint over your head.
+
+**It also ends a contradiction that has sat in the source since v12.** The portrait is written at
+`frameStrata 2`, which is WeakAuras' **`BACKGROUND`** — the *lowest* strata, below the inherited
+one the rings use. The comments next to it claimed the opposite ("nothing ever draws over your
+face") and the child order was arranged to match the claim rather than the data. Strata and frame
+level now agree, and both say the same thing: the face is the cluster's backdrop.
+
+**Reordering children costs no UIDs.** Construction order is the seeded UID stream and is
+untouched; only the portrait's `adopt()` call moves, from the end of the group to the front. The
+result is `stable=44 changed=0 retained=44 missing=0 parentSame=true` — every one of the 45
+tables keeps its identity, so this is a clean **Update**, and there is nothing to delete
+afterwards. **Tick Arrangement when you update**: the offsets and font sizes *are* the
+arrangement, and with it unticked you keep v13's placement and see none of this.
+
+Beyond those two labels and that one list, **nothing in the pack changed** — no aura added or
+removed, no trigger, load gate, condition, colour, size or position anywhere. A field-level diff
+of the shipped string against v13 is exactly 13 lines: four label fields and the nine-entry
+`controlledChildren` rotation.
 
 ## v13 — one cluster, and threat is yours
 
@@ -734,26 +793,41 @@ keeps the unfilled arc the same annulus as the fill instead of a halo around it.
 is black at 55% alpha on every ring, which is what makes a half-empty arc read as *half* rather
 than as a shape that shrank.
 
-The portrait is a `model` region at `frameStrata 2` (so nothing draws over your face) with
-`modelIsUnit` and `portraitZoom` set, and it emits the unit string in **both** `model_fileId` and
-`model_path`: current WeakAuras reads the former, WA 3.5.0 read the latter, and the migration
-between them is gated on `IsClassicEra()`, which a 2.5.x TBC client is not.
+The portrait is a `model` region with `modelIsUnit` and `portraitZoom` set, and it emits the unit
+string in **both** `model_fileId` and `model_path`: current WeakAuras reads the former, WA 3.5.0
+read the latter, and the migration between them is gated on `IsClassicEra()`, which a 2.5.x TBC
+client is not. It sits at `frameStrata 2`, which is WeakAuras' **`BACKGROUND`** — the *lowest*
+strata, below the inherited one the rings use — and since **v14** it is also the **first** child
+of the group, i.e. the bottom of the frame-level stack. Both of those say the same thing: your
+face is the cluster's backdrop, and the rings and their numbers are drawn over it. (v12–v13 said
+`frameStrata 2` meant "nothing draws over your face" and adopted the portrait *last* to match;
+that was backwards, and v14 fixes the order rather than the field.)
 
 **Always loaded**, for every spec and every level:
 
-- **Health**, the 84px arc in green, with `%percenthealth` at 13pt just under the ring.
-  It keeps the low-health escalation added in v8: **amber under 50%, red under 25%** (severe
-  condition last, so it wins), plus a `maxhealth <= 0 → alpha 0` guard, because a
+- **Health**, the 84px arc in green, with `%percenthealth` at **16pt dead centre, printed across
+  your portrait** (v14 — before that it was 13pt hanging 54px below the cluster, where a bright
+  background swallowed it). White with an `OUTLINE`, which is what keeps it legible on a lit 3D
+  model. It keeps the low-health escalation added in v8: **amber under 50%, red under 25%**
+  (severe condition last, so it wins), plus a `maxhealth <= 0 → alpha 0` guard, because a
   progresstexture with a zero total draws a *full* ring rather than an empty one.
-- **Power**, the 62px inner arc, with `%percentpower` at 10pt below the health number. Its Power
+- **Power**, the 62px inner arc, with `%percentpower` at **12pt, 54px below the centre** (v14 —
+  the slot health vacated), just under the 84px health band. Its Power
   trigger omits `use_powertype` entirely, so WeakAuras resolves the type from `UnitPowerType(unit)`
   at runtime and the ring follows every shapeshift — the trigger registers `UNIT_DISPLAYPOWER`
   unconditionally, so the switch is immediate. The resolved type is a stored conditionable
   value, which is what drives the colour, and the ring is always coloured for the resource it
   is actually reading: **blue mana** as the base (caster, tree, moonkin), **red** when the type
   resolves to rage (bear), **yellow** when it resolves to energy (cat).
-- **Your portrait**, 44px, in the middle. This is the recycled v8–v9 portrait aura, back where it
-  started.
+- **Your portrait**, 44px, in the middle, with the health number printed over it. This is the
+  recycled v8–v9 portrait aura, back where it started.
+
+The numbers are sub-regions of the **rings**, never of the portrait: a `model` region cannot carry
+a text sub-region at all (`SubText`'s `supports()` lists texture / progresstexture / icon /
+aurabar / empty). v12 read that as "the centre of a cluster is a face and can never be a number";
+v14 is the version that noticed the text only has to land on the portrait's *pixels*, not live on
+its region, and a ring's subtext goes wherever `anchorYOffset` puts it. Each number still rides on
+the region that owns it and appears and vanishes with it — no threat table, no threat number.
 
 Both rings and the portrait carry the extra Unit Characteristics trigger that has fed the
 out-of-combat fade since v1 and drop to **50% alpha out of combat**.
@@ -767,8 +841,9 @@ and at most one of them ever loads:
 - the **caster** ring (Balance-gated) is green, **orange at 70%** of the pull threshold and **red
   when you pull**.
 
-`%threatpct` sits at 10pt just *above* the ring (`+58`, clear of the annulus) — the one number in
-the layer that is above its arc, so it can never collide with the health number below. There is
+`%threatpct` sits at 10pt just *above* the ring (`+58`, clear of the annulus) and **v14 did not
+move it** — it is the one number in the layer that is above its arc, so it stays clear of both
+numbers below it (health in the centre, power at `−54`). There is
 **no track ring** under it any more: v12 needed one so the target cluster still looked like a
 matched pair for a resto druid who loads neither threat aura, and with the target cluster gone
 there is no pair to match. When threat is not real, the arc is simply not there and you see two
@@ -992,7 +1067,7 @@ whether to be on screen, so it is another clean Update with Arrangement left unt
 simply starts out shorter, and fills up as you spend things. **v7 is another gating-only Update**:
 all existing UIDs remain stable, and Bear elements now disappear when the player shifts to Cat.
 
-**v8 through v13 are the versions where you should tick Arrangement.** v8 is still a clean
+**v8 through v14 are the versions where you should tick Arrangement.** v8 is still a clean
 Update — every v7 UID survives, because the eleven Resources tables were repurposed in place
 rather than deleted and re-created — but the entire resource layout moved from a centre bar
 stack to two orbs at `x = ±250`, and with Arrangement unticked WeakAuras keeps the old
@@ -1011,8 +1086,14 @@ every size change, and the two rims become portraits again — untick Arrangemen
 v11's globe geometry wearing v12's region types, which is not a layout anyone wants. **v13 is the
 first version that removes auras rather than recycling them**: the target cluster is deleted and
 threat becomes a new 100px ring on your own cluster, so untick Arrangement and the threat rings
-stay 84px over at `(+270, 110)`, orbiting a cluster that no longer exists. Tick it
+stay 84px over at `(+270, 110)`, orbiting a cluster that no longer exists. **v14 adds and removes
+nothing at all** — it moves two percentage labels and reorders one group's children — but for
+exactly that reason Arrangement is the *only* category that carries it: untick it and the health
+number stays 54px below the cluster at 13pt, which is the whole thing v14 fixes. Tick it
 once, then drag `Druid - Rings` wherever you want it.
+
+**Nothing to delete after updating to v14**, and nothing was added — the child reorder is a
+property of the existing `Druid - Rings` group, and every one of the 45 UIDs is unchanged.
 
 **What to delete after updating, from v13: three auras.** WeakAuras **never deletes an aura that
 an import does not mention**, and v13 stops mentioning the target cluster's three regions — so an
@@ -1057,7 +1138,13 @@ and not next to their siblings. v3 added no constructors at all — it only set 
 three existing elements — so the uid stream is untouched, and **v5 likewise adds no
 constructors** (nine conditions on one aura, a load gate on two), neither does **v6** (a
 trigger flag and the conditions on the eight cooldown icons, plus one extra trigger on Mangle),
-and **v7** only appends a form-state trigger to the 15 existing Bear elements.
+and **v7** only appends a form-state trigger to the 15 existing Bear elements. **v14 adds no
+constructors either** — two subtext offsets, two font sizes, and one `adopt()` call swapped for
+`adoptFirst()`. That last one is worth stating plainly, because it is the only kind of edit in
+this file that *looks* like reordering and is not: `controlledChildren` order is DISPLAY order
+and is written by the `adopt` helpers, while UID order is CONSTRUCTION order and is written by
+where a `W.uid()` call sits. Moving a child between the front and the back of its group touches
+the first and cannot touch the second.
 
 **v8 is the first version that changes what an existing constructor builds**, and the rule it
 follows is worth stating because the rest of the repo will need it. `W.assertUidContinuity`
@@ -1127,11 +1214,16 @@ three freed UIDs can never be handed to a future aura and silently "Update" over
 somebody's collection.
 
 Construction order is UID order and is fixed; **display** order (which controls frame level, +4
-per child in `controlledChildren` order) is set separately by the `adopt()` calls, which is why
-the four arcs are adopted first, the rage pips after the power ring they mark, and the portrait
-last — on top of `frameStrata 2`, so nothing ever draws over your face. (The three arcs are
+per child in `controlledChildren` order, so **first = furthest behind**) is set separately by the
+`adopt()` calls and is completely independent of the UID stream. **v14 inverts the ends of that
+list**: the portrait is adopted **first** (`adoptFirst()`, at the point in the file where it is
+still *constructed* last), so the rings and their percentage text stack above it and the health
+number lands on the face; then the four arcs, then the rage pips after the power ring they mark.
+That also finally agrees with the portrait's `frameStrata 2` = `BACKGROUND`, which had said the
+face was the backdrop since v12 while the child order said the reverse. (The three arcs are
 concentric at three different diameters and their annuli do not overlap at all, so their relative
-order is cosmetic; it is kept in UID order.)
+order is cosmetic; it is kept in UID order. Nor do they overlap the *face*: their bands start at
+radius 26.16 and the portrait ends at 22, which is why drawing them on top hides nothing.)
 
 The script round-trip verifies with `W.verify` before writing and reports `W.uidContinuity`
 against the previously shipped `all-specs.txt` (v4 reported `stable=38 changed=0
@@ -1146,15 +1238,22 @@ nothing either, so it is back to the full `stable=47 changed=0 retained=47 missi
 parentSame=true`**; **v12 renames seven, so it reports `stable=40 changed=0 retained=47
 missing=0 parentSame=true`**; **v13 is the first with a non-zero `missing`, and it is declared:
 `stable=44 changed=0 retained=44 missing=3 parentSame=true`, the three being exactly
-`Druid - Target Health Ring`, `Druid - Target Ring Track` and `Druid - Target Portrait`**). A
-re-run with no source change reproduces the file byte for byte.
+`Druid - Target Health Ring`, `Druid - Target Ring Track` and `Druid - Target Portrait`**;
+**v14 renames, adds and removes nothing, so it is back to a full clean sheet:
+`stable=44 changed=0 retained=44 missing=0 parentSame=true`** — reordering a group's children
+consumes no UID and moves none). A re-run with no source change reproduces the file byte for
+byte.
 
-A removal is only allowed when it is **declared, one id at a time**. `generate.lua` lists the
-three ids in `WA-REMOVED (v13):` comment lines and hands the same list to
-`W.assertUidContinuity`; `tools/verify-packs.lua` reads those comment lines independently and
-honours them only while the pack still ships v13, so the licence expires by itself at the next
-version bump. An *undeclared* disappearance is still a hard build failure, and `changed` — an id
-that keeps its name and swaps UID — is never forgivable at all.
+A removal is only allowed when it is **declared, one id at a time**. v13 listed its three ids in
+`WA-REMOVED (v13):` comment lines and handed the same list to `W.assertUidContinuity`;
+`tools/verify-packs.lua` reads those comment lines independently and honours them **only while
+the pack still ships v13** — so **that licence has now expired by itself at v14**, exactly as
+designed. v14 deletes nothing, the three ids are already absent from the v13 string every
+continuity check compares against, and `W.assertUidContinuity` is called with **no allowance at
+all**: the strict default, where any disappearing UID is a hard build failure. The list survives
+in the source as the removal proof's input (nothing may quietly come back) and as the record of
+what a v12 player still has to delete by hand. `changed` — an id that keeps its name and swaps
+UID — is never forgivable under any setting.
 
 Since **v10** the script also proves the layout, not just the encoding: after assembling, it
 re-walks the parent chain summing every `xOffset`/`yOffset` exactly as WeakAuras does, and from
@@ -1162,7 +1261,8 @@ re-walks the parent chain summing every `xOffset`/`yOffset` exactly as WeakAuras
 `-270 / 40 / 100 / 84 / 62 / 44` spelled out as literals once, so a sign flip in the constants
 block cannot pass a proof written in terms of those same constants — and that each rage pip lands
 at its computed point on the arc. A group offset edited later, or a coordinate written locally
-instead of converted, fails the build instead of quietly sliding the HUD. **v13 ships six proofs:**
+instead of converted, fails the build instead of quietly sliding the HUD. **v14 ships eight
+proofs:**
 
 - **the breakpoint proof** measures each rage pip back from the cluster centre and asserts *both*
   polar components — the angle within a degree of `360 × f` measured clockwise from 12 o'clock,
@@ -1180,10 +1280,20 @@ instead of converted, fails the build instead of quietly sliding the HUD. **v13 
 - **the removal proof** (v13) asserts that no region whose id names the target survives in the
   assembled child list, so a stray `adopt()` cannot ship a cluster the release notes say is gone;
 - **the portrait proof** asserts that both `model_fileId` *and* `model_path` carry the unit
-  string, since emitting only the latter is a silent no-op on a 2.5.x client.
+  string, since emitting only the latter is a silent no-op on a 2.5.x client;
+- **the readability proof** (v14) asserts each percentage as it is actually shipped — token,
+  point size, `anchorXOffset`/`anchorYOffset`, `CENTER` anchor and `OUTLINE` — with `16 / 0`,
+  `12 / −54` and `10 / +58` written as literals once, so an edit to the constants block cannot
+  pass a proof phrased in those same constants;
+- **the draw-order proof** (v14) asserts that the portrait is the first entry of
+  `Druid - Rings`' `controlledChildren` *and* that every ring follows it in the flat child list
+  the string actually ships, then asserts that each ring's band starts outside the 22px portrait
+  radius — which is the reason drawing arcs over a face hides nothing but adds a number.
+  Both halves of v14 are silent on their own (the offset without the reorder puts text under a
+  face; the reorder without the offset moves nothing you can see), so both are asserted.
 
-## Import string (v13)
+## Import string (v14)
 
 ```
-!WA:2!T31F0XXr99m(Ij2NZpSL)vIXHCXj2roK4C)uNo3yG7xY60VUt7DYk2ofD7D7C3Uw7T76D3tsNiPKicbv(rkiGaeAbIkeij8E0Q2cuOuiMF0sFu6GAB6wcqPU86l9hV(h(1xlqPqNz2DVFPtNLLKDSDtEVm62zNz2DMVF((573z(oZAWX6i)N4EM92wmhB(X5uLvIklkR2Ndhos5W9HcO0rEzjDvzrrixuEbrovO0tPSNyQLf4CDVUsjYwbQ6QxiROoVlgbPIk3st3lL8K4u6T2P9TYWRcz1D1zeiR6bv2DZzhLvthIVXnBFdg2IqxdYQooorQOiuzxT6oLfv27YvdxdiOx71UXArV3UxYRTQUkRG(zZjRYbvJyn6OS1iIctpnRkNRmYYI6ckQtLSqbnOoiNclEWrx5UmBPmrIIBnsp8ECXa10Lvz1fKLCDaxryfzLYdZz2Y8QvmBGJmVkSiUezQOazkQkxwzEZsKwyA4gxqqQGSAjAB4CbZBykQaaGJfzlRZlRMuHCBnN5WcTccfDQYMNMrxmA6SQ6oZvqqsqJ3ze8F0DoJUQqXIqvTHoGQ1pFYi6KNoBzvwVNHKQPafff402thUJugxPCk0HNzO5NGtZ5z1kNdobUFNUCHcctTWyrdNoZyPZeMjt1BLsfIVft6uXhyGZvwdgFk87vAZwilJeBjOMZ55G5WTaPZR2B8bs1ZidmxzjRxlNlWjODQYs4EZeqVSIIkBJL(7mM3Fqzo4N9ASgUIZveQST0NUmwC4QNYIIUgLxqhEgZ7AowV55yLemhm7c9A75mqwnyADS4ROo)1HCfrswcUixztr2yKXevniEqLtBgsrjVLOGrkXki1dQlCfqbrDJcHom(V7T5CMtdkwiLSGKEUOXhktCM9jWTyvKiwVq7C47bvLyfpg(XGFGNCHcQ4bf8leRoRJZHblyzBpKSip4CPJYep(qZRlNFcZYVPu70lU5wyIJM5e9pGC8bo1OmA5zfHoMhlcyOOknBqtcjC)3X8KoJGjAjIOmlNZfmFm0xu0rM9W5Wck1XQam)7ua0n(VV1fy5ovzSUj3GStTHAxiiTbuhCBg1p6ik7GdQXQtg5GeDgcowIJFbnYlpCk8nGzRVm9iJb9MLHrdRwOdMbkXfMOY(y7c9gp5zvuLlQc10slxwnp8U371Sb09Joc6MqVb0T4eDZoNrvwNkLamSIk8Soqj67am55H5hVh0TTXzMGvvGnNiCgbPOYLYXQZmbRyziyFYk77ihrnppMEaQTNdGojLVBg8ZdlS1RGg9aOha3coqhFrCg5XWyEklh6K7lGBCT74(rpiPA95i116(qDfGuDpoq)6NRq1Uev)SAZGEZ4Q6nq9vLuNqKQ7XRzkU(OXQwJ5kXoL9dTdYZCF3)rmRjaxUrrhDpZUlLo0XdRJPXZYjp5dyrfnhnpsIYw3FdV97F)kBTUkuJb5SM5AdvJeEKmjv2ontm3Imrxj)OcC68rcJV8C0BGvQHC0mF0fnrph38fq0XzOfGGpekubHP2isjkciYqjhkoYLkgzskZ80cM32OJdZx9cyJokBThvHPDnCzwoIEGRmzuCxTFnMjz4yn05gJdMhRvloMIk(hendqddpwVDGfP5njwDyuvwLzg16hlw9rtzHsosMbsmuCRXRg0ouo455fHk(P8gmfeLLvnhoMa)oHHIzR9Giu7VwRXoBHNY(ppnUzM5gQCPCq1C8qHI86plkaHiRzYOFTZp9uU8ye)yvi4p)Eq7b3kor71j6wDQSvSMFylDCQkpVY2YvvN2sBwjycc5vb28WhmmhxsjThCui74Hj2oEWbHCcSpOvj1Eqcz3yEDRm1H0lYIIIPTMNAxIQUdq9DS5WpXXYlYQPLnNoM)ssFxmLkJTY6KHM7bYPjqkltmMrsedn7UqVRSrWMIYVl0SoJOHhmj)a96EZhaDBpjUtEhOdGUlgQnOCM(OGZ6or735mKheXEwwuNOdIE9or3d6ErhYz91d9ek7yeCrCfLNLyifQkGrZ51SAc07TP6IUpKBKNp71KRKGQQSkFZJFcs8OTFoB(mDZbLzKXC4ytQAoNdJmK4iwYyImq8HIrn)YytUDwTsYY68PSQD25PKL9iOQPZVGvBKxuqHhfgf5CwnobutAqLDeDGWdMktYideoA)HJflrMehddSRjmTGENRwovzgiaJabMjVCjfYtMhB9c5anwFucRaK0UPKxE72b6n5GzscDWZQSTASGwIF0JHITW055vhsVl(EpbMwwIy(cYphTRqEpZLyO0jIfFbzvbSeJ2XNl6ajJ2)Ojsh3eNoLfoDxovPvdYXp7HrdaqdsnqHgAdOKvngHsXJgolIHhLgGYqTNGgzPMqqhdGgLA3Gs8Urmv9jWuSMwim5BP2giCU14Mvi(1s0WrN0r9fLoWemqTHhpbAKvh98OtEDnwdQzaCs3KKMmcmd2ia9zHTb4P12aqSauUZzt0tl8(3pIJYRJGOcOIiEKWJIoL41Igh3ZfrLWGCjK8l3fsbDAKgqPZLJZH2A1XNHMgPJkJManjAkCt9wYQCNTVQM5HEROhANOhgOCFTV0lLbh9ip8QMBd9OlLwdndp6THbJe6h0BNW6GE8SO3bL4438aO3j6DzYRGE30SEpTGrb9em0z1SCmbnww0778XyGMJh9(XKdOpa6d6e9KOpe6ddqFKSONIh9rPk0OFB0Vd6JbqF8xod6tq1aVwIgibSq7GuCwOaefq0t)WO5P6AYfZf9eNs07dKmd6tYJ(uONb9PrFg0Zwvdc9CRF6o3Dv8kEUvy9(M0FE5d1aMEbD6m9OEIT8U2qH1Nz)MLvjVEvmTY9Sequ1c1keu9QaLT1auU920ivbTnQMup0VfMPRv)g0xOaFSMc6r(2xCrYpogjtTSrSeYBbGPi7ZsZLmJRXLKNukBdi95RDJn9yhJI4NGbpzw9kz9QmHs2zWDp9kLyLY6vhkLDE9jXQRvkGN(f2kn93zrbZ2KoY8MdgedOyt5QfH6yCp91O2nYsukEcLTAnV)0c6LPK(uTKLQkfHmmJFVDq6w4QLwNmn67dpfIs3hXFdIILLPDsjZwxZSg002OLToVbQYq7Zur7BBPOD0ytMkLue1GvcEXxr7W1SavfUHNxrqQo0B4ivNtc(1Sl7PKuVXN)GMmx1KMj6p88OpI(JSnS85xgfl0xOT6nOV4LAvc0FCd6cOVuJWF0xEtS7Xe1J(tYI(kzr)PzrF1SOVww0lycShQbc9ZG(6eK23We9I(MRpWSxdASx(R2aSktoPrk21a9NSp9Lhw5IIqiTgv97ZxNzNFFQzNN3rdwEwKODu11LSTYG13QQkg6pZuLc9N3sDPDH9kN6LOL6b1gun7rbcqGT4rIo(p3mA7Qw(KsqZKbKeox1cELTXjOLxfQdhR6K)Bae8DvU)v(KsIkOMxeowAQ)1ERoZeIAiwAG1bjsNRdDJ3ZnH1)MV2kxWt0iJTG3oJvozinFEgNLkyjA0pYwYzoFxEuFtqaGFjBhmE3l1nJVSnNRt0tVLly5j67SwLHO)sZvWiyGQ(tutY93Sjmi(7UoiZq)vnjIqOwmmVj0n(z7GqZ99SgDl0PsAXbgj1qvIv3Ol6VEnpW(pBpuDwt)ojl6dRUSkMcDUQQizTh1zOxUpVUVOm8Vu1hh1R5SKX)cix5iZfdBs9WQKLJmzzDYWTronE8SQgFg7fUmcPDPsGwiHWTcYG(tsvJuGLdIEjV4AqlYksCTzlTIQIlpfNCs(E929GzcwtCDtx4IRBAzfxO)wIrUxSQKb93Hn9DrxPWrB1hShj)7PJKOVp6Lq)Gv2Oo6hIl7pALpG7Sz9dU89ZwoQ3EIgm(ACa33cLWZaxmHMPJzxp6g8YQiWt9xXYtfvAjilf8URgFOgEPBEwsOFR1RziDgfRWXCczzSJDVXtEgZ3LccIWeCO7CEZlvy15r3PzpzmnSd5va4XP6Ug)UFuNOh54RSz9bQ2nNrdE6YqS3MoQZJSTXJ8gzizjiA7m0hbAN3ETNvzTHXaPAxRonqLLBcIlR8REA030gr9UBlbX0aK)TqrjeSXwSYTsD9x1P(jBf90hNcnITq8c(5owA)dalwKaOu2kTCXe0iX0jHubz(6Nk3kBzqqzBP)I1nKpD9VpvaZEB1nSI2WZPSv7qHma2AnXWATWeAf6Uy0idvl6D9WcvfGU6rqfAhcXTvTrekaZjIbjk7OAiwGNQ8eqjkJyTNgdz1PMuNVw5ibgjpEwitYQwQw5guMeknvOYT26hVzS8oyTWEgdwswLvuyAbPIUyKzvj6sOBeGboBLaz646byoKDG25gj8m720xAmAcJPAqxY2PZBhTV90HBBfeI(crd5UZ2ILrWlYhY)Mx9GltwMQXMkcEuxZIaIGGO8rXw44j7mPQV(ftDujupoi6t96Gqf2NtcjXS3X8c5LLmdxZEVgspRda5glMxwwKdphZ0tkG988m2xscxh)sPrEgRUoJpFb9halQKskjINO5DG9(EPJdQ9gMzWEgzGvnL)B8KNBCiujmzXK1ziyfE68VWeThTVxCXIIYt2JQjhqft71ri5XFgSZchv0kqk8ZrYlTzK3i)CaAaf35cKFBh8bAzQgKDh07zV0)MHfHKd9jMHxi)4sqnnhZqVe7X(I5kRRllL0CfFPT1ac4ISn6ZlIzeLND70PQTV9R1Qfbe04AasFlA180EOB3CoAvBnLvDRDMednuCMXIKmtMKdIEODB2WyBHZH7UMHLCrZ)mMS5iHv0ATcmenavw5yhefRWzogeJFq(SVISYhoqpYWxy2)2EecMfDtgGRb7sZ1Ib5D6juKKH7A4odZt8fa)FrMgZQqN9)m2q3SvjF)Vu2HDMKjwG5ujXCKllHq9Ph2a86Ys0V)K2e)efoxM(ayPB2uo7Dj5quaRBv2YPPZMFCnm5B9bumlM797vTmNfoLIGPNGzekbTkBvIACHjHh(qEoeb6qiJEtoM9omaBOETwdGJSgGRD5vqpmwbT7GDJtd1Dx00GgGxZYPNAaUU1GkQbyt10kp8lAa2SPQObWjVbyl4))6DyaUHDAaUrGb4MOIndWwXQvgGTza6aFX2na7WaSt8v7IFDayBa2n6HU1QWzdWnBaUf8ZEp02Za8AXdE7f5ZaCRRcqjg2ybjfj(6nb3d0x88X91zPawqsdGlkG0aC71GI)3gG9TEJ7CEbJoSSC9CEdg0n()7osOG(dfjui3bz82vOq(y80v3bcY4jOVqUPPEOPEz8g0ThpVk6z9e9CVyWtPUoyXJ2)X48NXF7ap)0lcGN9uLqYaCNTGeYaS)li41qn5Dqx(AdHtBbb9T(bcUCXslfsT71vivVZSui13zdKL(6u9QYjQetV)J2om1p7IaM6URdtDhymLVL1iOjMZ76hM77JPZ8hXJ7aDhXJFFUJ41DiAINi(6YBWiDhYJ7iH62hMSRB)KF53dJ3aEdfIW71ThAQ3vlG9QvwRwbXiM8G8hKFqVfo(OAzAhc7NFjG1Y36hc65WGeFDrs6MKecNGrk4epyRKbiyMaDrscss6MIyC)QiMZpI54yeZOvKkZRwYZ4CD2oeZ)ZvwiMtfjqGGUz86h7ffnnanTlAAqQpt(oVED))3Giwb1BP2TykNZxFXff680NUDyKFXR4osxhc4VaZp41djXpjjajHqHqT44LWJ4LyXXNpsIFssakXb1D7U7(vbhRaWbXItNt51DSudm6uti0oSX)7LtyJNZaC3gGxVballVxdWHma3NbaBXWJba7PXRsmSsK9eBh9N60E9wGnaxAP2j7)LxbmhP6Mc(P2xOqrWZToqKq(XEQITGq8Rie1VIqD)QZ0E9CM2VDmkkDYuQtQ5FKrhXt7qr)QxrrrUJqI(X(gjfAdpvDr2qfknTaKJeCeOKRuQYLu0RfGKOIqw18SA6KZY12TZnPCuxdkOr2y21oWwjKKGQtWQdTBKTxlMoLfTZS6P1kJke6sUan6nvBSQHGjAuxYsUgewlcqryvhxBCbjxDMwVm(rXDW6oBz0nBMReLkvwcsJ9crx5fOHg1mAlmAkS5H3WAnCllKxwSCjP0KgZbjmj3FoZf4MHvuOOe6iQA6SKtNenMJ9vF4evnp9rWS0Gc1JJzWcdR2HeurKp02pdxfj2sc5Phem0o3yenzvDuW5kQkyEKl2YmKFsIjW(yIXikusqFlK9(2aKFXF28Ys4hVKEpS51LvZXeowIrsNtLLtOS2JD9i)BEoSS0m(ep2USrLN1EqmSiuvxB(cLffn3FmzTdc0XaKW9CJIRHWmHH6Mg7ITGF)P1ZjNH)yCjN9oXmBGZhXMewm9TQYj9M3NF3vdZSjNerA9EZQSn6M4O(JnrwLD14XOWElF0X9xlO0ZUngDv28JhHCMxmBeSMauviFAE5jtkLDXgUCbn6FyGSCviVdZr3jLdXwcUPJFyKlg6LwNLGBjQvacCzVj(XOxY9pOshKNdgYiRcjBLFSyfMDrv8BzA7MtzNnQBcnxw)fRUTojfIUH0iDfZqOt3hl0EtwLTt(nKCS7QV4Rtm83DngElg8TGLCBNjLWuqX655n37KKu)u(ES9GSM2ciu(MK9Re25h3KDEE6PfHEOUw5m1KtsinE3yfefx12MyKR1Eq2CcIc6vglhg4RwwJNWR)4MEgwO)hOVJ1vc2Xp6ulLxN3wdYaiUSe7nUprwqtelNZjRRlxIUXB8zVNrAMSF2Toh908rJ)NgzBquKxNgLrKRC5lRHBGC0cuHo0sEcMxpL51VuhEqJcOWbA2z7Oc3M7ykWC0dmhPvNXUvjp7fX)wstKCCTW3szB23lJD24xSfTWwMzKL220wl7Q1xwBUxsGbcUYc39Y7Or9WqdWhPbFnONyfRT1ZYbcFfWJdlmTb4PAlwo8pUjVoSqN5MWZWDnyoLrgSDbhYauAfIonaFm0lza(4lpM0a8jmapnPNnVb43TkYZa8jRh1za(u2WndWZya(0KwYa8zmaplUTmaphUh)8nbAwrgcAikaymtx(xeBrnppuZKAErtQzlNjwn4P7ELJNQEqFwlSARaFoBq6Ba(OkD2mbgLDFmjYEufZnQwb7dGyowSrOAqLdg9yfIM6uc(KZ0wImPRwGknSbcv2zdN3OAobCM6ZNSvpT2HH0JXxdhsPSONhS873WzXc83Lb4DBaEp43LNWaq9oXa8E30P)pidbVpt)bmaZzaE)4s8bMRQZYgGNSjB4gGpeUiF4SRzykDGMKe0XA20RP)ksY61FIsoBJxtm6sbYucTLDh2zJJpqBXXIeZpse14AO4Kpq0(khnJB3JCQ2IILVQefFjzBWU65d7A9GpCfArSbV7iyP9TCo1XrMCZyLWtaToCepmuYGDPKYJgtBXrkxvA40NVUd5Xa85ma)Ex8mrskGVg3F7xkWf5pF2kBexORcHYfefkaRdDmT(b9EQE0ke6GT3w5PVcaDSY9fFckxHfwW2y0tOS1OQYtY5kA1piqeaY6I)4Nx)NEfWH8cwNCS2UhXpa6RKLH8z)bpXNM8iFGW(7jvVt0DPruARh5QxgdDEQANyxRpdu0V8nNms6mJmudhHDhnDE3pxTDwyJFfumaFD0jxKu)XgmE0EdpuIOTTHmaFZgRBKEIhMzjhF(GMRTqRQWIKk06h25PMQrtoupJKo(sQJFlYmYA51Y3rMKjZSKA5ZY)Rw9KsNyG4dfn(shkSNQAR6yPchnrphF1uvLTMoAVjtoWyjiFqIygjvMZt1VGJ(WY7g8X3BlDdEg7f1TTEbxVNm4EIb4BqAJVMPFmNZCbHQcux)8QHkPR(zAyTT6vptnwftIKhhxGVqJojBa(IehB(sedz4XlBQgdWlSeEMs9pnJV4j9kkZ3wtuAxvzIYA5IEkVD53BepU96MK4nsGaHcXG)vWUz8hWVVUz85XRx)mEcfiOFgF(9h0ZACt0CvTLSwbVueoD(JlmCFqLoBRzm9RaGxUnaJpFVjzsCIKdLj8aOn8oTp4qrJv94g1qwXLuzlcTpCp0SACH4TJog9wPNuOGEjOeNDi1O5oeDsS3LM5TjhNd7azz2EYQ5Pb)YSC2rkJEpBkXgEkvxUGQb36EU26IULbO8MxRH2YamHzeTiQGtrsQS0GyzaM2o(vgG3sTixzaEi0o3Ob4Hrbna)gBXa8w3htmdWJG)1JYBaMXa82mapgngugG3ETGpv7qCzhPemL17O5apbwxI7uuVLYdzgsosyV0znD(jDKwQnT5jlXyyXjzROzBBdZz3kBBlADs2mpTARydCT7KrEPEk9bAIyJ)c20x4vxy1)jKW8y9T2mRjN0WtdpD4YhKvUZyTLt6hG5KONPXNo86wm2R993yEzjBGAtFtnAEhi)V20XO0mu8l)XSKV(q1FNRwxUoR5kGx9D0cIUJsTeIMZKQBLJnxhWCRY9dYkbPvBrc4VWqBgGx2cL1jmWqs5Jh5y8sTfL9dViGYCUwf(gG)TQ(BF4wkWnaFWRwe2RkALAc6sd3BQktgR4r5pABf0)OxXf0d1wbDVZ064lu1TK1A8fELveUKT8DDIW(R0vGPcYpzLcHBRi8F4YCryKFqlfHkDSuNiVYwyI7OlRWulDYjeHf01uB)uo(XxMlmFS7QLcZZ1Kh)xzliXDYLvqEIUMC8kXg(OHK93wb5)4L5cYLzfRmaF3lZLD01vYkmS0fuQTbITjPNFHtFcLblnrU45BR07SxMl9wMWUBa(8xnl9g2T0ib6LD8ECdBR07F6IO0JSElrILC0HqB4W12BWPMiLRmKVtvqDxXWtmP2w3nUeSuf77D262(VKpWvTAN8AakFdRBR1H3mjtDPB1owOUHJwSmhCRp7V2bpnxGtD8H9L8b6EfU4QFXxZgiF35MrqhwIUrwL63CT2FpzrpHYn3InXAcCjpO5KcSu8Wd1NHULwTAJSixri)U2sxGv9(LBsA4ATSb4x1CtySHRbxrJnaAQAV)xE1vT)Lvv1s85wDv7tDbvn095LvQYsOBYEPIUz1TeX)ctQMUpwYyW(tDc3EQ0wQMF6frQMvEKdi7E8Nq16F)s2dJFVEd5Lsq8sE9q21xk7GURRDr(hHgxPlNppK81BhHFaVWcv3U1j4Y22pOZx6TzKyfke3vRKGs9QK(uf9xrsO32kb)zvLGjEfuc(I0fEnQOmEAqzn56)5KpeeD3LxF(cfXJ7U8gjGNqbij0dsTxsIp6jHmeJNqHc6MM6HM6LM6JM6NMgGEGADVGcuL8XWJ8LPFg2cfG51HCMhMo8y4zjB8CbjykZcL9k4tx3TScdL0AcIfFC9bD7ByONHC3wiwTZY)6oeRJsDW1b3SVUg(a0Dc0BWaGDc4XPEp9lS)yTr(qT9D20L3FO2WoJSKpoBDNxzQ4Hf6nCXEBXhNTo0y8DOahYDhtCTp8)h
+!WA:2!T31c4XXr99m(Ij2NZdz5hjX4qU4e7iBsCUN605gdCVK1Px3P9ozh54IU9UDoTR1E7UE39K0jiarjeC5ncAacFLqfqGeslu1wE0Nb3w(kukmvLMULcTGGYxkVAQB)Abkf6mZU79sNollj7y7M89Lr3o7mZUZ8)3)F))pZ)zwdoA75)q31PV1fYXMFCovzLOYIYQ96WHJuoCFWakTNxwsxvwueYfLxqKtfk9yk3ym1scCUUBxPezldvDLswvxLvqxzxnCJEGSI68UyeKgt5MxsLMeNsV1oSVvgEviRURoIazv3F1hJD2rz10H4BCt23GHDmORbyvhhNinMiuzNn7oLev29Yvdx9x7RD91ICVfZjRYbvJyn6O0werHPNMvLZvgzzrDbf1PswOGguhKtHfp4ORCNMnwMirXniPJCxUyGA6YQS6cYsU2NRiSISs5H5mBzE1YMnWHNtfogUezkRazgtvUKYCMLiTW0WnoVGubz1I02W58M3WuubaahlWwsNxwnPc52AoZHfAfegZPkBEAgDYOPZQQ7mxbbjbnENrW)r35m6QcJnguvBW9PA9ZhnIo5PZwsL17ziPAkqrrboTD1U7iLWvkNcv4ndn)eCAoxuRuo4e4(D6sfkim18JgnC6mJMotyMmvUvkvi(wmPtfV)(pBjny8PWVxPnBHSmsSfHAoNJdMd3cKoVApX7pv3d3)SLKSETCopNG2jljH7nta9YkkQSvw6VZyE)bK5Gp9vznCfNBmOYwtFQsyXHRUljk66y8c6WZyExZX6nplRKG5GzNOxA3NbYQbtRJfFJPZFnixrKKLGlWvYuKnkzmrvdIhu50MHuuYBjkyKIScsDJ6exbuquxOqOdH)7UBmNz1GIfsjliPNlA8bZeNzpcClubWHH)ANfFpOQeR4rXpg8d8(NVGkEqb)cXQZ64SyWcw22njlYdox6OmXJp4C6Y5NWS8Bk1o8IBU5N4izoEF9lhV)tEmgT8SIqhZHfbmuuLMnOjHeU)7yosNrWeTeruMLZ58Mpg6lk6WN238fXdQIj0ggl1ZIUw015LvrGhD9)W2qTZTzuFOdRslXOtbq3yf(c0UWJNor72j6wCIEzV69HU1hfpwC7O9HUtgkwiNjLaoR7aTxNZGrdJwI(e6aTF0l3j6Uq3n6GoRTEOKkBN8s4kkplbqdvf00fYRz1eOHAOUO7b5g55PVQZOyXkDCz5IzrVY7)mMVVfeeHj4q3XCMxQWIFBUdZE7OA6yHnygvzDQKhut24U5rCMJhkmgV(iOEp6SKx98ISAAzZPJhRL03jtXsygbNm0C3xonbcbdtmMHtedDIDIgnBeSAt(DIoHZiAyDAYpqGkdDZObpvjiMyWb6gqVc0n7eDtorBLh5nYGy0iABm03f0oUTQVuL0gcTtNvVwDAGkl3ee2fEuacYUr05VY5gVIEvBe1ZnAjCNgG8VfuumcdJAroSYTCndmQt9DBJzsboD(rqHrrqXMpEb)ChnT)(HJng6ErhwPnAzJjOr4osGPX4zyfv4zDGsCG9XKNhMF8Ur36gNzcwvb2CIWzeKIkxmhRoZeSILGG9iRSNdFy188ycBO2U2hs1C8sbZhdv1lJK2hsg3coqkZwKDkEtaMA7Ujv8EpmIwfashjvJ4C6A7cLbN(q5WYtvCpZ8VyPngPppl3jlHn5Wna7uBO6fcsBWwhqz7CqnwDctbKyJGWBlXXpVgrzfof(gWS1wMULXK8MLHrdBgqhmduIlmbO8W7eJrxe3PgtfQPLwUKAE4b29vTbYyyniIJbqs4rUEn7ZBePGofU3zogHQo6q6UvgwwapoLhJqThA2taYyt73Rz571rQR29b7maPEECG0pBHkVKulmvAg0m4Q6nqTvLuNqKQ7XRzkU(OhQAnk1u5a6i7607uPDD8a0OA8SCYtEFwgrNLMhjrPT9w3B9E3RsB1uHQ2(w0mxBs2iHhotsLTrZeBvuMWYN)ye8zKW4lpl9gyZrqoAMp4cM8EJy9cCg69jcAHcLryBYeQaQOmYGjhmoYLkMsLuM5OfmVT3somFZlG9wsPTUvfM21qLy5ie4UYKrXDLU1OMwXhTU(2OCW8yZryYiv8piu6G6gDSF5wGM3KyE8JPYQmZXS(XcvE0uZNjhot)jgmU1WvD06k7)C8IqL6udEmfeLLvnhoMa)oHvmZw9br8j52Sg6SLDk79C04MzMBWsfZbvrJ8KRAkQC5XQ(JwMG487PwtokTH1EdBPNsvB5v2AUk6LwAKkbtqm4wGnp8eH54skPDIJbzhpmXFNtmaKtG9ewLu7eed0J61TYuhuFmwkr4CuFPOQSaSDa0XZIUFkv(V6(qVA0OMm9OS0SyPP1BheLeLA5SD1q5yox24YvuqvvwLVX(TGepABN1Mlr3SZmJm2FbmfSMZzXctjoIxtmr6p(GXOU6XyB0BrTIYY68PSQD25OevDlOQPZpVvBKxuqHNW3FwRgNGdjnOY2J2F4bsLjzK(dhTVWXILitIJIXIvfcwOLZwnNk6YebAGaZKxUOc5jZtS5C1OhQxk1sasAxuAgVD5a9QCGg)jv2AvUklrg6jWMGMopV6G6DY3ZXX2uKiUjb5NL2niVJ5smy6eXIpVSQagCs70ZgT)Kr77yjsh3eBnLf2ANovPvdYXF6dHWwfktnmGMEdOxtfJaOxlp6bYIED8Oxpa9gO84OhCDI6EwfY0KikKivh1wu6GsWavhA8eObU3NbPEn1xdkznoPlssdu1ZGnDsFwygBpnNXg9Wa0B8S20Y0cV39IEtuwy0Pr)AO3m6TGERpi6Tj6a92X983b6DIbZVl0Spxo07g9EqpkqPJLJIG2A1q)G(nqVx07d9(rpg6dGBQpywL7O1v1mp0COh)MrFiGY906sVucx0ipWQ3LPp8sPIqFeE0hfdgjugOp2QKPGHoj51l2c0hNh9KyIb0tH(eorpn63c9BdqFYSOpfp63HQmJMh97I(9aOF)N7nG(0uTVns0(iGfAhKIZcfWu57bqFgQUM8y5IE8tk69(sMb954r)bO)q0Fe6pg9Nurdc9NU(P7CGk4v8u1X69nO)8ChVom9860foG6g5Y7icfwFM9AwwL86vW0k31sarvkuZqq1QcuYwdq52ArJub0wVAsTq)MyvTA9RtF5X3bg4J1uqJ8fVWIKFemsMoZnYSy4TaWuK9I0CjZSFCj5jLYwhsFUQ3ytp8rPi(jyuW2slN1RYekzNb390lxKvkRxDOu250NeRUwUaEA(4zyr)DwuWSnOJmN5GbzcI4PHPoguhJ7PVgvVrwIsrsL2SwgP0c6LOK(uTKLQkfHmmJFVDq6w4QLwNmHQ7b76EX7H4JarXYAQRKsMTMMznOP9sSSZ5nqfgAFMkAFrlfTJeBYuPKIOgSCWl8kAhQQfOkWnS3)bP6qVIdxzMd4xZoTN4qTgF(lBWCvdAMOV45qFe9LSnS8xTmkwOVCl1Bq)1xSvjqFL60fqF16H)i0My3LjQh93KfTqw0FBw0xll6Vll6znb2dwhH(FpYGG0(hmrVOV(6dm7Aqp0Z9dQdwLjN0WJ1z)9LSx9Lhw5IIqiTgv97txJzNVa1SZZ4Oolplq0oQ46s2MzW6FSIkg6ByQsH(MnvxANozmNMLL6b1guv7rbcqGT4rI2)p3mABQw(JsqZKbKeox1cELTYjOLxfQdhTYccvhi47OCVR8jsevqnViC00uFR9wz2ee1qS0aRdsKoBcD931nG1)MR6kgWt0iJnV3oIvkzinFEgNLkyjA0JSLCMtpLh17eea4x12bJSl1ndKnNRt04B58wEI(2RvziArZ1ziyGk(tuvY912ege)DwhKzOVBdIi0)stgM3m66F62j0CFpRr3cDOKwS)Htny5y1m6IEU18a73ZEOArt)ojRyfRUSkMcD2kQizTh1zOxUhVUVGm8Vu1hh1Q5SKX)cix5iZddBs9qQKL9ozjDYW9pkNgpEwvJpJ9cKhH0UujqtKq4wb9JO)Ku1ify5GON3lUg0ISIexoT0kQiU8m2KtY3J3UgitWQIRB48xCDdlR4c99jg5(bvKmOFi203fCLchTuFWEK8hthjr)BONh9VVYg1rNfx2)Jv(a(wAu)GlFFSLI6T7ObJVghWV1AwXB0gEkL2SJes)ysucFx1GbAfGUy0advngDDZcXZB3v3cQq7afU1knIqbyorz5IkBVsewGNS0eqjkqT6tJHSObtQZxTCK4IKh7C4KSQfRwUbKjrstfQCln)XBgkV9xn4MXGfLvzffMwqAmxmYSQKqNGUEagN1gz18B)Abyr72r7yJeX)nA6IdwQJf11f6eBFbUn0E2v7UTNzhbErashiBtMDNxKpK)nV6Ponf(vcnve8OUMfUGiZPWKyZpsYosQ6RpXuhrc1Td0rCI6XbbH2RtcQ403(Cc5LLmx96DFvKEw7aYnwiVSSih21)0tkGDi4m2xsIwh)sJA0ty11z85lO)ayrLusjrS))3o2POLooO2tyMb6E4(x1AIVY7)SJdHkHjXNrNHGv4PUfJX)hP3NDHXeLNSBvZWZu2Kgncjp(ZG5WpIO1QrZpljV0MbEJ8Z(PXtChZt(T9s4sltLyS7GEp7fq1CXLj5qFIz4fYpUeutZXm0lXosTqUs66YsjnxeoAB1VaUiBL(8Iygq5tVnQh07zVAnBTza1V0m03IM5(8JFBMUoxP1uw1T2zsm4GXzgnsYmzsoa6XVrZggtrnlU7AgvYfm)ZOYwRcV1L5RUk)w5yVu0wrZCuig)G8zFfzcPoqJm05hT02IqWSOBWaCvylnxngK3HNqrsgUZH6impHIg)FrMgZQqNu2m2q3SvIl2)LY2TZK4VxmbnsCS4YsOqhFidWlllr)(ZzhtoIcNltQzlDZgYz3ljhIcynl(ronD28JRHNdvTrJjlEkuFVkLzr4ukcMgOZiueAv2kZ3cxys0HpONdsGoeYOxLJtF7gGnuRwRbWrwdWvV8kOhcRG2vWUWPH6QtAAqdWlz50tnaxZAqf1aSPQALh6znaB2uv0a4K3aSf8)FTomax3omaxpWaCduXMbOnSALbyRgG2XxSndW2na7aF1o5xha2gGBe943sf4Sb4Mma3m(zVlA7zaEP4bVDJ8zaULvbOedBSGKIetWtWDF9gpFCFDumGfK0a4Icina3wvO4)TbypR34oNN3OdllxpL3GbDJ))UIekO)qrcfYDqgVDgkKpgpD2vGGmEc6lKBAQhAQxgVbD7XZlIEwprp3ng8uSZ9p2r67OC(Z4VvGNFYfaWZUQqizaUJMqcza275f8AWg8oOtFTGWPLGGEx)abxQyPLcPUX1vivpZSui1xEdKvK4K9OYjQetVVJ0km1p9caM6a1GPUDmMY3YAe0eZ5D9dZ91X0z(J4XDGUI4XVp3r86oenXteFD6nyKUc5XDKqD5dt21LFYV87HXBaVHcr496Ydn17QfWELkRvZGyetEq(9ZpG3cJCmTmTcH9ZUiWA5B9db9uyqIVojjDrscHtWifCIhSvYaemtGojjbjjDrrmUFreZ5gXmcgXCSYsL4vl6zCUoAfI5)5YleZjJeiqq3mE9J9IIMgGM2jnni1NjFNtVU))BqeRyTSu7wmLY5R34IcDCQt1kmYp)fChPRbb8LW8dE9qs8tscqsiuiuloEj8iEjwC85JK4NKeGsCqD3URUErWXkaCqS40XuEDhlv)hBQjeAf24)9sjSXtzaoGb4LBaWYY72aCqdW9yaWwm8yaWEA8IedRezpX2rFPoLxVfydWLwQvY(FXLbZrQMPGFY9ekue8CRdejKFSNQylie)kcr9RiuxV4mTxpNP9BeJIsNmL6KA(h(yd7PvOOF5lOOi3rir)ypdNcTHhRMiBOcLMwaYrcocuYvkv5Ik6vdqsuriRAEwnDYj2AB25MuoQRbe0iN1HQhlRessq1jy1H2nY2QgtNsI2zw5mzLrfcDjxGg9MknwLqWenQlzjxdaRgbOiSQJRnUGKRosRxc)O42FnNGm6EaYvIIfljbPXEHOR85PrSYmAlmAkS5Hx3AnClZNxwSurP0KgZbjmj3BoZf4MHvuymj0Hv10zjhojY5gHeDKQX9s18WhbZsdku3oMblmSAhY59a5dTTZWvwITOqE65adTJngrtwvhfC2Xufm336BzgYpjXeypmXyefkkOVfYwsQFYV4xmVSe(XlP3nBEDz1CmHJLy405uz5ekP9WxlY)MNfllnJpXdVtBu5I2dIHfHQ6AZvOKOO52wiRDqGogGeUNRxCneMjmu30yxS597pTEo5m8hLl5PVdmZg4CrSjHftFHkCsZSh)URSBQn5KisRHYQSvAS1RDZNNvzN1Vz0TJeF73B1y4E6TYORYMF8iKdoGzJG1eGQc5tZlpzsPSlu3LZRr)ddKLRm5Dyw6gCBq2IWnnYHqUyOxADeMU5OwbiWL9(QgJEj3F)kTtEoyiJSkKS7QXIvy2fuXVLPTBoLDuVUj0Cz9xOYUTJui6(eI0vmdonD7fq7nzv2g53qYPUR2IVoXWFGQm8wm4Bbl52gtkHPGI1YZBUL2iP(P89y7bznTfqO8nj7xjSZpIj78C0dGf9GcTYzQjhKq6XqcRGO4Q6U3HCT2jyZjikOxE0CyGVAjnEcV(Jy6zyH(UVEpANjyh)itTuEDEBnidG4YsSxF47NxtelNZjRRlxKUFi8zhk)gj7pDBZspmF04)ProrBJXRtJYiYvU8L0WnqoAbkthAjpbZRNY86NVDpijafoqZoB7L52C7tbMLEiSiT6m2Tk5zVa(3sAIKd9c(wkB1(EzSZg)ITGf2YmJS02M2AzxT(YAZ9scmqWvw4UxEhnQfgAaE)15Rb9qeyTBlwoq4laECyHPnapwlXYH)wn41Hf6m3eEgQZbYPm8aTk4qgGIRq0Pb4dIEEdWJV8ysdWhYa8Bs6zZza(WvqEgGpsTOodWh1gUzaEcdWhJ0sgGpUb4jXTLb4PW94prdGMvKHG6IcagZ0P)fWwuZZd1mPMxWKA2YzIvdE6aRC8uLZFXAHvBf4ZzDsFdWhqPJgjWOS7Jkr26GyUr1YyFaeZXIncvfQS)OhTq0uNuWNCMwsKjDLcuPU91LYoQ7yGu1jGZuB(KDGN1g)IEYQQ7SJKf9mGLFBGDASa)TyaERgG3g(D5TBaEhKwXa8o30P(XKHG3LP)agGznaVBCjEpZwXzzdWJ2GnCdW7fxK3x21mmLoqtsc6ynB610Ffjz9A3O)lw)1eJUuGmLqBzpUl24491sCSiX8JernUkko59fT3srZ429WNSLOy5RirXxu2DIRE(Woxp4dxHweRZ7ocwAplNtDCKj3mAr8eqRbhXddLmyNkP8OX0sCKYvKgo95RRqEmaFsdWN6cNjssb8v)2o(IbUi)5Ywz94cDviuUGOqbynOJP13V3t2TwHq7V12kp1LbOJvUV4tq5kSWc2gJsQ0wuv5j5CfTY3dicazDXF8ZP)tVa4qEbRd0tlpWM7dTqwgYx9h8eFAWJ8(d7V7u9mrxfhwPLEKREjm05XQEqkT(kqr)W3OgjDMHhSUtwSJgogYNT6olS(pHegG)mK6cK6p6aXJ2t4bteTLnKb4VO(6gP74HzwYPAoO5Al0SkSaPcn)HDoQPA0Kd29WPJVK643ImJSwEn9DKjzYmlPw(S8)QzpP0j6p(GrJV0Hc7PQ2SowQWrt09iRMQQ0w6O9Kmz)JMG89iIz4uzohv)8o6dlVBWJS7M6g8m2lQBl9cUwpzW9edWFoPnEgt)yoR5ccvbOU(5vdvsx50ZV2w9QNOkRIjrYXXf4ZuVtYgGplXXMVkXqgE8YMQXa85xcptX(MMXx8KEfL5BPjkTROmrzTCrpM3o97nIh3EDts8gjqGqHyW)kyxm(d43xxm(841RFgpHce0pJp)(d6znUjAUI2swZGxkcNk)icd1luPJwAgt)Ya4LBdW4Z1tsMehp5Gzc3pAdVz7dou0yvoUr1LvCjv2XG2hUhAw1Vq82rhJER0tkuqViuIZoKA0ChKoj27uZ82KJZHDGSmBpz180GFzwo7iLrVNnLyDpLklxqLGBDxxDnr3YauAZR1qBzaMWmIwevWPijLxAqSmatBh)kdWRPAKRmaVw0o2Ob4bqbnaVUTyaE97HjMb4nG)1dYBaMXa8qgGhMgdkdWBSAWNQEiUSJucMY6n1yGNaRlXDkQ3I5HmdkhjSx6SMo3Kosl1M2CKLymS4KSL1STTH5SBMTTfSojBMNwTvSbUw9j94I9u6d0aXg)5TPVWRUWQ)DjH5X6tTzwtoPHMgEQWL2pRChXAjN03aZjXt5KcVUfJ9QFweMtwYgO2WN6Gg3bYF)g(iLygk(L)JaeFTHQ)owTUCTO5kGx5D0cIU9InfIMZKQBLJnxhWCRY9dYkbPvDrc4p)qBgGNZcL1bmWGs5Jh5O8sTeL9nVaGYCUwf(gGFqf)Tputf4gGF9Rue2RkALQc6Id1tQYtgBSJWFKwkO)NEbxqpylf09mtZJVqf3swRXx4fwr4s2Y31ic7RCNbMki)KLleULIW)5lXfHr(gnveQ0(sDI8YBHjUJUSctT0jNqewqxtT1t54BDjUW8HVZMkmpBdE8F5TGe3jxwb5X7CYXlhBOJes2FlfKF7lXfKlZkwza(kxIl7ORRKvyyPlOuldeBdsp)cN64kduCICXZ3sP3IxIl9wMWUBa(0xjl9gYT0Wb6HD8UDdBP077Cbu6rwVLiXsESbrB4qv3BWPMiLRmKpFqqDxXWtmP6w3nUeSyz77TynB)xY3DOMTtEnaLUU1T16WBMKPU4TAhZxZWrtwMdU1N9x7aNIlWjhziFjVVUwHlU6N9LSbYNdSze0HfPBKvP(mxR93wwusLBQjBI1e4sUFZjfyP4HhQpdDlTA1gzrUIq(D1LUaR69l2K0qvBzdWVSXMWydxfUIgBa0q1E3p3QRA)RRQQL4tU6Q2h98QAO7XlRu5Lq3K9IfDZQBjI)5MunDD0KXG9L64U9uULun)KlGunR8ihq294jvT(NVKDX43R3qEPeepVxpKD9LY2P76AxK)PMXv6s5ZdjFqTr4hWNF(kB36eCzB53z3l(2msScfI7SzsqPEusFYX8xwsONwkb)PvKGjEbuc(S0fEnQOmEAqzn56)zKpeeD1PxF(cfXJ7o9gjGNqbij0dsTxsIp6jHmeJNqHc6MM6HM6LM6JM6NMgGEGADpVcuL8XJL8bdFg2cfG51HCMhMo8y4IKnEUGemLzHYEz8PR7MxHHsAnbXIpU(aU9ne0ZGUBjeR6z5FDhI1EX25AN70VS6(a0DC0RWaGDc4rOEp9ZT)yTr(qT9L30L2FO2WoJSKpoBDLxzQ4Hf6j8y90KpoBTRX47GboO72N4QFG)Vp
 ```

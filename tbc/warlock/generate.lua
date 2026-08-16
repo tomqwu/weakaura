@@ -1,4 +1,4 @@
--- generate.lua — Warlock TBC All-Specs HUD (v12).
+-- generate.lua — Warlock TBC All-Specs HUD (v13).
 -- Run: lua5.1 generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import).
 --
@@ -338,6 +338,66 @@
 --   * NOTHING ELSE MOVED: every trigger, gate, condition and colour outside the
 --     clusters is untouched — buffs, alerts, DoT row, cooldown row, procs, PvP.
 --
+-- v13 (THE HEALTH NUMBER MOVES INTO THE MIDDLE, ONTO YOUR FACE):
+--   * THE COMPLAINT, VERBATIM: "percentage in middle can't be seen". It could not
+--     be seen because it was never in the middle. v11 pushed both numbers OUTSIDE
+--     the rings when the portrait came back (a `model` region cannot carry a text
+--     sub-region, so the numbers had to ride on the rings), and they stayed there
+--     through v12: health 13 pt at y -54 and mana 10 pt at y -70 — two small
+--     detached figures floating under the cluster, over whatever the game world
+--     happened to be showing. Against a bright background they are unreadable.
+--   * THE FIX IS TO USE THE MIDDLE. The rings' text sub-regions are anchored to
+--     the ring CENTRE, so a y offset of 0 puts the health number dead centre, over
+--     the portrait — the darkest, most stable backdrop in the whole cluster and
+--     the one place the eye already goes. It grows 13 -> 16 pt because it is now
+--     the cluster's headline number rather than a caption under it.
+--       health  %percenthealth%%  y -54 -> 0    13 -> 16 pt
+--       mana    %percentpower%%   y -70 -> -54  10 -> 12 pt
+--       threat  %threatpct%%      y +58 unchanged, 10 pt unchanged
+--     Mana takes the slot health vacates rather than staying at -70: one number
+--     under the cluster instead of two, tucked just under the 84 ring's radius of
+--     42, and 2 pt larger now that it is not competing with a bigger sibling
+--     directly above it. Every label keeps its OUTLINE font type, its shadow, its
+--     colour and its text token — only the offsets and two sizes moved.
+--   * AND THE HALF THAT IS NOT A COORDINATE: DRAW ORDER. Moving the health number
+--     to y 0 alone would have looked like nothing happened, because the portrait
+--     was the LAST child of the cluster. FixGroupChildrenOrder walks
+--     controlledChildren and adds +4 frame levels per child, so LATER = further
+--     FORWARD, and the face was drawn over everything the rings put in the middle.
+--     The portrait becomes the FIRST child instead:
+--       v12  { Threat, Health, Mana, Portrait, Threat Flash }
+--       v13  { Portrait, Threat, Health, Mana, Threat Flash }
+--     This is safe ONLY because a ring is an ANNULUS. Ring_20px draws a band from
+--     0.84375r to r, so the three arcs occupy 42.19..50, 35.44..42 and 26.16..31,
+--     and the face is 0..22 — no band overlaps the face at any radius. Drawing the
+--     rings above the portrait therefore hides none of it; the only thing that
+--     lands on the face is the text, which is the entire point.
+--   * A COMMENT THAT WAS WRONG IS NOW RIGHT. Two places in this file claimed
+--     "frameStrata 2 puts the face above its rings no matter how the children are
+--     ordered". That is backwards: WeakAuras' frame_strata_types[2] is BACKGROUND,
+--     the LOWEST strata — below the inherited strata (1) the rings use, not above
+--     it. The mage pack documents the same fact for its rims. The portrait keeps
+--     frameStrata 2, which means it was ALREADY behind its rings and the strata
+--     never fought this change; the child reorder makes the frame-LEVEL layer agree
+--     with the strata layer instead of contradicting it. The comment mattered
+--     because the next person to read it would have "fixed" the strata to put the
+--     face genuinely on top, and buried the number again.
+--   * NOT ONE AURA ADDED, REMOVED OR RENAMED, and not one W.uid() call added,
+--     removed or reordered. uids are assigned where a region is CONSTRUCTED, and
+--     nothing moved there — only the `adopt` calls that wire the cluster changed
+--     order, and F.assemble derives both controlledChildren and the flat c-list
+--     from those, so the two stay depth-first consistent by construction. All 40
+--     uids byte-for-byte stable: stable=39, changed=0, missing=0.
+--   * THE v12 REMOVAL LICENCE EXPIRES HERE, as designed. The four
+--     `-- WA-REMOVED (v12):` tags stay as lineage but are no longer honoured — the
+--     verifier only accepts tags matching the version a pack currently ships — and
+--     W.assertUidContinuity is called with NO allowance, so v13 is back on the
+--     default contract: no uid may disappear, full stop.
+--   * NOTHING ELSE CHANGED: not one trigger, load gate, condition, colour, size,
+--     diameter or position. The cluster is still at (-270, 40), the rings are still
+--     100/84/62 around a 44 px face, and everything outside the cluster — buffs,
+--     alerts, DoT row, cooldown row, procs, PvP — is untouched.
+--
 -- UID ORDER IS SACRED: the two v2 auras are built at the BOTTOM of this file so
 -- every pre-v1 uid() call keeps its position in the seeded stream. v3 is a
 -- load-gate-only change: no aura added, removed, renamed or reordered. v4's
@@ -442,21 +502,32 @@ local PORTRAIT    = 44   -- live unit portrait (44/84 = the 0.52 face-to-ring ra
 local CLUSTER_X   = -270 -- ABSOLUTE screen x of the (only) cluster
 local CLUSTER_Y   = 40   -- ABSOLUTE screen y of the (only) cluster
 
--- The percentages sit just OUTSIDE the rings, because the middle of the cluster
--- is a live portrait and a `model` region cannot carry a text sub-region at all
--- (SubText's supports() gate lists texture / progresstexture / icon / aurabar /
--- empty — never model). Every ring is concentric on one centre, so the numbers
--- stack on ONE baseline pair below (health at -54, mana at -70, both clearing the
--- 84 ring's radius of 42) and threat rides ALONE above at +58, outside the 100
--- ring's radius of 50. Health and mana deliberately did not move outward with the
--- new ring: they belong to the arcs they sit against, and pushing them out to
--- clear a ring they are not on would only widen the cluster.
-local PCT_HP        = 13   -- health percentage, CENTER
-local PCT_HP_Y      = -54  -- just under the health ring (radius 42)
-local PCT_POWER     = 10   -- power percentage, CENTER
-local PCT_POWER_Y   = -70  -- below the health number
+-- v13: THE HEALTH NUMBER LIVES IN THE MIDDLE, ON YOUR FACE.
+--
+-- A `model` region cannot carry a text sub-region at all (SubText's supports()
+-- gate lists texture / progresstexture / icon / aurabar / empty — never model), so
+-- the portrait itself can never hold a number. But the RINGS can, and every ring
+-- is concentric on the cluster's centre, so a ring's text at anchorYOffset 0 lands
+-- exactly in the middle — over the face. That is where the health number goes:
+-- the middle of the cluster is the darkest, most stable backdrop it has, and it is
+-- where the eye already is. Outside the rings it was two small figures floating
+-- over the game world, which is precisely the "can't be seen" complaint.
+--
+-- The offsets are measured from the shared centre:
+--   health  0    dead centre, ON the 44 px portrait (radius 22)
+--   mana    -54  just under the 84 ring's radius of 42 — the slot health vacated
+--   threat  +58  unchanged, outside the 100 ring's radius of 50
+-- One number below the cluster instead of two stacked, and one in the middle.
+--
+-- This ONLY works together with the child order at the bottom of this file: the
+-- portrait must be drawn FIRST (furthest back) or it covers the text. See the
+-- draw-order note there — the offset alone is not the fix.
+local PCT_HP        = 16   -- health percentage, CENTER — the headline number
+local PCT_HP_Y      = 0    -- DEAD CENTRE, over the portrait (v13; was -54)
+local PCT_POWER     = 12   -- power percentage, CENTER
+local PCT_POWER_Y   = -54  -- just under the health ring, radius 42 (v13; was -70)
 local PCT_THREAT    = 10   -- threat percentage, CENTER
-local PCT_THREAT_Y  = 58   -- ABOVE the new 100 px threat ring (radius 50)
+local PCT_THREAT_Y  = 58   -- ABOVE the 100 px threat ring (radius 50), unchanged
 
 -- -270 IS A CONTRACT, NOT A TASTE CALL, and it was not chosen for looks. The
 -- Alerts column occupies x -170..-130 in the seven-pack layout — a DYNAMIC GROUP
@@ -687,9 +758,16 @@ end
 -- guarded by WeakAuras.IsClassicEra(), which is a DISTINCT predicate from
 -- IsTBC() — so on a 2.5.x client that migration DOES NOT RUN and emitting only
 -- model_path is a silent no-op. BOTH are emitted; model_fileId does the work.
--- frameStrata 2 puts the face above its rings no matter how the cluster's
--- children are ordered. The portrait carries its cluster's own triggers, so it
--- appears, fades and vanishes with the rings around it.
+-- frameStrata 2 puts the face BEHIND its rings, which is what v13's centred health
+-- number needs. WeakAuras' frame_strata_types[2] is BACKGROUND — the LOWEST
+-- strata, below the inherited strata (1) every ring uses, not above it. (This file
+-- claimed the opposite until v13; the mage pack documents the same fact for its
+-- rims, which are likewise drawn behind at frameStrata 2.) Strata outranks frame
+-- level entirely, so this alone already kept the face behind the arcs; the v13
+-- child reorder makes the frame-level layer agree rather than contradict it.
+-- Nothing is lost by being behind: the rings are annuli and none of their bands
+-- reaches the face's radius. The portrait carries its cluster's own triggers, so
+-- it appears, fades and vanishes with the rings around it.
 local function portrait(id, unit, trigs)
   return orbStub{
     regionType = "model", id = id, uid = W.uid(), parent = nil,
@@ -711,9 +789,11 @@ local function portrait(id, unit, trigs)
   }
 end
 
--- The number rides on its ring, just outside the outer radius, because the middle
--- of the cluster is a live face. `sym` is the stored trigger variable, which is
--- also what makes the text a rounded integer rather than 63.428571%.
+-- The number rides on its ring, anchored to the ring's CENTRE, so `yOffset` is
+-- measured from the shared cluster centre: 0 is dead middle (v13 puts health
+-- there, over the face), negative is below, positive above. `sym` is the stored
+-- trigger variable, which is also what makes the text a rounded integer rather
+-- than 63.428571%.
 local function pct(sym, size, yOffset, color)
   local st = F.subtext("%" .. sym .. "%%", size, "CENTER", sym)
   st.anchorYOffset = yOffset
@@ -1343,11 +1423,28 @@ adopt(gPvp, emana)
 --
 -- SIBLING ORDER IS DRAW ORDER, exactly: FixGroupChildrenOrder walks
 -- controlledChildren and adds +4 frame levels per child, so EARLIER = further
--- BEHIND. Rings outside-in, then the face (which also carries frameStrata 2, so
--- nothing draws over it whatever the order), and the halo last of all so it pulses
--- OVER the threat ring it now shares a radius with rather than under it.
--- sharedFrameLevel is deliberately left off the cluster group — it would set the
--- offset to 0 and make the overlap ambiguous.
+-- BEHIND. v13 puts THE FACE FIRST, which is the half of the centred-health-number
+-- change that is not a coordinate:
+--   v12  { Threat, Health, Mana, Portrait, Threat Flash }   face on top
+--   v13  { Portrait, Threat, Health, Mana, Threat Flash }   face at the back
+-- With the portrait last, it was drawn over everything the rings put in the middle,
+-- so moving the health number to y 0 would have looked like nothing happened.
+--
+-- DRAWING THE RINGS OVER THE FACE HIDES NONE OF IT, because a ring is an ANNULUS.
+-- Ring_20px paints a band from 0.84375r to r, so the three arcs occupy radii
+-- 42.19..50, 35.44..42 and 26.16..31 while the face is 0..22 — the nearest band
+-- still clears the face by 4 px. The only thing that lands on the portrait is the
+-- text sub-region, which is the entire point.
+--
+-- (frameStrata was never the mechanism here: the portrait's frameStrata 2 is
+-- BACKGROUND, the lowest strata, so it was ALREADY behind the rings' inherited
+-- strata 1. Strata outranks frame level, so this reorder does not change what wins
+-- — it makes the frame-level layer say the same thing the strata layer already
+-- said, instead of contradicting it. See the portrait factory note above.)
+--
+-- The halo stays last of all so it pulses OVER the threat ring it shares a radius
+-- with rather than under it. sharedFrameLevel is deliberately left off the cluster
+-- group — it would set the offset to 0 and make the overlap ambiguous.
 -- =====================================================================
 
 -- --- the cluster: three rings and your face, at ABSOLUTE (-270, 40) -----
@@ -1368,12 +1465,14 @@ pPortrait.conditions = {
   F.condition(1, "maxhealth", "<=", "0", "alpha", 0),
 }
 
--- --- wiring (append-only, so no uid above this line moves) --------------
+-- --- wiring (v13 draw order; no uid moves — uids are assigned at CONSTRUCTION,
+--     above, and not one constructor call changed place) -------------------
 adopt(gRes, gPlayer)
-adopt(gPlayer, threat)      -- the outermost arc, furthest back...
-adopt(gPlayer, pHealth)     -- ...then health...
+adopt(gPlayer, pPortrait)   -- the face FIRST, furthest back, so the rings' text
+                            -- draws ON it — this is what makes health at y 0 read
+adopt(gPlayer, threat)      -- ...then the outermost arc...
+adopt(gPlayer, pHealth)     -- ...then health (its number is the centred one)...
 adopt(gPlayer, pMana)       -- ...then mana...
-adopt(gPlayer, pPortrait)   -- ...and the face last, so nothing draws over it
 adopt(gPlayer, flash)       -- the 80% halo, on the threat ring, over everything
 
 -- ===== assemble (v2000 nested), encode, verify =====
@@ -1417,6 +1516,12 @@ W.verify(transmit, encoded)
 -- 8. THE REMOVALS ARE THE DECLARED ONES, in the string and in the uid stream:
 --    the four target-cluster ids are absent, and every uid that disappeared
 --    belongs to one of them.
+-- 9. (v13) THE NUMBERS ARE WHERE THEY ARE CLAIMED TO BE, AND THE FACE IS AT THE
+--    BACK. Both halves are asserted, because either one alone is a no-op: health
+--    at anchorYOffset 0 / 16 pt and mana at -54 / 12 pt, AND the portrait as the
+--    FIRST entry of the cluster's controlledChildren with all three rings after
+--    it. The annulus clearance that makes drawing rings over the face safe is
+--    asserted too, from the decoded diameters rather than from the comment above.
 -- =====================================================================
 local back = W.decode(encoded)
 local nodes = { [back.d.id] = back.d }
@@ -1503,6 +1608,79 @@ do
   assert(n.width == PORTRAIT and n.height == PORTRAIT, id .. ": wrong face size")
 end
 
+-- v13: THE PERCENTAGES, AND THE DRAW ORDER THAT MAKES THE CENTRED ONE VISIBLE.
+-- Asserted together and from the DECODED string, because each half is useless
+-- without the other: a centred number under an opaque portrait is invisible, and a
+-- reordered portrait under a number that is still at -54 changes nothing.
+do
+  local want = {
+    { id = "Warlock - Player Health", sym = "%percenthealth%%", size = PCT_HP,    y = PCT_HP_Y },
+    { id = "Warlock - Player Mana",   sym = "%percentpower%%",  size = PCT_POWER, y = PCT_POWER_Y },
+    { id = "Warlock - Threat",        sym = "%threatpct%%",     size = PCT_THREAT, y = PCT_THREAT_Y },
+  }
+  for _, w in ipairs(want) do
+    local sub = assert(nodes[w.id].subRegions[1], w.id .. ": no percentage sub-region")
+    assert(sub.type == "subtext", w.id .. ": sub-region 1 is not a subtext")
+    assert(sub.text_text == w.sym,
+      ("%s: text token is %q, expected %q"):format(w.id, tostring(sub.text_text), w.sym))
+    assert(sub.text_fontSize == w.size,
+      ("%s: font is %s, expected %d"):format(w.id, tostring(sub.text_fontSize), w.size))
+    assert(sub.anchorYOffset == w.y,
+      ("%s: anchorYOffset is %s, expected %d"):format(w.id, tostring(sub.anchorYOffset), w.y))
+    assert(sub.text_anchorPoint == "CENTER", w.id .. ": percentage is not CENTER-anchored")
+    -- the readability kit the v13 note promises to keep
+    assert(sub.text_fontType == "OUTLINE", w.id .. ": lost its OUTLINE font type")
+    assert(sub.text_shadowColor and sub.text_shadowXOffset == 0 and sub.text_shadowYOffset == 0,
+      w.id .. ": lost its shadow settings")
+  end
+  -- the health number is the one in the middle, and it is the only one there
+  assert(PCT_HP_Y == 0, "the health percentage is not at the cluster's centre")
+  assert(PCT_POWER_Y ~= 0 and PCT_THREAT_Y ~= 0,
+    "two numbers are stacked on the same centre point")
+
+  -- DRAW ORDER: the face first (furthest back), every ring after it.
+  local cc = assert(nodes["Warlock - Player Orb"].controlledChildren)
+  assert(cc[1] == "Warlock - Player Portrait",
+    ("the portrait must be the FIRST cluster child, but child 1 is %q — with it later "
+      .. "it draws OVER the centred health number"):format(tostring(cc[1])))
+  local ringsAfter = 0
+  for i = 2, #cc do
+    if nodes[cc[i]].regionType == "progresstexture" then ringsAfter = ringsAfter + 1 end
+  end
+  assert(ringsAfter == 3,
+    ("only %d of 3 rings are drawn after the portrait"):format(ringsAfter))
+  -- ...and the flat c-list agrees with it, depth-first (F.assemble derives it from
+  -- controlledChildren, so this catches a hand-edit that desynchronised the two).
+  local order = {}
+  for _, ch in ipairs(back.c) do
+    if ch.parent == "Warlock - Player Orb" then order[#order + 1] = ch.id end
+  end
+  assert(#order == #cc, "cluster c-list and controlledChildren differ in length")
+  for i = 1, #cc do
+    assert(order[i] == cc[i],
+      ("c-list is out of step with controlledChildren at %d: %q vs %q")
+        :format(i, tostring(order[i]), tostring(cc[i])))
+  end
+
+  -- WHY DRAWING RINGS OVER THE FACE IS SAFE: Ring_20px is an annulus whose band
+  -- runs 0.84375r..r, so the innermost band must still clear the portrait radius.
+  local BAND = 1 - 40 / 256   -- inner radius as a fraction of the outer
+  local face = nodes["Warlock - Player Portrait"].width / 2
+  local tightest = math.huge
+  for _, id in ipairs({ "Warlock - Threat", "Warlock - Player Health", "Warlock - Player Mana" }) do
+    tightest = math.min(tightest, nodes[id].width / 2 * BAND)
+  end
+  assert(tightest > face,
+    ("the innermost ring band starts at r=%.2f and the face ends at r=%.2f — a ring "
+      .. "drawn over the portrait would cover it"):format(tightest, face))
+  print(("v13 layout: health %d pt @ y=%d (centre, over the %d px face), mana %d pt @ y=%d, "
+    .. "threat %d pt @ y=%d"):format(PCT_HP, PCT_HP_Y, face * 2, PCT_POWER, PCT_POWER_Y,
+      PCT_THREAT, PCT_THREAT_Y))
+  print(("  draw order: %s"):format(table.concat(cc, " -> ")))
+  print(("  annulus clearance: innermost band r=%.2f vs face r=%.2f (%.2f px clear)")
+    :format(tightest, face, tightest - face))
+end
+
 -- the halo pulses ON the threat ring, at the same diameter, with the same gates
 do
   local n = assert(nodes["Warlock - Threat Flash"])
@@ -1580,18 +1758,18 @@ do
 end
 
 -- uid continuity vs the previous on-disk version (checked BEFORE overwriting, so
--- re-running after any future edit compares against the shipped string). v12 is
--- the first version to hand over an allowance: the four declared removals may
--- disappear, and NOTHING ELSE may. `changed` is still forbidden outright.
-local REMOVED_V12 = {
-  "Warlock - Target Orb",
-  "Warlock - Target Health",
-  "Warlock - Target Ring Track",
-  "Warlock - Target Portrait",
-}
+-- re-running after any future edit compares against the shipped string).
+--
+-- v13 PASSES NO ALLOWANCE, and that is the point. v12 handed over a licence for
+-- four deliberate removals; a licence that stays open outlives the deletion it was
+-- written for and quietly permits the next one. It expires at the version bump —
+-- exactly as tools/verify-packs.lua treats the `-- WA-REMOVED (vN):` tags, which it
+-- honours only when the tag matches the version the pack currently ships. Those
+-- four tags stay above as lineage and are now inert on both sides. v13 removes
+-- nothing, so it is back on the default contract: no uid may disappear, full stop.
 local txtPath = dir .. "/all-specs.txt"
 local cont = W.uidContinuity(encoded, txtPath)
-W.assertUidContinuity(cont, "warlock", REMOVED_V12)
+W.assertUidContinuity(cont, "warlock")
 
 local out = assert(io.open(txtPath, "w"))
 out:write(encoded)  -- single line, no trailing newline

@@ -1,4 +1,4 @@
--- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v12.
+-- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v13.
 -- Run: lua5.1 tbc/mage/generate.lua   (toolkit libs live in tools/tbc-weakaura-creator/scripts/)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (internalVersion 45).
 --
@@ -282,8 +282,38 @@
 --     100px threat ring is concentric with the 84/62/44 that were already there. Walk it in the
 --     shipped string, not here.
 --
+-- v13 (THE PERCENTAGES BECOME READABLE: health moves to the middle of the cluster, onto the
+-- portrait, and the portrait moves to the BACK of the draw order so it can). No aura added,
+-- removed, renamed or re-uid'd; no trigger, load gate, condition, colour, size or position
+-- touched anywhere. The entire version is two subtext offsets, two font sizes and one child
+-- reordering — but the reordering is what makes the offsets do anything, and it is the half a
+-- reader will not predict:
+--   * THE COMPLAINT, and what actually caused it. v11 parked the percentages outside the rings
+--     (health 54px below the cluster, mana 70px below) because the portrait owns the middle and
+--     a `model` region cannot carry a subtext. That reasoning was sound about WHERE THE TEXT CAN
+--     LIVE — it must belong to a ring — and wrong about WHERE IT CAN BE DRAWN: a subtext anchors
+--     to the cluster centre, so a ring's number can sit anywhere, its own band included. The
+--     result was two small numbers on bare screen with nothing behind them, illegible over
+--     anything bright, reported from the client as "percentage in middle can't be seen".
+--   * THE FIX. Health goes to y = 0 at 16pt — dead centre, on the portrait, which is the one
+--     opaque always-present backdrop the cluster has. Mana inherits the -54 slot health leaves,
+--     at 12pt. Threat does not move (58, 10pt): it is above the outer ring and was never the
+--     problem. Text tokens, colours, outline and shadow are all untouched.
+--   * THE HALF THAT IS NOT IN THE CONSTANTS. Cluster children draw in controlledChildren order,
+--     +4 frame levels each, and the portrait was LAST — i.e. over everything. A number at y = 0
+--     under the old order is drawn UNDER the face and is simply invisible, so shipping the offset
+--     change alone would have looked like a no-op. v13 moves the portrait to FIRST. That is safe
+--     because every other child is an annulus or a bead with no art at the centre (innermost band
+--     radius 26.16; the face ends at 22.00), so the rings hide none of the face — only their text
+--     lands on it, which is the entire point. Measured radii and the flare case are worked
+--     through in the assembly note at the bottom of this file.
+--   * UID STREAM UNTOUCHED. Reordering adopt() calls edits controlledChildren only; the portrait
+--     is still created in its original position in the uid stream. changed = 0, missing = 0.
+--
 -- The four auras v12 removes, declared for the verifier (see tools/verify-packs.lua). These
--- lines are the licence for the four disappearing uids and they expire at v13:
+-- lines are the licence for the four disappearing uids and they expire at v13 — which is now,
+-- so they are inert: the removal already happened in the committed v12 string, both sides of the
+-- continuity check agree, and `missing` is 0 without needing the allowance:
 -- WA-REMOVED (v12): Mage - Target Cluster
 -- WA-REMOVED (v12): Mage - Target Health Ring
 -- WA-REMOVED (v12): Mage - Target Ring Track
@@ -415,13 +445,28 @@ local CLUSTER_X = -270          -- the one cluster; x is unchanged from v11's pl
 local CLUSTER_Y = 40            -- ABSOLUTE screen y of the cluster, also unchanged
 -- The three read-outs. Every one is a CENTER-anchored subtext, so its offset is measured from
 -- the CLUSTER centre rather than from whichever ring carries it — which is why the threat number
--- can move outward with its ring by changing one constant. The portrait owns the middle (a
--- `model` region cannot carry a subtext at all — SubText's supports() lists texture /
--- progresstexture / icon / aurabar / empty), so the numbers sit just outside the rings.
-local PCT_HP       = 13         -- health %
-local PCT_HP_Y     = -54        -- just under the health ring (radius 42)
-local PCT_POWER    = 10         -- mana %
-local PCT_POWER_Y  = -70        -- under the health number
+-- can move outward with its ring by changing one constant. A `model` region still cannot carry a
+-- subtext (SubText's supports() lists texture / progresstexture / icon / aurabar / empty), so the
+-- numbers still RIDE ON THE RINGS — but v13 stops treating that as a reason they must also SIT
+-- outside them. The subtext is anchored to the cluster centre, not welded to its ring's band, so
+-- a ring's number can be placed anywhere, the middle included.
+--
+-- v13 PUTS HEALTH IN THE MIDDLE, over the portrait, and that is the whole point of the version.
+-- v11 and v12 parked health 54px BELOW the cluster and mana 70px below it: two small numbers
+-- floating on bare screen with nothing behind them, which against a bright zone is unreadable —
+-- reported from the client as "percentage in middle can't be seen". The middle, meanwhile, held
+-- only the portrait, which is the one part of the cluster with a dark, opaque, always-present
+-- backdrop. So health moves onto it at 16pt (the biggest number in the pack, because it is the
+-- one you read at a glance while taking damage), mana takes the -54 slot health vacates at 12pt,
+-- and threat does not move at all.
+--
+-- MOVING THE OFFSET IS ONLY HALF THE FIX. See the child-order note in the assembly section at the
+-- bottom: with the portrait drawn LAST, as v11/v12 had it, a number at y = 0 lands UNDER the face
+-- and nothing visibly changes. The reorder there is what makes these two constants take effect.
+local PCT_HP       = 16         -- v13: 13 -> 16. Health is the glance read; it gets the big font
+local PCT_HP_Y     = 0          -- v13: -54 -> 0. Dead centre, ON the portrait (its only backdrop)
+local PCT_POWER    = 12         -- v13: 10 -> 12, readable now that it owns the under-ring slot
+local PCT_POWER_Y  = -54        -- v13: -70 -> -54, the slot health vacates, just under the ring
 local PCT_THREAT   = 10         -- threat %, the one read-out that sits above the cluster
 local PCT_THREAT_Y = 58         -- v12: 54 -> 58, clear of the new 100px outer ring (radius 50)
 local TOP_Y        = -140       -- the pack's top group; the ring layer offsets back out of it
@@ -1372,11 +1417,46 @@ adopt(gPvP, emana)
 -- uid, and takes the 80% flare with it. See the threat ring itself for the reasoning.
 --
 -- CHILD ORDER IS THE STACKING ORDER: FixGroupChildrenOrder walks controlledChildren and adds
--- +4 frame levels per entry, so EARLIER = further behind. Threat first (it is the outermost arc
--- and the one thing that may be drawn over), then health, then mana, the conserve beads over the
--- arc they mark, the flare over everything it haloes, and the PORTRAIT LAST so nothing draws over
--- the face. sharedFrameLevel is deliberately left off the cluster group: it would zero the level
--- offset and make the overlap order ambiguous.
+-- +4 frame levels per entry, so EARLIER = further behind. sharedFrameLevel is deliberately left
+-- off the cluster group: it would zero the level offset and make the overlap order ambiguous.
+--
+-- v13 MOVES THE PORTRAIT FROM LAST TO FIRST, and this is the half of the "put health in the
+-- middle" change that is invisible in a diff of the constants but is the reason it works at all.
+--
+--   v11/v12:  threat, health, mana, beads, flare, PORTRAIT   <- face on top of everything
+--   v13:      PORTRAIT, threat, health, mana, beads, flare   <- face behind everything
+--
+-- WHY IT WAS LAST. The old rule was "nothing draws over the face", which was correct while the
+-- numbers lived outside the rings: nothing else reached the middle, so last cost nothing and
+-- guaranteed the portrait was never clipped. Once health moves to y = 0 that rule inverts — the
+-- portrait is drawn AFTER the health ring, so it covers the health ring's subtext, and a build
+-- with PCT_HP_Y = 0 and the old order renders a number that is simply not there. Changing the
+-- offset alone looks like nothing happened; that is the trap this note exists to prevent.
+--
+-- WHY PUTTING IT FIRST IS SAFE, and not just a trade of one occlusion for another: every other
+-- child of this cluster is an ANNULUS or a bead, and none of them has any art at the centre.
+-- Measured off the decoded string rather than assumed (Ring_20px's stroke is 20/256 of the drawn
+-- size, so a ring of diameter d spans radius d/2 - 20d/256 .. d/2):
+--     threat ring   100px -> radius 42.19 .. 50.00
+--     threat flare  100px -> radius 42.19 .. 50.00  (same annulus art, ADD blend)
+--     health ring    84px -> radius 35.44 .. 42.00
+--     mana ring      62px -> radius 26.16 .. 31.00
+--     conserve beads 6/8px at (27.71, -9) -> ~29 from centre, on the mana stroke
+--     PORTRAIT       44px -> radius  0.00 .. 22.00
+-- The innermost band starts at 26.16 and the face ends at 22.00, so no ring's ART can reach the
+-- portrait at all: drawing the rings above it hides nothing. The only thing of theirs that lands
+-- on the face is the health SUBTEXT, which is exactly the point — the number now has the one
+-- opaque, always-present backdrop in the cluster behind it instead of the open sky.
+--
+-- The flare is the case worth checking twice, because it is the one child drawn over the health
+-- number: it is 100px of Ring_20px in ADD blend, i.e. the 42.19..50 band, so at 80% threat it
+-- pulses around the OUTSIDE of the cluster and never touches a number at y = 0.
+--
+-- Reordering is a controlledChildren edit ONLY. It consumes no uid and moves no uid() call — the
+-- portrait is still CREATED in its original position in the stream above (slot 3), and only its
+-- adopt() call moves — so every uid is unchanged and the in-game Update flow is unaffected.
+-- F.assemble derives the flat c-list depth-first from controlledChildren, so the transmit's two
+-- orderings cannot drift apart here; W.verify enforces that they agree.
 local gPlayer = reg(F.group("Mage - Player Cluster", CLUSTER_X, 0, nil))
 adopt(gRings, gPlayer)
 
@@ -1403,16 +1483,18 @@ W.uid()
 W.uid()
 W.uid()
 
--- THE CLUSTER, outside in. Threat is the outermost arc, and it is adopted first precisely
--- because it is outermost: nothing else in the cluster reaches 100px, so nothing can obscure it,
--- while the flare that pulses on it is adopted after every arc so it draws on top.
+-- THE CLUSTER: the face first, then the arcs outside in. The portrait is adopted FIRST as of v13
+-- so that every ring — and therefore every ring's subtext, which is the whole reason — draws over
+-- it; see the long note above for why that hides nothing. The arcs keep their v12 order among
+-- themselves: threat outermost, then health, then mana, the conserve beads over the arc they
+-- mark, and the flare last so the 80% pulse draws over every arc it haloes.
+adopt(gPlayer, pPortrait)
 adopt(gPlayer, threatRing)
 adopt(gPlayer, hpRing)
 adopt(gPlayer, mpRing)
 adopt(gPlayer, manaLine)
 adopt(gPlayer, manaLit)
 adopt(gPlayer, flash)
-adopt(gPlayer, pPortrait)
 
 -- ===== icon polish everywhere ===============================================
 for _, aura in ipairs(order) do

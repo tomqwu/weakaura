@@ -1,4 +1,4 @@
--- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v13).
+-- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v14).
 -- Run: lua5.1 tbc/hunter/generate.lua   (toolkit libs must be fetched once:
 --      tools/tbc-weakaura-creator/scripts/setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game.
@@ -271,6 +271,29 @@
 --     surviving aura built after it), and the README names the leftover group the player has
 --     to delete by hand, because WeakAuras never deletes an aura an import does not mention.
 --
+-- v14: THE HEALTH NUMBER MOVES INTO THE MIDDLE, AND THE PORTRAIT MOVES BEHIND IT. v13 left the
+-- three readouts stacked OUTSIDE the rings — health 54px below the cluster, mana 70px below —
+-- and the reported result was the obvious one: small unbacked digits on open sky, unreadable
+-- against any bright zone, while the one opaque surface in the cluster (the portrait) sat in
+-- the centre showing nothing but a face. v14 spends that centre.
+--   * HEALTH GOES TO DEAD CENTRE at 16pt, ON the portrait, which is both where the eye already
+--     rests and the only place in the cluster with something solid behind the glyphs.
+--   * MANA TAKES THE SLOT HEALTH VACATED, -54 at 12pt: one number just under the outer ring
+--     instead of two stacked numbers trailing off the bottom of the HUD.
+--   * THREAT DOES NOT MOVE. +58 at 10pt, above the 100px threat ring, exactly as in v13.
+--   * THE DRAW ORDER IS HALF THE FIX, AND THE NON-OBVIOUS HALF. The health number is a
+--     subregion of the health RING, and through v13 the portrait was the cluster's LAST child
+--     — FixGroupChildrenOrder gives later children higher frame levels, so the face drew over
+--     every sibling. Sending the text to the centre without touching the order would have
+--     painted it straight under the portrait and looked like nothing had happened. The
+--     portrait becomes the FIRST child instead, so every ring and every ring's text draws in
+--     front of it. That is safe only because a ring is an ANNULUS: the innermost ink in this
+--     cluster is at radius 26.16 and the portrait ends at 22, so no ring's art can touch the
+--     face — only its text can, which is the point. The build asserts that gap.
+--   * NOTHING ELSE CHANGES. No aura added or removed, every uid stable, no trigger, load gate,
+--     condition, colour, size or position touched outside those two offsets, two font sizes
+--     and the child order. Reordering controlledChildren costs no uid draw at all.
+--
 -- Every spell id was verified on wowhead.com/tbc. Aura triggers carry EVERY
 -- rank as strings; cooldown triggers carry the numeric rank-1 id; spellknown
 -- gates use ids that really sit in the spellbook when trained/talented.
@@ -413,13 +436,26 @@ local PORTRAIT  = 44    -- the live unit portrait in the middle, unchanged
 local CLUSTER_X = 270   -- ABSOLUTE screen x of the (only) cluster's centre: -270
 local CLUSTER_Y = 40    -- ABSOLUTE screen y of the cluster's centre
 
--- The readouts, and the price of having the portrait back: a `model` region can never carry a
--- text subregion (SubText's supports() gate lists texture / progresstexture / icon / aurabar /
--- empty — not model), and the middle of each cluster is a face again, so every number rides on
--- its own ring and sits just OUTSIDE the rings where it competes with nothing.
-local PCT_HP     = { size = 13, y = -54 }   -- health, just under the health ring
-local PCT_POWER  = { size = 10, y = -70 }   -- power, under the health number
-local PCT_THREAT = { size = 10, y =  58 }   -- threat, ABOVE the new 100px outermost ring
+-- The readouts. A `model` region can never carry a text subregion (SubText's supports() gate
+-- lists texture / progresstexture / icon / aurabar / empty — not model), so every number still
+-- rides on a RING. What changes in v14 is WHERE the ring puts it.
+--
+-- v13 pushed all three numbers OUTSIDE the rings, on the theory that clear space beats
+-- overlap. In play that theory loses: health ended up as a 13pt number floating 54px below
+-- the cluster with nothing behind it, so against a bright zone — Nagrand grass, Netherstorm,
+-- any snowfield — it was two unreadable digits on open sky, and the only actually-opaque
+-- thing in the whole cluster, the portrait, sat in the middle displaying nothing at all.
+--
+-- v14 puts the health number where the eye already is and where there is something solid
+-- behind it: dead centre, ON the portrait. y = 0 is the cluster's own centre, so it needs no
+-- offset arithmetic to stay there, and 16pt is legible at a glance rather than a squint. The
+-- power number inherits the slot health just vacated (-54, just under the outer ring) at
+-- 12pt, and threat is untouched at +58 above the 100px threat ring.
+--
+-- This only WORKS because the portrait is reordered to draw first — see the cluster block.
+local PCT_HP     = { size = 16, y =   0 }   -- health, dead centre, ON the portrait
+local PCT_POWER  = { size = 12, y = -54 }   -- power, the slot health vacated in v14
+local PCT_THREAT = { size = 10, y =  58 }   -- threat, ABOVE the 100px outermost ring
 
 -- Pack-local geometry, all of it derived from the canon so the two can never drift.
 --   NOTHING below hard-codes a coordinate. Each CLUSTER is placed by a canon constant minus
@@ -795,8 +831,9 @@ flash.animation.main = F.animPreset("alphaPulse", "1")
 --   The clearance is derived, not picked, and the ring clusters make it wider than it was:
 --   the row is 40px icons centred at BUFF_Y = -60 spanning x -64..64 and y -80..-40, while
 --   the nearest cluster edge is the player's outer ring at x = -CLUSTER_X + OUTER/2 = -228
---   and its lowest ink is the mana percentage at CLUSTER_Y + PCT_POWER.y = -30. The two
---   never share a column at all, which is what moving the readouts out to +-270 bought.
+--   and its lowest ink is the mana percentage at CLUSTER_Y + PCT_POWER.y, which v14 lifts
+--   from -30 to -14 by pulling the readouts inward. The two never share a column at all, so
+--   the margin was never load-bearing in y — but v14 only ever widens it.
 local BUFF_Y = -60
 local gBuffs = reg(F.group("Hunter - Buffs", 0, BUFF_Y - TOP_Y, nil))
 adopt(top, gBuffs)
@@ -1536,8 +1573,7 @@ assert(burned == #REMOVED,
 -- controlledChildren and adds +4 frame levels per child, so EARLIER = further behind.
 -- The track ring first, then the arcs, with the HALO drawn directly ON TOP of the threat arc
 -- it warns about — it is an ADD-blend ring at the same 100px diameter now, so behind the arc
--- it would only light the part of the circle threat has not filled, which is backwards. The
--- PORTRAIT is last of all, so nothing in the pack is ever drawn across the face.
+-- it would only light the part of the circle threat has not filled, which is backwards.
 adopt(gPlayerCluster, powerTrack)
 adopt(gPlayerCluster, threat)
 adopt(gPlayerCluster, flash)
@@ -1566,6 +1602,38 @@ local function placeAfter(group, id, afterId)
     if cid == afterId then pos = i + 1 break end
   end
   table.insert(group.controlledChildren, assert(pos, "placeAfter: no " .. afterId), id)
+end
+
+-- ===== v14: THE PORTRAIT DROPS TO THE BACK, AND THAT IS THE WHOLE FIX =====
+-- Moving PCT_HP to y = 0 on its own would have looked like nothing happened. The health
+-- number is a subregion of the HEALTH RING, and through v13 the portrait was the LAST child
+-- of the cluster — highest frame level, drawn over every sibling — so a number sent to the
+-- centre would have been painted straight over by the face. Two edits, one effect: the
+-- offset moves the text in, and this moves the surface it would have hidden behind out.
+--
+-- Order becomes: portrait, track, threat, halo, health, mana — the portrait furthest back,
+-- every ring and therefore every ring's text in front of it.
+--
+-- WHY THIS DOES NOT BURY THE FACE. A ring here is an ANNULUS, not a disc: Ring_20px.tga is a
+-- 20px stroke on 256px art, so a ring of diameter d paints only the band from 0.84375*d/2 out
+-- to d/2 and is empty everywhere inside that. Measured against this cluster, the innermost
+-- ink of any sibling is the mana arc and the power track at radius 26.16, while the portrait
+-- ends at radius 22 — a 4.16px gap, so no ring's ART can reach the face no matter which order
+-- they draw in. The only thing that now lands on the portrait is the health SUBTEXT, which
+-- is the entire point of the change. The assert below pins that gap so a future resize of
+-- INNER or PORTRAIT fails the build instead of quietly covering the face.
+placeFirst(gPlayerCluster, pPortrait.id)
+do
+  local innermostRing = math.min(INNER, THREAT_RING, OUTER) / 2 * (1 - 20 / 256)
+  assert(innermostRing > PORTRAIT / 2,
+    ("innermost ring ink reaches radius %.2f but the portrait ends at %.2f, so a ring drawn "
+     .. "above the portrait would cover the face"):format(innermostRing, PORTRAIT / 2))
+  assert(gPlayerCluster.controlledChildren[1] == pPortrait.id,
+    "the portrait is not the cluster's first child, so it still draws over the readouts")
+  for i = 2, #gPlayerCluster.controlledChildren do
+    assert(gPlayerCluster.controlledChildren[i] ~= pPortrait.id,
+      "the portrait is listed twice in the cluster")
+  end
 end
 
 -- The two on-cooldown shots sit together in the row.
@@ -1650,6 +1718,29 @@ do
   assert(st.text_anchorYOffset > THREAT_RING / 2,
     ("threat readout at +%d prints on a ring whose top edge is +%d")
       :format(st.text_anchorYOffset, THREAT_RING / 2))
+end
+-- v14's two moved readouts, pinned to the values the version exists to ship. The health
+-- number is the one the player complained they could not read, so its centre placement and
+-- its 16pt are asserted literally rather than derived — a later tweak that drifts it back out
+-- of the middle has to change this line and say so.
+do
+  local h = hp.subRegions[1]
+  assert(h.type == "subtext" and h.text_fontSize == 16 and h.text_anchorPoint == "CENTER"
+     and h.text_anchorYOffset == 0 and h.anchorYOffset == 0,
+    "health readout is not font 16 / CENTER / dead centre")
+  assert(h.text_anchorYOffset == 0 and math.abs(h.text_anchorYOffset) < PORTRAIT / 2,
+    "health readout no longer lands on the portrait, which is the whole of v14")
+  local p = mana.subRegions[1]
+  assert(p.type == "subtext" and p.text_fontSize == 12 and p.text_anchorPoint == "CENTER"
+     and p.text_anchorYOffset == -54 and p.anchorYOffset == -54,
+    "power readout is not font 12 / CENTER / -54")
+  assert(p.text_anchorYOffset < -OUTER / 2,
+    ("power readout at %d prints on the health ring, whose bottom edge is %d")
+      :format(p.text_anchorYOffset, -OUTER / 2))
+  assert(h.text_fontType == "OUTLINE" and p.text_fontType == "OUTLINE",
+    "a moved readout lost its outline, which is what keeps it legible on a bright background")
+  assert(h.text_text == "%percenthealth%%" and p.text_text == "%percentpower%%",
+    "v14 moved a readout and changed its text token, which it must not")
 end
 -- The trigger arg IV-45 data must carry. Modernize renames threatUnit -> unit for < 51 data,
 -- and it assigns unconditionally, so emitting `unit` here would be overwritten with nil.
