@@ -23,25 +23,25 @@ use GitHub's copy button on the block to grab the whole string in one click.
 
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
-| Rogue — All Specs | Combat · Assassination · Subtlety | v50 | 62 | [string](tbc/rogue/README.md#import-string-v50) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v12 | 48 | [string](tbc/paladin/README.md#import-string-v12) · [raw](tbc/paladin/all-specs.txt) |
-| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v11 | 48 | [string](tbc/druid/README.md#import-string-v11) · [raw](tbc/druid/all-specs.txt) |
-| Warlock — All Specs | Affliction · Demonology · Destruction | v10 | 44 | [string](tbc/warlock/README.md#import-string-v10) · [raw](tbc/warlock/all-specs.txt) |
-| Hunter — BM & Survival | Beast Mastery · Survival | v11 | 54 | [string](tbc/hunter/README.md#import-string-v11) · [raw](tbc/hunter/all-specs.txt) |
-| Priest — All Specs | Shadow · Holy · Discipline | v10 | 44 | [string](tbc/priest/README.md#import-string-v10) · [raw](tbc/priest/all-specs.txt) |
-| Mage — Arcane & Frost | Arcane · Frost | v10 | 48 | [string](tbc/mage/README.md#import-string-v10) · [raw](tbc/mage/all-specs.txt) |
+| Rogue — All Specs | Combat · Assassination · Subtlety | v51 | 62 | [string](tbc/rogue/README.md#import-string-v51) · [raw](tbc/rogue/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v13 | 48 | [string](tbc/paladin/README.md#import-string-v13) · [raw](tbc/paladin/all-specs.txt) |
+| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v12 | 48 | [string](tbc/druid/README.md#import-string-v12) · [raw](tbc/druid/all-specs.txt) |
+| Warlock — All Specs | Affliction · Demonology · Destruction | v11 | 44 | [string](tbc/warlock/README.md#import-string-v11) · [raw](tbc/warlock/all-specs.txt) |
+| Hunter — BM & Survival | Beast Mastery · Survival | v12 | 54 | [string](tbc/hunter/README.md#import-string-v12) · [raw](tbc/hunter/all-specs.txt) |
+| Priest — All Specs | Shadow · Holy · Discipline | v11 | 44 | [string](tbc/priest/README.md#import-string-v11) · [raw](tbc/priest/all-specs.txt) |
+| Mage — Arcane & Frost | Arcane · Frost | v11 | 48 | [string](tbc/mage/README.md#import-string-v11) · [raw](tbc/mage/all-specs.txt) |
 
 Every pack is class-gated and auto-adapts across the **supported builds listed in the table**
 through Spell Known gates. The current product scope is primarily level-70 single-target
 raid/dungeon play plus the explicitly documented PvP layer; AoE, levelling and omitted specs
 are named in each pack README rather than implied by the `all-specs.txt` filename. Druid v7
 also adds an active-form state gate so Cat never receives the Bear rotation, v8 replaced the
-centre bar stack with unit orbs and v9 put those orbs on one shared size — and **Druid v10
-turns them into Diablo-style globes**, which **v11 moves up beside the character**: life at
-`(-270, 40)` and power at `(190, 40)` in 72px vessels that fill bottom-to-top, a 44px target
-globe above and between them at `(0, 110)`, the percentage *inside* each glass, a specular
-highlight so the glass reads as curved, threat as the target globe's rim colour, and no
-portrait — dropping it is exactly what frees the centre of a vessel for its number.
+centre bar stack with unit orbs, v9 put those orbs on one shared size and v10/v11 turned them
+into Diablo-style globes — and **Druid v12 brings the rings and the portraits back**, at the
+geometry every pack now shares: two clusters of an 84px outer ring and a 62px inner ring around
+a 44px **live 3D portrait**, yours at `(-270, 40)` reading health outside and form-adaptive power
+inside, your target's at `(+270, 110)` reading **threat** outside and its health inside, with the
+percentages just outside the arcs again because a `model` region cannot carry text.
 
 Every pack also carries a **PvP layer**: elements that exist only inside an
 arena or battleground (CC-on-you with the break decision, trinket availability, enemy trinket
@@ -55,18 +55,20 @@ acceptance note instead of presenting static serialization as an in-game test.
 
 ## Packs
 
-- **tbc/rogue/all-specs.txt** — full HUD, v50 of a 50-iteration build: v50 **globes beside
-  the character** (life 72px at `(-270, 40)` and energy 72px at `(+270, 40)` flanking you,
-  the target's health 44px above you at `(0, 110)` — off the old under-HUD band, which read
-  as one more action bar — each vessel now lit by a **specular highlight**, an additive
-  ellipse 46% × 34% of its own globe offset up and left, which is what makes a flat fill read
-  as curved glass; additive because the percentage sits inside the glass and a darkening
-  overlay would dim it), on the v49 **Diablo globes** (vessels that fill bottom-to-top with
-  the percentage inside the glass, the 35/40 energy breakpoints as waterlines across the
-  energy globe, threat as the target globe's rim colour, and no portrait: a `model` region
-  cannot carry text, which is what kept the old numbers outside their rings), replacing the v47/v48
-  **unit orbs** (live portraits ringed by health and energy, which in turn replaced the centre
-  bar stack), combo pips (always-visible sockets, green→orange
+- **tbc/rogue/all-specs.txt** — full HUD, v51 of a 51-iteration build: **v51 ring clusters**
+  in place of the v49/v50 Diablo globes, at the geometry shared by every pack — an 84px outer
+  ring, a 62px inner ring and a 44px **live 3D portrait**, your cluster at `(-270, 40)` and
+  the target's at `(+270, 110)`, where `±270` is the tightest symmetric position the
+  vertically-growing Alerts and PvP columns cannot climb into. Yours reads health outside
+  energy, with the **35/40 breakpoint marks back on the inner ring's circumference** (dim
+  where the breakpoint is, lit the moment you can afford Eviscerate or Sinister Strike); the
+  target's reads **threat** outside its health — green, orange at 70%, red on aggro, `%` above
+  the ring, 80% halo unchanged. The percentages hang just outside the arcs again, because a
+  `model` region cannot carry text. All ten cluster UIDs carry across, so 62 auras stay 62 and
+  the re-import is a clean Update: the two globe rims were the v47/v48 portraits and are handed
+  straight back to them, and the old target power ring's UID becomes the target's outer track,
+  which keeps the pair matched when threat is not loaded. On the v47/v48 **unit orbs** the
+  design returns to (they in turn replaced the centre bar stack), combo pips (always-visible sockets, green→orange
   gradient, and a brief scale/brightness pop whenever a point is gained),
   spec-adaptive cooldown row
   (16 spells, talent-gated, tooltips + keybind labels), animated alert flow (SnD missing,
@@ -77,31 +79,33 @@ acceptance note instead of presenting static serialization as an in-game test.
   Locale-independent (pure spell-ID matching, built on a
   zhCN client). Combat / Mutilate / Subtlety auto-adapt via spell-known gates.
 - **tbc/paladin/all-specs.txt** — seal uptime + missing alarm, own Judgement debuff, Holy
-  Shield uptime, and **v12 Diablo globes** in place of the v9/v10 ring orbs: a 72px life
-  vessel at `(-270, 40)`, a 72px mana vessel at `(190, 40)` and a 44px target vessel at
-  `(0, 110)` — v12 moved all three off the old `y = -262` band so they **flank the character**
-  instead of reading as a bar bolted under the HUD, and gave each one a specular highlight in
-  its upper left so the glass catches light. Each fills bottom-to-top with its percentage
-  **inside the glass** — the portraits are gone (a `model` region cannot carry text, which is
-  what kept the ring-era numbers outside) and both were recycled into the two brass rims, so 48
-  auras stay 48 with every UID stable. Threat became the **target globe's rim** — green, orange at 70%, red on
-  aggro, percentage above the globe — costing no extra element. Plus the seal-twisting swing
+  Shield uptime, and **v13 ring clusters** in place of the v11/v12 Diablo globes: two arcs
+  around a **live 3D portrait** per unit, at the geometry shared by every pack — an 84px outer
+  ring, a 62px inner ring and a 44px portrait, your cluster at `(-270, 40)` and the target's at
+  `(+270, 110)`, where `±270` is the tightest symmetric position that the vertically-growing
+  Alerts and PvP columns cannot climb into. Yours reads health outside mana; the target's reads
+  **threat** outside its health — green, orange at 70%, red on aggro, percentage above the ring
+  — so threat costs no extra element. The percentages hang just outside the arcs again, because
+  a `model` region cannot carry text. The two globe rims were the v9/v10 portraits and are
+  handed straight back to them, so 48 auras stay 48 with every UID stable. Plus the seal-twisting swing
   runway and a 14-icon cooldown row that shows only what is
   unavailable (rotational buttons stay visible and glow when ready); Holy / Protection /
   Retribution adapt via Holy Shock, Holy Shield and Crusader Strike gates, and the row is
   spec-selective — a healing Holy paladin is not shown Consecration or Avenging Wrath. PvP
   layer: CC-on-me, HAMMER NOW, target immunity, trinket and Forbearance clocks, Cleanse.
-- **tbc/druid/all-specs.txt** — **v11 Diablo globes** at the geometry shared by every pack: a
-  72px life vessel at `(-270, 40)`, a 72px power vessel at `(190, 40)` and a 44px target vessel
-  at `(0, 110)` — v11 moved all three off the old `y = -262` band so they **flank the character**
-  instead of reading as a bar bolted under the HUD, and gave each one a specular highlight in its
-  upper left so the glass catches light. Each fills bottom-to-top with the percentage inside the
-  glass and a brass rim over it. The power globe is form-adaptive — one vessel reads mana, rage or
-  energy as you shapeshift and is always coloured for what it is actually reading — with the
-  bear's 20/70 rage breakpoints as horizontal marks across it; threat is the target globe's rim
-  colour (green → orange at 70% → red on the aggro flip, `%threatpct` above the glass); there is
-  no portrait, which is what frees each vessel's centre for its number; and the target globe
-  hides completely with no target. Lacerate stacks and Mangle debuff,
+- **tbc/druid/all-specs.txt** — **v12 ring clusters** in place of the v10/v11 Diablo globes, at
+  the geometry shared by every pack: two arcs around a **live 3D portrait** per unit — an 84px
+  outer ring, a 62px inner ring and a 44px portrait — your cluster at `(-270, 40)` and the
+  target's at `(+270, 110)`, where `±270` is the tightest symmetric position the vertically
+  growing Alerts and PvP columns cannot climb into. Yours reads health outside and **form-adaptive
+  power** inside: one ring follows mana, rage or energy as you shapeshift and is always coloured
+  for what it is actually reading, with the bear's 20/70 rage breakpoints as pips on its
+  circumference at 72° and 252°. The target's reads **threat** outside (green → orange at 70% →
+  red on the aggro flip, `%threatpct` above the ring, both spec gates and the not-in-arena gate
+  intact) and its health inside, over a plain track so a resto druid still sees two rings; the
+  whole cluster hides with no target. The percentages hang just outside the arcs again, because a
+  `model` region cannot carry text — and the two globe rims were the v8–v9 portraits, handed
+  straight back to them, so 48 auras stay 48 with every UID stable. Lacerate stacks and Mangle debuff,
   Demoralizing Roar, Lifebloom/Rejuvenation/Regrowth
   timers, Moonfire and Insect Swarm, Omen of Clarity proc, and an 8-icon cooldown row showing
   only what is down (Mangle keeps its ready glow); Bear / Restoration / Balance gate on
@@ -110,63 +114,66 @@ acceptance note instead of presenting static serialization as an in-game test.
   target immunity, trinket clocks, own Cyclone/Roots per opponent.
 - **tbc/warlock/all-specs.txt** — the five own-DoT timers (Corruption, Curse of Agony,
   Immolate, Unstable Affliction, Siphon Life), Demonic Sacrifice and Fel Armor upkeep,
-  Nightfall and Backlash proc alerts, Life Tap and Soulshatter prompts, and **v9 Diablo
-  globes** in place of the ring orbs, which **v10 moves beside the character and gives a
-  specular highlight**: life (72px, red, amber at 60%) at `(-270, 40)`, mana (72px, blue,
-  violet at 30%) at `(+270, 40)` and the target's health (44px) at `(0, 110)`, all absolute
-  screen coordinates, filling bottom-to-top like liquid with the percentage inside the glass
-  and an ADD-blend bright spot in the upper left that reads as curved glass (ADD so the
-  number underneath stays readable). The portraits are gone — a model region cannot carry text,
-  which is what kept the numbers outside the rings — and **threat became the target globe's
-  rim colour** (green → orange at 70% → red on aggro, percentage above, pulsing halo at 80%,
-  same party/raid and not-in-arena gates). Plus a 7-icon cooldown row showing only what is
-  down. PvP layer: CC-on-me, target immunity, trinket clocks, per-opponent enemy mana for
-  the drain decision.
+  Nightfall and Backlash proc alerts, Life Tap and Soulshatter prompts, and — **v11 —
+  two ring clusters** in place of the v9/v10 Diablo globes: your cluster at `(-270, 40)`
+  and your target's at `(+270, 110)`, both absolute screen coordinates, each an 84px outer
+  ring and a 62px inner ring around a 44px **live 3D portrait**. Yours reads health
+  (green, amber at 60%) outside and mana (blue, violet at 30%) inside — the two halves of
+  the Life Tap decision on one object; the target's reads **your threat** outside (green →
+  orange at 70% → red on aggro, percentage above the ring, pulsing halo at 80%, same
+  party/raid and not-in-arena gates) and its health inside, with an unfilled outer track
+  underneath so the pair still matches when threat is not loaded. The percentages sit just
+  outside the rings again, because a model region cannot carry text. Plus a 7-icon cooldown
+  row showing only what is down. PvP layer: CC-on-me, target immunity, trinket clocks,
+  per-opponent enemy mana for the drain decision.
 - **tbc/hunter/all-specs.txt** — Serpent Sting and Hunter's Mark timers, Bestial Wrath and
   Rapid Fire windows, aspect-missing and back-to-Hawk alarms, Kill Command reactive prompt,
-  pet health prompts, Misdirection/Feign Death threat pairing, proc tracker, and the **v10
-  Diablo-style life and mana globes** that **v11 moves up beside the character**: round glass
-  vessels that fill bottom-to-top with the percentage inside the glass, a 72px life globe at
-  `(-270, 40)` and a 72px mana globe at `(190, 40)` flanking you, with the 44px target globe
-  above and between them at `(0, 110)` — off the old `y = -262` band, which read as one more
-  bar bolted under the HUD. v11 also lights every vessel with a **specular highlight**, an
-  additive ellipse 46% × 34% of its own globe pushed up and left, which is what makes a flat
-  fill read as curved glass; additive because the percentage sits inside the glass and a
-  darkening overlay would dim it. The mana globe carries the two aspect-swap thresholds as
-  waterlines, and **threat is the colour of the target globe's rim** (green →
-  orange at 70% → red on aggro) with its percentage above it. The live portraits are gone —
-  a model region cannot hold a text sub-region, so dropping the face is what frees the centre
-  of each globe for its number — and both portrait auras were recycled into the glass rims
-  rather than deleted. Plus an 11-icon
+  pet health prompts, Misdirection/Feign Death threat pairing, proc tracker, and — since
+  **v12** — **two ring clusters around live unit portraits**, replacing v10/v11's Diablo
+  globes: your health on an 84px outer ring and mana on a 62px inner one around a 44px live
+  3D portrait at `(-270, 40)`, with the two aspect-swap thresholds marked on the mana arc's
+  own circumference (red at 20%, green at 80%, placed by trigonometry from the ring radius);
+  your target's cluster at `(+270, 110)` reads **your threat** on the outer ring (green →
+  orange at 70% → red at 90% → deep red on aggro, percentage above the rings, pulsing halo at
+  80%, party/raid only and never in an arena) and its health on the inner one, over an
+  unfilled track ring so the pair still matches when threat is not loaded. The percentages sit
+  just outside the arcs again, because a model region cannot carry text. The target's mana
+  readout is dropped on purpose — the cluster is two arcs and a face — and its aura, like both
+  v10 glass rims, is recycled onto a track ring rather than deleted. Plus an 11-icon
   cooldown row showing only what is down (Multi-Shot and Arcane Shot keep their ready glow);
   BM and Survival only. PvP layer: CC-on-me, SILENCE NOW, trinket clocks, enemy mana.
 - **tbc/priest/all-specs.txt** — Shadow Word: Pain and Vampiric Touch timers, Vampiric Embrace
   and Inner Fire uptime, Shadowform-missing alarm, Weakened Soul shield-timing on the heal target,
-  Fade and Shadowfiend prompts, and — since **v9** — **Diablo-style life and mana globes**
-  that fill bottom-to-top with the percentages inside the glass (72px at `x = ±190, y = 40`,
-  a 44px target globe above and between them at `(0, 110)`, each with a **v10** specular
-  highlight so the fill reads as liquid behind curved glass), replacing v7's portrait-and-ring orbs: the
-  portraits are gone because a model region cannot carry text, which is what freed the centre
-  of each globe for its number, and **threat is now the target globe's rim colour** — green,
-  orange at 70%, red on aggro — so it costs no extra element. The 40% health and 50% mana
-  breakpoint marks are horizontal lines across the glass. Plus the arena/BG-only PvP layer
+  Fade and Shadowfiend prompts, and — since **v11** — **two ring clusters around live unit
+  portraits**, replacing v9/v10's Diablo globes: your health on an 84px outer ring, mana on a
+  62px inner ring and your face in the middle at `(-270, 40)`, with the matching pair for your
+  target at `(+270, 110)` — **threat on the outer ring** (green, orange at 70%, red on aggro,
+  over a dark track that keeps the circle when you are on nobody's threat table) and their
+  health on the inner one. No target power ring: two rings and a face is the whole design, and
+  the Mana Burn scoreboard already covers enemy mana where it decides a press. The portrait is
+  a live model, so the percentages sit just outside the rings (a model region cannot carry
+  text); the 40% health and 50% mana breakpoint marks are pips on their own ring at the angle
+  the threshold implies. Plus the arena/BG-only PvP layer
   (CC-on-me colour-coded by CC category, Fear Ward and Mass
   Dispel prompts, trinket clocks, UA-on-ally warning, and a per-opponent enemy mana bar for
-  the Mana Burn decision). The threat rim and Fade prompt do not load in an arena.
+  the Mana Burn decision). The threat ring and Fade prompt do not load in an arena.
 - **tbc/mage/all-specs.txt** — Arcane Blast stacks (the Arcane rotation driver), Arcane Power
   and Icy Veins burn-window timers, Ice Barrier uptime and missing alarm, Clearcasting proc,
   mana thresholds with Evocation/mana-gem prompts, Ice Lance shatter window, and a 10-icon
   cooldown row showing only what is down; Arcane and Frost only. v7 replaced the centre
-  health/mana/threat bar stack with two unit orbs and v8 put them on the shared ring geometry;
-  v9 replaced the rings with Diablo-style globes and **v10 moves them beside the character and
-  lights the glass** — a 72px red life vessel at `(-270, 40)`, a 72px blue mana vessel at
-  `(190, 40)` and a 44px target vessel above and between them at `(0, 110)`, each filling
-  bottom-to-top like liquid with its percentage **inside the glass** and a specular highlight
-  in the upper left (`ADD` blend, so it brightens the number instead of veiling it).
-  The live portraits are gone (a model region cannot carry text, so keeping them meant keeping
-  every number outside its orb); **threat is now the target globe's rim** — green, orange at
-  70%, red on aggro, with a flare above 80% and the percentage above the globe — and the
-  Arcane conserve breakpoint is a horizontal line across the mana globe at its 30% waterline.
+  health/mana/threat bar stack with two unit orbs, v8 put them on the shared ring geometry and
+  v9/v10 turned them into Diablo-style globes beside the character — and **v11 brings the rings
+  and the live portraits back**, at the geometry every pack now shares: your cluster at
+  `(-270, 40)` with an 84px health arc outside a 62px mana arc around a 44px **live portrait**
+  of you, your target's at `(+270, 110)` reading **threat** outside (green, orange at 70%, red
+  on aggro, with a flare pulsing round it above 80% and the percentage above the cluster) and
+  the target's health inside, around a live portrait of whatever you are fighting. The
+  percentages sit just outside the arcs again — health 13pt, mana 10pt, threat 10pt — because a
+  `model` region cannot carry text; and the Arcane conserve breakpoint is a bead back on the
+  mana ring's circumference at the angle its 30% threshold implies. All eleven cluster UIDs
+  carry across, so 48 auras stay 48 and the re-import is a clean Update: the two globe rims were
+  the v7/v8 portraits and are handed straight back to them, and the freed third cluster group
+  becomes the target's outer track, which keeps the pair matched when threat is not loaded.
   PvP layer: CC-on-me
   colour-coded by category, COUNTERSPELL NOW plus its lockout bar, target immunity, trinket
   clocks, own Polymorph per opponent, enemy mana.
