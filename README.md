@@ -24,7 +24,7 @@ use GitHub's copy button on the block to grab the whole string in one click.
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
 | Rogue — All Specs | Combat · Assassination · Subtlety | v54 | 58 | [string](tbc/rogue/README.md#import-string-v54) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v17 | 46 | [string](tbc/paladin/README.md#import-string-v17) · [raw](tbc/paladin/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v18 | 46 | [string](tbc/paladin/README.md#import-string-v18) · [raw](tbc/paladin/all-specs.txt) |
 | Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v15 | 45 | [string](tbc/druid/README.md#import-string-v15) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v14 | 40 | [string](tbc/warlock/README.md#import-string-v14) · [raw](tbc/warlock/all-specs.txt) |
 | Hunter — BM & Survival | Beast Mastery · Survival | v15 | 49 | [string](tbc/hunter/README.md#import-string-v15) · [raw](tbc/hunter/all-specs.txt) |
@@ -110,7 +110,14 @@ acceptance note instead of presenting static serialization as an in-game test.
   the moment you obeyed it the prompt vanished and nothing told you to re-apply SoC before the
   next swing — `Seal MISSING` stayed quiet because a seal *was* up. `RE-SEAL` is its mirror
   (swinging, SoC missing, a twist seal present), and it resolves its icon from the client rather
-  than a hard-coded path, so it is correct on both factions. 46 auras. Plus a 14-icon cooldown
+  than a hard-coded path, so it is correct on both factions. **v18 takes two ideas from
+  [SwedgeTimer](https://github.com/hypernormalisation/SwedgeTimer)** (no code copied — rebuilt
+  from WA primitives): the runway gains a **press** mark ahead of the **land** mark, because 0.4s
+  is when the seal must land and the moment you press is 0.4s *plus your latency* — set it to
+  your own ping in `/wa` — and a **GCD floor** at 1.5s past which no filler fits before the
+  swing. Both twist prompts also gained WA's native Global Cooldown trigger and **grey out while
+  the GCD is locked**, held out of the visibility test by a one-line trigger combinator, so a
+  prompt you cannot obey reads as *wait* rather than *press*. 46 auras. Plus a 14-icon cooldown
   row that shows only what is
   unavailable (rotational buttons stay visible and glow when ready); Holy / Protection /
   Retribution adapt via Holy Shock, Holy Shield and Crusader Strike gates, and the row is
