@@ -1,4 +1,4 @@
--- generate.lua — "Paladin TBC - All Specs" (v17)
+-- generate.lua — "Paladin TBC - All Specs" (v18)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code)
 -- except the rail region tables, which wa_factory has no builder for.
@@ -1465,6 +1465,29 @@ local SEAL_OF_COMMAND = { 20375, 20915, 20918, 20919, 20920, 27170 }
 -- Deliberately NOT every non-SoC seal — see the RE-SEAL note for why the third trigger is
 -- narrow. Both ids are already in the SEALS census above (Blood 31892 / the Martyr 348700).
 local TWIST_SEALS = { 31892, 348700 }
+
+-- v18, from SwedgeTimer (hypernormalisation, GPL-3.0). Nothing is copied — it is a separate
+-- addon and this repo ships pure WeakAuras with no custom code — but two of its ideas are the
+-- right ones and are rebuilt here from WA primitives. Both are about the same question a
+-- twister actually asks, which is not "where is the swing" but "can I act before it lands".
+--
+--   * GCD_FLOOR. SwedgeTimer draws the remaining GCD as an underlay on the swing bar:
+--         local gcd_progress = (self.gcd.expires - tab.start) / (tab.ends_at - tab.start)
+--     so you can see whether an ability fits before impact. A mark at one GCD from the end
+--     answers the same question with no moving parts: past it, no filler fits.
+--     1.5 is the TBC base GCD. Spell haste can shorten it, so treat the mark as a FLOOR —
+--     if the fill is left of it a filler definitely fits; just right of it, it may still.
+--
+--   * PRESS_LEAD. SwedgeTimer draws a right-aligned latency "deadzone":
+--         local frac = (self.latency.world_ms / 1000) / self[hand].speed
+--     i.e. the tail of the swing in which a press can no longer reach the server in time.
+--     That exposes a distinction this pack had wrong: 0.4s is when the seal must LAND, and
+--     the moment you must PRESS is 0.4s + your latency. WeakAuras cannot read latency without
+--     custom Lua, so this cannot be automatic. It ships as a second, dimmer tick at a nominal
+--     150ms lead, and the README tells the player to set it to their own world latency —
+--     `tick_placements` is a plain editable list in /wa, so that is a one-field change.
+local GCD_FLOOR  = "1.5"                     -- TBC base global cooldown, seconds
+local PRESS_LEAD = "0.55"                    -- TWIST_WINDOW + ~150ms; user-tunable in /wa
 local TWIST_WINDOW = "0.4"                   -- seconds before impact
 local function swingTrigger()
   local tr = { type = "unit", event = "Swing Timer", use_hand = true, hand = "main" }
@@ -1572,12 +1595,53 @@ swing.subRegions[3] = {
   tick_yOffset = 0,
   tick_mirror = false,
 }
+-- v18 — the PRESS mark, dimmer, sitting to the left of the gold LAND mark. See PRESS_LEAD.
+-- Same subregion type, its own placement, so the pair reads as a band: enter it and press.
+swing.subRegions[4] = {
+  type = "subtick",
+  tick_visible = true,
+  tick_color = { 1, 0.82, 0.1, 0.45 },   -- the twist gold at 45%: the same event, less certain
+  tick_placement_mode = "AtValue",
+  tick_placements = { PRESS_LEAD },
+  progressSources = { { -2, "" } },
+  automatic_length = true,
+  tick_thickness = 2,
+  tick_length = 30,
+  use_texture = false,
+  tick_texture = "Interface\\CastingBar\\UI-CastingBar-Spark",
+  tick_blend_mode = "ADD",
+  tick_desaturate = false,
+  tick_rotation = 0,
+  tick_xOffset = 0,
+  tick_yOffset = 0,
+  tick_mirror = false,
+}
+-- v18 — the GCD floor. See GCD_FLOOR. Cool white, so it never reads as part of the twist pair.
+swing.subRegions[5] = {
+  type = "subtick",
+  tick_visible = true,
+  tick_color = { 0.6, 0.75, 0.9, 0.5 },
+  tick_placement_mode = "AtValue",
+  tick_placements = { GCD_FLOOR },
+  progressSources = { { -2, "" } },
+  automatic_length = true,
+  tick_thickness = 1,
+  tick_length = 30,
+  use_texture = false,
+  tick_texture = "Interface\\CastingBar\\UI-CastingBar-Spark",
+  tick_blend_mode = "ADD",
+  tick_desaturate = false,
+  tick_rotation = 0,
+  tick_xOffset = 0,
+  tick_yOffset = 0,
+  tick_mirror = false,
+}
 -- ...and the exact time left, at one decimal, because a 0.4s window is not learnable from a
 -- bar edge alone. The mark says WHERE the window is; the number says how far you are from it.
 -- Precision 1 is deliberate: at precision 0 every value inside the window floors to "0".
 local swingLeft = F.subtext("%p", 10, "INNER_RIGHT", "p")
 swingLeft.text_text_format_p_decimal_precision = 1
-swing.subRegions[4] = swingLeft
+swing.subRegions[6] = swingLeft   -- 1 bar, 2 border, 3 land, 4 press, 5 GCD floor, 6 number
 swing.conditions = {
   F.condition(1, "expirationTime", "<=", TWIST_WINDOW, "barColor", { 1, 0.82, 0.1, 1 }),
 }
@@ -1590,13 +1654,34 @@ local twist = reg(F.icon("Paladin - Twist NOW", CLASS, 40, 40, 0, 0, gAlerts.id)
 twist.iconSource = 0
 twist.displayIcon = "Interface\\Icons\\ability_paladin_sealofblood"
 twist.cooldown = false
+-- v18 — IT NOW KNOWS WHETHER YOU CAN ACTUALLY PRESS. A prompt you cannot obey is noise, and
+-- worse than noise here: a twist you start on a locked GCD lands after the swing and loses the
+-- proc you were reaching for. Trigger 3 is WeakAuras' native Global Cooldown trigger (verified
+-- in the installed 5.21.10, Prototypes.lua ["Global Cooldown"]: internal events GCD_START /
+-- GCD_CHANGE / GCD_END, progressType "timed", no custom code required).
+--
+-- IT MUST NOT GATE VISIBILITY, which is the whole reason for the custom logic line. F.triggers
+-- defaults to disjunctive = "all", so simply adding a third trigger would hide the prompt
+-- whenever the GCD was NOT running — the exact inverse of what is wanted. `t[1] and t[2]`
+-- keeps visibility on swing + seal, and trigger 3 exists only to feed the condition below.
+--
+-- The condition reads trigger 3's built-in `show` ("Active") bool, which WeakAuras defines for
+-- every trigger (WeakAuras.lua Private.GetTriggerConditions: conditions[i].show, type "bool").
+-- So: GCD running -> the icon desaturates. Grey means WAIT, colour means PRESS. That is the
+-- same distinction the Hammer of Wrath prompt already draws with range.
 twist.triggers = F.triggers({
   swingTrigger(),
   F.auraTrigger("player", true, SEAL_OF_COMMAND),
+  { type = "spell", event = "Global Cooldown", names = {}, spellIds = {},
+    subeventPrefix = "SPELL", subeventSuffix = "_CAST_START", debuffType = "HELPFUL" },
+}, {
+  disjunctive = "custom",
+  customTriggerLogic = "function(t) return t[1] and t[2] end",
 })
 twist.subRegions[1] = F.subglow(false, { 1, 0.82, 0.1, 1 })
 twist.conditions = {
   F.condition(1, "expirationTime", "<=", TWIST_WINDOW, "sub.1.glow", true),
+  F.condition(3, "show", "==", 1, "desaturate", true),
 }
 twist.load.use_combat = true
 gate(twist, SWING_GATE)
@@ -2038,14 +2123,23 @@ W.uid()   -- was: Paladin - Target Portrait (deleted in v14)
 local reseal = reg(F.icon("Paladin - RE-SEAL", CLASS, 40, 40, 0, 0, gAlerts.id))
 reseal.iconSource = 2                      -- Seal of Command's own icon, resolved by the client
 reseal.cooldown = false
+-- v18 — same GCD awareness as Twist NOW, and for the same reason; see its note. Trigger 4 is
+-- the Global Cooldown trigger, kept out of the visibility test by the custom logic line so the
+-- prompt still requires exactly swinging + SoC missing + a twist seal.
 reseal.triggers = F.triggers({
   swingTrigger(),
   F.auraTrigger("player", true, SEAL_OF_COMMAND, { matchesShowOn = "showOnMissing" }),
   F.auraTrigger("player", true, TWIST_SEALS),
+  { type = "spell", event = "Global Cooldown", names = {}, spellIds = {},
+    subeventPrefix = "SPELL", subeventSuffix = "_CAST_START", debuffType = "HELPFUL" },
+}, {
+  disjunctive = "custom",
+  customTriggerLogic = "function(t) return t[1] and t[2] and t[3] end",
 })
 reseal.subRegions[1] = F.subglow(false, { 1, 0.82, 0.1, 1 })
 reseal.conditions = {
   F.condition(1, "expirationTime", "<=", TWIST_WINDOW, "sub.1.glow", true),
+  F.condition(4, "show", "==", 1, "desaturate", true),
 }
 reseal.load.use_combat = true
 gate(reseal, SWING_GATE)
@@ -2248,16 +2342,33 @@ do
     assert(sw.regionType == "aurabar",
       "twist canon: the runway is a " .. tostring(sw.regionType) .. "; subtick supports() "
       .. "returns regionType == \"aurabar\" only, so the mark would vanish silently")
-    local tick
-    for _, s in ipairs(sw.subRegions) do if s.type == "subtick" then tick = s end end
-    assert(tick, "twist canon: the swing runway lost its twist mark")
-    assert(tick.tick_placement_mode == "AtValue",
-      "twist canon: placement mode is " .. tostring(tick.tick_placement_mode)
-      .. "; only AtValue is weapon-speed independent")
-    assert(tick.tick_placements[1] == TWIST_WINDOW,
-      ("twist canon: the mark sits at %s but the recolour fires at %s — they must be the "
-        .. "same window"):format(tostring(tick.tick_placements[1]), tostring(TWIST_WINDOW)))
-    assert(tick.tick_visible == true, "twist canon: the twist mark is not visible")
+    -- THE THREE MARKS, BY NAME AND IN ORDER. v18 added two more ticks, and the first version
+    -- of this check took "the last subtick it saw" — which silently became the GCD mark and
+    -- asserted the wrong thing. Address them by their placement, not their position.
+    local ticks = {}
+    for _, s in ipairs(sw.subRegions) do
+      if s.type == "subtick" then
+        assert(s.tick_placement_mode == "AtValue",
+          "twist canon: a mark uses placement mode " .. tostring(s.tick_placement_mode)
+          .. "; only AtValue is weapon-speed independent")
+        assert(s.tick_visible == true, "twist canon: a mark is not visible")
+        assert(#s.tick_placements == 1,
+          "twist canon: a mark carries " .. #s.tick_placements .. " placements; one each, so "
+          .. "they can be coloured and edited independently")
+        ticks[s.tick_placements[1]] = s
+      end
+    end
+    assert(ticks[TWIST_WINDOW],
+      ("twist canon: no mark at %s, the window the recolour fires on — the tick and the "
+        .. "colour must agree"):format(tostring(TWIST_WINDOW)))
+    assert(ticks[PRESS_LEAD], "twist canon: the latency press mark is gone")
+    assert(ticks[GCD_FLOOR], "twist canon: the GCD floor mark is gone")
+    assert(tonumber(PRESS_LEAD) > tonumber(TWIST_WINDOW),
+      "twist canon: the PRESS mark is not EARLIER than the LAND mark. Latency means you press "
+      .. "before the seal has to land; inverted, the pair teaches the opposite of the truth")
+    assert(tonumber(GCD_FLOOR) > tonumber(PRESS_LEAD),
+      "twist canon: the GCD floor is inside the twist band, so 'a filler still fits' and "
+      .. "'press the seal' would be the same region of the runway")
     assert(sw.conditions[1].check.value == TWIST_WINDOW
       and sw.conditions[1].check.variable == "expirationTime",
       "twist canon: the gold recolour no longer fires on the twist window")
@@ -2277,8 +2388,29 @@ do
     -- invisible in testing, because the aura that remains still looks correct on its own.
     local rs = assert(nodes["Paladin - RE-SEAL"], "twist canon: the RE-SEAL prompt is gone")
     local tw = assert(nodes["Paladin - Twist NOW"], "twist canon: the Twist NOW prompt is gone")
-    assert(#rs.triggers == 3 and rs.triggers.disjunctive == "all",
-      "twist canon: RE-SEAL must require ALL of swinging + SoC missing + a twist seal")
+    -- v18: the GCD trigger was appended to BOTH prompts and must never join the visibility
+    -- test. F.triggers defaults to disjunctive "all", so a future edit that drops the custom
+    -- logic line would silently hide each prompt except while the GCD is running — the exact
+    -- inverse of the intent, and it would look like "the twist prompt barely ever fires".
+    assert(#rs.triggers == 4 and rs.triggers.disjunctive == "custom",
+      "twist canon: RE-SEAL must be swinging + SoC missing + a twist seal, with the GCD "
+      .. "trigger held OUT of the visibility test by custom logic")
+    assert(rs.triggers.customTriggerLogic == "function(t) return t[1] and t[2] and t[3] end",
+      "twist canon: RE-SEAL's trigger logic changed; the GCD trigger must not gate visibility")
+    assert(tw.triggers.customTriggerLogic == "function(t) return t[1] and t[2] end",
+      "twist canon: Twist NOW's trigger logic changed; the GCD trigger must not gate visibility")
+    for _, pair in ipairs({ { tw, 3 }, { rs, 4 } }) do
+      local aura, n = pair[1], pair[2]
+      assert(aura.triggers[n].trigger.event == "Global Cooldown",
+        "twist canon: " .. aura.id .. " trigger " .. n .. " is not the Global Cooldown trigger")
+      local found = false
+      for _, c in ipairs(aura.conditions) do
+        if c.check.trigger == n and c.check.variable == "show"
+          and c.changes[1].property == "desaturate" then found = true end
+      end
+      assert(found, "twist canon: " .. aura.id .. " no longer greys out on a locked GCD, so it "
+        .. "tells you to press a button you cannot press")
+    end
     assert(rs.triggers[2].trigger.matchesShowOn == "showOnMissing",
       "twist canon: RE-SEAL's Seal of Command trigger is no longer the MISSING case, so it "
       .. "now duplicates Twist NOW instead of mirroring it")
