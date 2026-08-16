@@ -79,3 +79,33 @@ report the preview as a bug (it happened three times).
 - OmniCC-style addons add their own numbers to any cooldown swipe — don't also add a `%p`
   subtext on cooldown icons or users get double numbers. Bars/buff icons: WA `%p` subtext,
   `cooldownTextDisabled = true`.
+
+## `subtick` — marking an ABSOLUTE time on a bar whose length varies
+
+Read out of the installed addon (WeakAuras **5.21.10**, `SubRegionTypes/Tick.lua`), not inferred.
+Use it whenever the thing you must mark is a fixed number of seconds but the bar's total is a
+player stat — a swing runway, a cast window, a GCD-relative press. A hard-coded pixel offset or
+a percentage is correct for exactly one weapon speed / haste level and **silently wrong for
+every other**: the bar still looks right, the press just misses.
+
+- **Aurabar only.** The file's last statements are
+  `local function supports(regionType) return regionType == "aurabar" end` then
+  `WeakAuras.RegisterSubRegionType("subtick", L["Tick"], supports, …)`. It will not attach to a
+  `progresstexture` — use a `subtexture` there, which is a different sub-region with its own
+  `supports()` that *does* list progresstexture.
+- **Placement modes** (`tick_placement_mode`): `AtValue` (the raw value — on a *timed* progress
+  the value is seconds REMAINING, so `"0.4"` is 0.4s before the end at any bar length),
+  `AtMissingValue` (`maxValue - placement`), `AtPercent`, `ValueOffset`. `AtValue` is the
+  weapon-speed-independent one, because `UpdateTickPlacementOne` re-reads
+  `self.parent:GetMinMaxProgress()` on every update.
+- **`tick_placements` is a LIST** (`{"0.4"}`), one entry per mark, and `SetTickPlacementAt` runs
+  `tonumber()` on it — so emit the string form the addon's own `default()` uses.
+- Full field set: `tick_visible`, `tick_color`, `tick_placement_mode`, `tick_placements`,
+  `progressSources` (`{{-2, ""}}` = Automatic), `automatic_length` (spans the bar's height),
+  `tick_thickness`, `tick_length`, `use_texture`, `tick_texture`, `tick_blend_mode`,
+  `tick_desaturate`, `tick_rotation`, `tick_xOffset`, `tick_yOffset`, `tick_mirror`.
+- **It raises the client floor.** `subtick` did not exist at `internalVersion` 45; the mark is
+  simply absent on a very old WA. Keep a condition-driven colour change as the fallback cue and
+  say so in the pack README rather than assuming the mark is always there.
+- Pair it with a `%p` subtext at **`decimal_precision = 1`**. At precision 0 every value inside a
+  sub-second window floors to `"0"` and the number tells you nothing.

@@ -1,20 +1,23 @@
--- generate.lua — Rogue TBC All-Specs HUD (v53).
+-- generate.lua — Rogue TBC All-Specs HUD (v54).
 -- Reproducible lineage build: start from the committed v41 snapshot, then replay
--- the reviewed v42 through v53 Lua migrations in order. The snapshot lives
+-- the reviewed v42 through v54 Lua migrations in order. The snapshot lives
 -- inside this script so the class still ships exactly one importable all-specs.txt.
 --
--- v53 moves the health percentage into the MIDDLE of the ring cluster at 16pt, hands the
--- slot it vacates to the raw energy readout at 12pt, and — the half that actually makes
--- it visible — puts the live portrait FIRST in the cluster so the rings, and therefore
--- their subtexts, draw on top of the face instead of under it. A ring is an annulus, so
--- nothing of the face is lost; only the number lands on it. No aura is added or removed.
+-- v54 replaces the 100x100 concentric ring cluster with THE SILL: a 102x37 instrument
+-- strip of four stacked 100px rails — threat, health, energy, combo — parked under your
+-- character at absolute (0, -110), where ONE PIXEL IS ONE PERCENT. The five combo pips
+-- move in from their own 172x14 row. No aura is added or removed; every region in the
+-- strip is a v53 aura that changed job, so all 58 uids carry across untouched.
 --
--- v52's WA-REMOVED licence for the four target-cluster uids has EXPIRED with this bump,
--- which is the design: the allowance is scoped to the version that spends it. v53 removes
--- nothing, so the strict default applies again — no uid may disappear. (The pack README
--- still tells anyone updating from v51 or earlier to delete the leftover
--- `Rogue - Target Cluster` group by hand once; WeakAuras never deletes what an import
--- does not mention.)
+-- The >=80% threat alarm is a 108x43 quad drawn FIRST, under the plate: Square_White_Border
+-- is FILLED art, so the only way one region can read as an edge is to be bigger than what
+-- covers it. The canon below asserts both the size and the draw index, because dropping
+-- either turns the alarm back into an ADD red wash over every readout.
+--
+-- The RING CANON that guarded every earlier version (orientation == "CLOCKWISE",
+-- width == height, Ring_20px art, the annulus radii) is REWRITTEN below to the RAIL
+-- CANON rather than deleted. Those assertions are the reason a geometry change in this
+-- pack has never silently shipped wrong, and a redesign is exactly when they matter.
 math.randomseed(20260809)
 
 local dir = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
@@ -40,7 +43,7 @@ local ok, result = pcall(function()
   for _, patch in ipairs({
     "patch-v42.lua", "patch-v43.lua", "patch-v44.lua", "patch-v45.lua", "patch-v46.lua",
     "patch-v47.lua", "patch-v48.lua", "patch-v49.lua", "patch-v50.lua", "patch-v51.lua",
-    "patch-v52.lua", "patch-v53.lua",
+    "patch-v52.lua", "patch-v53.lua", "patch-v54.lua",
   }) do
     arg[0] = dir .. "/" .. patch
     dofile(arg[0])
@@ -57,10 +60,249 @@ local ok, result = pcall(function()
   local transmit = W.decode(final)
   W.verify(transmit, final)
   local cont = previous and W.uidContinuityStrings(final, previous) or nil
-  -- No allowance list: v53 removes nothing, so the strict default is back — every uid the
+  -- No allowance list: v54 removes nothing, so the strict default is back — every uid the
   -- previously shipped string carried must still be here, and an id that keeps its name
   -- while swapping uid is a hard failure either way.
   W.assertUidContinuity(cont, "rogue")
+
+  -- ===== THE RAIL CANON =================================================================
+  -- Post-build, on the finished string, hard-coding what The Sill IS. These replace the
+  -- ring canon (orientation "CLOCKWISE", width == height, Ring_20px, the annulus radii)
+  -- that guarded v49..v53. Nothing here is derived from the patch scripts: the string is
+  -- decoded and measured, so a lineage step that silently changes geometry fails here.
+  local MEDIA      = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\"
+  local RING_TEX   = MEDIA .. "Ring_20px.tga"
+  local SQUARE     = MEDIA .. "Square_White.tga"
+  local SQUARE_BRD = MEDIA .. "Square_White_Border.tga"
+  local SILL_X, SILL_Y   = 0, -110
+  local RAIL_LEN         = 100          -- one pixel is one percent
+  local PLATE_W, PLATE_H = 102, 37
+  local RIM              = 3            -- the alarm sticks out this far past the plate
+  local ALARM_W, ALARM_H = PLATE_W + 2 * RIM, PLATE_H + 2 * RIM
+  local GROUP  = "Rogue - Player Sill"
+  local PLATE  = "Rogue - Sill Plate"
+  local ALARM  = "Rogue - Alarm Frame"
+  local RAILS  = {
+    { id = "Rogue - Threat Rail", h = 4,  y = 15.5, subs = 2 },
+    { id = "Rogue - Health Rail", h = 11, y = 7,    subs = 4 },
+    { id = "Rogue - Energy Rail", h = 11, y = -5,   subs = 8 },
+  }
+  local PIP_W, PIP_H, PIP_Y = 16, 6, -14.5
+  local PIP_X = { -40, -20, 0, 20, 40 }
+
+  local nodes = { [transmit.d.id] = transmit.d }
+  for _, aura in ipairs(transmit.c) do nodes[aura.id] = aura end
+
+  -- Adding xOffset/yOffset up a parent chain only yields a screen position when every node is
+  -- screen-anchored, and only yields a CENTRE when every node anchors centre-to-centre. The
+  -- three dynamic groups in this pack deliberately anchor by the edge they grow away from
+  -- (Alerts BOTTOM/UP, Procs LEFT/RIGHT, PvP TOP/DOWN), so that is the one licensed exception
+  -- and the scan below boxes them accordingly. Everything else must be CENTER/CENTER.
+  local GROW_SELF = { UP = "BOTTOM", DOWN = "TOP", RIGHT = "LEFT", LEFT = "RIGHT",
+                      HORIZONTAL = "CENTER", VERTICAL = "CENTER", CIRCLE = "CENTER" }
+  local function assertAnchor(node)
+    assert(node.anchorFrameType == nil or node.anchorFrameType == "SCREEN",
+      "rail canon: " .. node.id .. " is not screen-anchored")
+    assert(node.anchorPoint == nil or node.anchorPoint == "CENTER",
+      "rail canon: " .. node.id .. " does not anchor to the screen centre")
+    local want = node.regionType == "dynamicgroup" and GROW_SELF[node.grow] or "CENTER"
+    assert(node.selfPoint == nil or node.selfPoint == want,
+      ("rail canon: %s anchors by %s, expected %s")
+        :format(node.id, tostring(node.selfPoint), tostring(want)))
+  end
+  local function absolute(id)
+    local x, y = 0, 0
+    local node = assert(nodes[id], "rail canon: missing " .. id)
+    while node do
+      assertAnchor(node)
+      x, y = x + (node.xOffset or 0), y + (node.yOffset or 0)
+      node = node.parent and assert(nodes[node.parent], "unresolved parent " .. node.parent)
+    end
+    return x, y
+  end
+
+  -- 1) the strip is where it says it is, by arithmetic on the real parent chain
+  do
+    local x, y = absolute(GROUP)
+    assert(x == SILL_X and y == SILL_Y,
+      ("rail canon: the sill resolves to (%s,%s), not (%d,%d)")
+        :format(tostring(x), tostring(y), SILL_X, SILL_Y))
+  end
+
+  -- 2) the rails: linear, 100px long, square art, never square-shaped
+  for _, want in ipairs(RAILS) do
+    local a = nodes[want.id]
+    assert(a and a.regionType == "progresstexture", "rail canon: " .. want.id .. " is missing")
+    assert(a.orientation == "HORIZONTAL_INVERSE",
+      "rail canon: " .. want.id .. " does not fill left to right")
+    assert(a.width == RAIL_LEN and a.height == want.h,
+      ("rail canon: %s is %sx%s, expected %dx%d")
+        :format(want.id, tostring(a.width), tostring(a.height), RAIL_LEN, want.h))
+    assert(a.width ~= a.height, "rail canon: " .. want.id .. " is square, so it is still a ring")
+    assert(a.foregroundTexture == SQUARE and a.backgroundTexture == SQUARE,
+      "rail canon: " .. want.id .. " is not drawn on Square_White")
+    assert(a.foregroundTexture ~= RING_TEX, "rail canon: " .. want.id .. " is still ring art")
+    assert(a.parent == GROUP, "rail canon: " .. want.id .. " is not in the sill")
+    assert(a.xOffset == 0 and a.yOffset == want.y,
+      ("rail canon: %s sits at (%s,%s), not its lane (0,%g)")
+        :format(want.id, tostring(a.xOffset), tostring(a.yOffset), want.y))
+    assert(#a.subRegions == want.subs,
+      ("rail canon: %s has %d subregions, expected %d")
+        :format(want.id, #a.subRegions, want.subs))
+    local _, ay = absolute(want.id)
+    assert(ay == SILL_Y + want.y, "rail canon: " .. want.id .. " lands off its lane")
+  end
+
+  -- 3) the plate, and the alarm rim that must be BIGGER than it and UNDER it.
+  --    Square_White_Border.tga is a FILLED square -- the pack's own dark combo sockets are
+  --    drawn from it, and the lit pip of identical size hides one completely. So a single
+  --    region on that art cannot trace a hollow outline: the alarm reads as an edge only
+  --    because it is 3px larger than the plate on every side and is drawn first, under it.
+  --    Both halves are canon; drop either and the >=80% flare becomes a full-area ADD red
+  --    wash over the numbers, the fills and the pips.
+  for _, id in ipairs({ PLATE, ALARM }) do
+    local a = nodes[id]
+    assert(a and a.regionType == "texture", "rail canon: " .. id .. " is not a texture")
+    assert(a.texture == SQUARE_BRD, "rail canon: " .. id .. " is not on Square_White_Border")
+    assert(a.xOffset == 0 and a.yOffset == 0, "rail canon: " .. id .. " is off-centre")
+  end
+  do
+    local plate, alarm = nodes[PLATE], nodes[ALARM]
+    assert(plate.width == PLATE_W and plate.height == PLATE_H,
+      ("rail canon: %s is %sx%s, expected %dx%d")
+        :format(PLATE, tostring(plate.width), tostring(plate.height), PLATE_W, PLATE_H))
+    assert(alarm.width == PLATE_W + 2 * RIM and alarm.height == PLATE_H + 2 * RIM,
+      ("rail canon: %s is %sx%s, expected the %dpx rim %dx%d")
+        :format(ALARM, tostring(alarm.width), tostring(alarm.height), RIM, ALARM_W, ALARM_H))
+    assert(alarm.blendMode == "ADD" and plate.blendMode == "BLEND",
+      "rail canon: the plate and the alarm swapped blend modes")
+    local c = alarm.color
+    assert(type(c) == "table" and c[1] == 1 and c[2] == 0.1 and c[3] == 0.1 and c[4] == 0.85,
+      "rail canon: the alarm rim has no explicit red and would draw in WeakAuras' default")
+    local p = plate.color
+    assert(type(p) == "table" and p[1] == 0 and p[2] == 0 and p[3] == 0 and p[4] == 0.45,
+      "rail canon: the plate is not a dark ground")
+  end
+
+  -- 4) the combo lane lives in the strip, not in a row of its own
+  for i = 1, 5 do
+    for _, id in ipairs({ ("Rogue - Combo Socket %d"):format(i),
+                          ("Rogue - Combo Point %d"):format(i) }) do
+      local a = assert(nodes[id], "rail canon: missing " .. id)
+      assert(a.parent == GROUP, "rail canon: " .. id .. " is not in the sill")
+      assert(a.width == PIP_W and a.height == PIP_H,
+        ("rail canon: %s is %sx%s, expected %dx%d")
+          :format(id, tostring(a.width), tostring(a.height), PIP_W, PIP_H))
+      assert(a.xOffset == PIP_X[i] and a.yOffset == PIP_Y,
+        "rail canon: " .. id .. " is off its 20px pitch")
+    end
+  end
+
+  -- 5) draw order — alarm rim first, then the plate, then the readouts, and `c` depth-first
+  --    in the same order. Nothing is drawn over a readout, which is the whole point.
+  do
+    local cc = nodes[GROUP].controlledChildren
+    assert(#cc == 15, ("rail canon: the sill holds %d children, expected 15"):format(#cc))
+    assert(cc[1] == ALARM, "rail canon: the alarm rim is not the first child, so it is a wash")
+    assert(cc[2] == PLATE, "rail canon: the plate is not the second child")
+    assert(cc[#cc] ~= ALARM and cc[#cc] ~= PLATE,
+      "rail canon: the top of the stack is not a readout")
+    local expected = {}
+    local function walk(node)
+      for _, id in ipairs(node.controlledChildren or {}) do
+        expected[#expected + 1] = id
+        walk(assert(nodes[id], "unresolved child " .. id))
+      end
+    end
+    walk(transmit.d)
+    assert(#expected == #transmit.c,
+      ("rail canon: depth-first walk covers %d of %d children")
+        :format(#expected, #transmit.c))
+    for i, id in ipairs(expected) do
+      assert(transmit.c[i].id == id,
+        ("rail canon: c is not depth-first at %d: %s, expected %s")
+          :format(i, transmit.c[i].id, id))
+    end
+  end
+
+  -- 6) the geometry proof: the strip against every other element in the pack, with dynamic
+  --    groups projected six children deep. A stack that only clears while one alert is up
+  --    is not clearance, which is why depth is projected rather than assumed. The box is the
+  --    ENVELOPE -- the widest of the plate, the alarm rim and the peak of the pip pop -- so
+  --    the proof covers everything the strip ever draws, not just its resting state.
+  do
+    local DEPTH = 6
+    local scale = nodes["Rogue - Combo Point 1"].animation.start.scalex
+    local scaleY = nodes["Rogue - Combo Point 1"].animation.start.scaley
+    local popX = math.max(math.abs(PIP_X[1]), math.abs(PIP_X[5])) + PIP_W * scale / 2
+    local popY = math.abs(PIP_Y) + PIP_H * scaleY / 2
+    local sx1 = math.min(SILL_X - ALARM_W / 2, SILL_X - popX)
+    local sx2 = math.max(SILL_X + ALARM_W / 2, SILL_X + popX)
+    local sy1 = math.min(SILL_Y - ALARM_H / 2, SILL_Y - popY)
+    local sy2 = math.max(SILL_Y + ALARM_H / 2, SILL_Y + popY)
+    local inSill = { [GROUP] = true }
+    for _, id in ipairs(nodes[GROUP].controlledChildren) do inSill[id] = true end
+    local scanned, hits, closest, closestId = 0, {}, math.huge, nil
+    for _, a in ipairs(transmit.c) do
+      if not inSill[a.id] then
+        local x1, x2, y1, y2
+        if a.regionType == "dynamicgroup" then
+          local x, y = absolute(a.id)
+          local widest, tallest = 0, 0
+          for _, cid in ipairs(a.controlledChildren or {}) do
+            widest  = math.max(widest,  nodes[cid].width  or 0)
+            tallest = math.max(tallest, nodes[cid].height or 0)
+          end
+          local space = a.space or 0
+          local runX = DEPTH * widest  + (DEPTH - 1) * space
+          local runY = DEPTH * tallest + (DEPTH - 1) * space
+          if a.grow == "UP" then
+            x1, x2, y1, y2 = x - widest / 2, x + widest / 2, y, y + runY
+          elseif a.grow == "DOWN" then
+            x1, x2, y1, y2 = x - widest / 2, x + widest / 2, y - runY, y
+          elseif a.grow == "RIGHT" then
+            x1, x2, y1, y2 = x, x + runX, y - tallest / 2, y + tallest / 2
+          elseif a.grow == "LEFT" then
+            x1, x2, y1, y2 = x - runX, x, y - tallest / 2, y + tallest / 2
+          else
+            x1, x2 = x - runX / 2, x + runX / 2
+            y1, y2 = y - tallest / 2, y + tallest / 2
+          end
+        elseif a.regionType ~= "group" then
+          local x, y = absolute(a.id)
+          local w, h = a.width or 0, a.height or 0
+          x1, x2, y1, y2 = x - w / 2, x + w / 2, y - h / 2, y + h / 2
+        end
+        if x1 then
+          scanned = scanned + 1
+          if sx1 < x2 and x1 < sx2 and sy1 < y2 and y1 < sy2 then
+            hits[#hits + 1] = ("%s (x %g..%g, y %g..%g)"):format(a.id, x1, x2, y1, y2)
+          else
+            local gap = math.max(sx1 - x2, x1 - sx2, sy1 - y2, y1 - sy2)
+            if gap < closest then closest, closestId = gap, a.id end
+          end
+        end
+      end
+    end
+    assert(scanned > 0, "rail canon: the geometry proof examined nothing")
+    assert(#hits == 0, ("rail canon: the strip envelope at (%d,%d) overlaps %d element(s): %s")
+      :format(SILL_X, SILL_Y, #hits, table.concat(hits, "; ")))
+    print(("geometry: sill plate %dx%d, alarm rim %dx%d, pop x+-%.2f at (%d,%d) -> envelope "
+      .. "x %g..%g y %g..%g; %d elements scanned (dynamic groups %d deep), 0 overlaps, "
+      .. "closest %.2fpx (%s)")
+      :format(PLATE_W, PLATE_H, ALARM_W, ALARM_H, popX, SILL_X, SILL_Y, sx1, sx2, sy1, sy2,
+        scanned, DEPTH, closest, tostring(closestId)))
+  end
+
+  -- 7) nothing anywhere in the pack is still a ring
+  for _, aura in ipairs(transmit.c) do
+    assert(aura.foregroundTexture ~= RING_TEX and aura.backgroundTexture ~= RING_TEX
+      and aura.texture ~= RING_TEX,
+      "rail canon: " .. aura.id .. " still draws on Ring_20px")
+    assert(aura.orientation ~= "CLOCKWISE",
+      "rail canon: " .. aura.id .. " is still a clockwise progresstexture")
+  end
+
   return { encoded = final, transmit = transmit }
 end)
 
