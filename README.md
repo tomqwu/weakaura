@@ -23,13 +23,13 @@ use GitHub's copy button on the block to grab the whole string in one click.
 
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
-| Rogue — All Specs | Combat · Assassination · Subtlety | v52 | 58 | [string](tbc/rogue/README.md#import-string-v52) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v14 | 45 | [string](tbc/paladin/README.md#import-string-v14) · [raw](tbc/paladin/all-specs.txt) |
-| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v13 | 45 | [string](tbc/druid/README.md#import-string-v13) · [raw](tbc/druid/all-specs.txt) |
-| Warlock — All Specs | Affliction · Demonology · Destruction | v12 | 40 | [string](tbc/warlock/README.md#import-string-v12) · [raw](tbc/warlock/all-specs.txt) |
-| Hunter — BM & Survival | Beast Mastery · Survival | v13 | 49 | [string](tbc/hunter/README.md#import-string-v13) · [raw](tbc/hunter/all-specs.txt) |
-| Priest — All Specs | Shadow · Holy · Discipline | v12 | 41 | [string](tbc/priest/README.md#import-string-v12) · [raw](tbc/priest/all-specs.txt) |
-| Mage — Arcane & Frost | Arcane · Frost | v12 | 44 | [string](tbc/mage/README.md#import-string-v12) · [raw](tbc/mage/all-specs.txt) |
+| Rogue — All Specs | Combat · Assassination · Subtlety | v53 | 58 | [string](tbc/rogue/README.md#import-string-v53) · [raw](tbc/rogue/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v15 | 45 | [string](tbc/paladin/README.md#import-string-v15) · [raw](tbc/paladin/all-specs.txt) |
+| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v14 | 45 | [string](tbc/druid/README.md#import-string-v14) · [raw](tbc/druid/all-specs.txt) |
+| Warlock — All Specs | Affliction · Demonology · Destruction | v13 | 40 | [string](tbc/warlock/README.md#import-string-v13) · [raw](tbc/warlock/all-specs.txt) |
+| Hunter — BM & Survival | Beast Mastery · Survival | v14 | 49 | [string](tbc/hunter/README.md#import-string-v14) · [raw](tbc/hunter/all-specs.txt) |
+| Priest — All Specs | Shadow · Holy · Discipline | v13 | 41 | [string](tbc/priest/README.md#import-string-v13) · [raw](tbc/priest/all-specs.txt) |
+| Mage — Arcane & Frost | Arcane · Frost | v13 | 44 | [string](tbc/mage/README.md#import-string-v13) · [raw](tbc/mage/all-specs.txt) |
 
 Every pack is class-gated and auto-adapts across the **supported builds listed in the table**
 through Spell Known gates. The current product scope is primarily level-70 single-target
@@ -55,7 +55,7 @@ acceptance note instead of presenting static serialization as an in-game test.
 
 ## Packs
 
-- **tbc/rogue/all-specs.txt** — full HUD, v52 of a 52-iteration build: since **v52 a single
+- **tbc/rogue/all-specs.txt** — full HUD, v53 of a 53-iteration build: since **v52 a single
   ring cluster**: the target cluster is deleted (its health duplicated the target frame and the
   nameplate for the whole game, and its ring track existed only to keep a spare UID alive) and
   **threat comes home as your own outermost arc**. Three concentric rings around a **live 3D
@@ -66,8 +66,12 @@ acceptance note instead of presenting static serialization as an in-game test.
   circumference** (dim where the breakpoint is, lit the moment you can afford Eviscerate or
   Sinister Strike); threat is green, orange at 70%, red on aggro, with the percentage above the
   ring and the 80% halo resized onto it, party/raid-gated and never in an arena, so the common
-  solo case is still two rings and a face. The percentages hang just outside the arcs, because a
-  `model` region cannot carry text. 62 auras become 58 with all 57 survivors keeping their UIDs;
+  solo case is still two rings and a face. **v53 puts the health percentage in the middle of the
+  cluster at 16pt, over your own face** — which needed the portrait moved to the *front* of the
+  child list so the rings, and their text, draw above it; a ring paints only its own band
+  (`r 42.19..50`, `35.44..42`, `26.16..31` against a portrait at `r 0..22`), so nothing of the
+  face is covered. Raw energy takes health's old slot at 12pt, threat stays above the outer ring.
+  62 auras become 58 at v52 with all 57 survivors keeping their UIDs, and 58 stay 58 through v53;
   the leftover `Rogue - Target Cluster` group must be deleted by hand once after updating. On
   the v47/v48 **unit orbs** the
   design returns to (they in turn replaced the centre bar stack), combo pips (always-visible sockets, green→orange
@@ -89,15 +93,24 @@ acceptance note instead of presenting static serialization as an in-game test.
   cannot climb into at any stack depth (the cluster spans `x -320..-220` against the column's
   `-170..-130`). Threat is green, orange at 70%, red on aggro, with the percentage above the
   ring, party/raid-gated and never in an arena, so the common solo case is still two rings and
-  a face. The percentages hang outside the arcs, because a `model` region cannot carry text.
+  a face. Since **v15 the health percentage prints in the middle of the cluster**, 16pt on your
+  own portrait, which needed the portrait moved to the *front* of the child list so the rings —
+  and their text — draw over it; a ring is an annulus, so the face stays visible and only the
+  number lands on it. Mana moves up into the slot health left, at 12pt.
   48 auras become 45 with all 44 survivors keeping their UIDs; the leftover
-  `Paladin - Target Rings` group must be deleted by hand once after updating. Plus the seal-twisting swing
+  `Paladin - Target Rings` group must be deleted by hand once after updating from v13 or
+  earlier (v15 removes nothing). Plus the seal-twisting swing
   runway and a 14-icon cooldown row that shows only what is
   unavailable (rotational buttons stay visible and glow when ready); Holy / Protection /
   Retribution adapt via Holy Shock, Holy Shield and Crusader Strike gates, and the row is
   spec-selective — a healing Holy paladin is not shown Consecration or Avenging Wrath. PvP
   layer: CC-on-me, HAMMER NOW, target immunity, trinket and Forbearance clocks, Cleanse.
-- **tbc/druid/all-specs.txt** — since **v13 a single ring cluster**: the target cluster is deleted
+- **tbc/druid/all-specs.txt** — since **v14 your health percentage sits in the middle of the
+  cluster**, 16pt across your own portrait, which is the only opaque backdrop the HUD owns; that
+  needed the portrait moved to the *front* of its group's `controlledChildren` (first = furthest
+  behind) so the rings' text draws over the face instead of under it, and it hides nothing because
+  an annulus's band starts at radius 26.16 while the face ends at 22. Power moves up into the slot
+  health left, at 12pt; threat stays above its arc. Since **v13 a single ring cluster**: the target cluster is deleted
   (its health duplicated the target frame and the nameplate for the whole game, and its ring track
   existed only to keep the pair looking matched) and **threat comes home as your own outermost
   arc**. Three concentric rings around a **live 3D portrait** of you at `(-270, 40)` — a 100px
@@ -110,10 +123,12 @@ acceptance note instead of presenting static serialization as an in-game test.
   ring green → orange at 70% → red on the flip), the not-in-arena gate and the
   `threatvalue <= 0 → alpha 0` guard, with `%threatpct` above the ring — this pack gates threat by
   spec rather than by party/raid, and the guard plus the target-less trigger is what keeps the
-  common case to two rings and a face. The percentages hang just outside the arcs, because a
-  `model` region cannot carry text. 48 auras become 45 with all 44 survivors keeping their UIDs;
-  the leftover `Druid - Target Health Ring`, `Druid - Target Ring Track` and
-  `Druid - Target Portrait` must be deleted by hand once after updating. Lacerate stacks and Mangle debuff,
+  common case to two rings and a face. The percentages are sub-regions of the *rings*, since a
+  `model` region cannot carry text — but v14 puts the health one over the portrait anyway, because
+  the number only has to land on the face's pixels, not live on its region. 48 auras become 45
+  with all 44 survivors keeping their UIDs; the leftover `Druid - Target Health Ring`,
+  `Druid - Target Ring Track` and `Druid - Target Portrait` must be deleted by hand once after
+  updating from v12 or earlier (v14 removes nothing). Lacerate stacks and Mangle debuff,
   Demoralizing Roar, Lifebloom/Rejuvenation/Regrowth
   timers, Moonfire and Insect Swarm, Omen of Clarity proc, and an 8-icon cooldown row showing
   only what is down (Mangle keeps its ready glow); Bear / Restoration / Balance gate on
@@ -131,9 +146,13 @@ acceptance note instead of presenting static serialization as an in-game test.
   **v12 deletes the v11 target cluster** (its health duplicated the target frame and the
   nameplate) and moves threat onto your own rings rather than losing it; 44 auras → 40, every
   surviving UID byte-identical, and the README names the one leftover group to delete by hand
-  after updating. The percentages sit just outside the arcs, because a model region cannot
-  carry text. Plus a 7-icon cooldown row showing only what is down. PvP layer: CC-on-me,
-  target immunity, trinket clocks, per-opponent enemy mana for the drain decision.
+  after updating from v11 or earlier (v13 removes nothing). Since **v13 the health percentage
+  prints in the middle of the cluster**, 16pt on your own portrait, which needed the portrait
+  moved to the *front* of the child list so the rings — and their text — draw over it; a ring
+  is an annulus, so the face stays visible and only the number lands on it. Mana moves up into
+  the slot health left, at 12pt. Plus a 7-icon cooldown row showing only what is down. PvP
+  layer: CC-on-me, target immunity, trinket clocks, per-opponent enemy mana for the drain
+  decision.
 - **tbc/hunter/all-specs.txt** — Serpent Sting and Hunter's Mark timers, Bestial Wrath and
   Rapid Fire windows, aspect-missing and back-to-Hawk alarms, Kill Command reactive prompt,
   pet health prompts, Misdirection/Feign Death threat pairing, proc tracker, and — **v13 —
@@ -160,9 +179,12 @@ acceptance note instead of presenting static serialization as an in-game test.
   nameplate, so it duplicated the default UI — and threat moved to your own body because it is
   the one thing that cluster showed that nothing else does. Updating leaves three orphan auras
   to delete by hand (`Priest - Target Health`, `Priest - Target Track`,
-  `Priest - Target Portrait`). The portrait is a live model, so the percentages sit just
-  outside the rings (a model region cannot carry text); the 40% health and 50% mana breakpoint
-  marks are pips on their own ring at the angle the threshold implies. Plus the arena/BG-only
+  `Priest - Target Portrait`). Since **v13** the **health percentage sits dead centre on your
+  portrait at 16px** with mana at 12px just under the outer ring: a model region cannot carry
+  text, so every number is still owned by a *ring*, but the portrait was moved to the back of
+  the cluster's draw order so a ring's text can land on the face (an annulus hides nothing —
+  the bands are 26.2–31, 35.4–42 and 42.2–50 around a 22px face). The 40% health and 50% mana
+  breakpoint marks are pips on their own ring at the angle the threshold implies. Plus the arena/BG-only
   PvP layer
   (CC-on-me colour-coded by CC category, Fear Ward and Mass
   Dispel prompts, trinket clocks, UA-on-ally warning, and a per-opponent enemy mana bar for
@@ -182,9 +204,14 @@ acceptance note instead of presenting static serialization as an in-game test.
   only to hold a UID — while threat moved onto your own body because it is the one thing that
   cluster showed that nothing else does. 48 auras → 44, every surviving UID unchanged, and
   updating leaves one group to delete by hand (`Mage - Target Cluster`, with its three
-  children). The percentages sit just outside the arcs — health 13pt, mana 10pt, threat 10pt —
-  because a `model` region cannot carry text; the Arcane conserve breakpoint is a bead on the
-  mana ring's circumference at the angle its 30% threshold implies.
+  children). **v13 makes the percentages readable**: health moves to the dead centre of the
+  cluster at 16pt, drawn **on your portrait** instead of floating 54px below it on bare screen,
+  and mana takes the vacated slot at 12pt (threat is unchanged at 10pt above the cluster). That
+  required reordering the cluster so the **portrait draws first (furthest back)** rather than
+  last — otherwise the face covers the health ring's own text and the move is invisible — which
+  hides nothing, because no ring paints inside radius 26.16 and the face ends at 22.00. No aura
+  added or removed and every UID stable. The Arcane conserve breakpoint is a bead on the mana
+  ring's circumference at the angle its 30% threshold implies.
   PvP layer: CC-on-me
   colour-coded by category, COUNTERSPELL NOW plus its lockout bar, target immunity, trinket
   clocks, own Polymorph per opponent, enemy mana.
