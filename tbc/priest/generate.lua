@@ -1,4 +1,4 @@
--- generate.lua — Priest TBC All-Specs HUD (v15).
+-- generate.lua — Priest TBC All-Specs HUD (v16).
 -- Run: lua5.1 tbc/priest/generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import -> paste).
 --
@@ -697,16 +697,16 @@ end
 
 -- THE RAIL. Same region type the rings and the v9/v10 globes used, one different
 -- orientation — and that one field decides which of the others are live:
---   orientation "HORIZONTAL_INVERSE" -> the LINEAR fill path, anchored LEFT, growing
+--   orientation "HORIZONTAL" -> the LINEAR fill path, anchored LEFT, growing
 --     RIGHT. This is the trap that has to be stated: on an AURABAR "HORIZONTAL" is
 --     left-anchored and grows right (gotchas.md), but on a PROGRESSTEXTURE the same
 --     key is WeakAuras' "Right to Left" and the left-to-right value is the _INVERSE
 --     one. Private.orientation_with_circle_types, transcribed verbatim in
---     poc/diablo-globes/generate.lua: HORIZONTAL_INVERSE = "Left to Right",
+--     poc/diablo-globes/generate.lua: HORIZONTAL = "Left to Right",
 --     HORIZONTAL = "Right to Left", VERTICAL = "Bottom to Top",
 --     VERTICAL_INVERSE = "Top to Bottom". VERTICAL off that same table is live in the
 --     shipped poc/diablo-globes string, so the linear path itself is proven here;
---     HORIZONTAL_INVERSE is the one field in this version no committed string in this
+--     HORIZONTAL is the one field in this version no committed string in this
 --     repo has rendered before. 30-second check in game: drop to ~50% and confirm the
 --     EMPTY half is on the RIGHT. If it is reversed the fix is a one-token swap to
 --     "HORIZONTAL" and nothing else in the design changes.
@@ -736,7 +736,7 @@ local function rail(id, w, h, color, x, y, trigger)
     width = w, height = h,
     selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
     xOffset = x, yOffset = y, frameStrata = 1, alpha = 1,
-    orientation = "HORIZONTAL_INVERSE", startAngle = 0, endAngle = 360,
+    orientation = "HORIZONTAL", startAngle = 0, endAngle = 360,
     inverse = false, mirror = false,
     compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
     foregroundTexture = RAIL_TEX, backgroundTexture = RAIL_TEX, sameTexture = true,
@@ -1684,15 +1684,15 @@ end
 
 -- (2) THE RAIL RECIPE, on every rail, from the shipped data. ONE PIXEL IS ONE PERCENT
 -- is the whole design, so width == RAIL_W is asserted per rail and not inferred from
--- the table above; and HORIZONTAL_INVERSE is the single field this version cannot
+-- the table above; and HORIZONTAL is the single field this version cannot
 -- prove from a previously shipped string, so it is the one most worth pinning here.
 for _, want in ipairs(SILL) do
   local node = nodes[want[1]]
   if node.regionType == "progresstexture" then
     local id = want[1]
-    assert(node.orientation == "HORIZONTAL_INVERSE",
+    assert(node.orientation == "HORIZONTAL",
       ("%s fills %q; a rail fills left to right, which on a progresstexture is %q")
-        :format(id, tostring(node.orientation), "HORIZONTAL_INVERSE"))
+        :format(id, tostring(node.orientation), "HORIZONTAL"))
     assert(node.width == RAIL_W,
       ("%s is %s long; one pixel is one percent, so a rail is exactly %d")
         :format(id, tostring(node.width), RAIL_W))

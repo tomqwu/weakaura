@@ -1,4 +1,4 @@
--- generate.lua — "Paladin TBC - All Specs" (v20)
+-- generate.lua — "Paladin TBC - All Specs" (v21)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code)
 -- except the rail region tables, which wa_factory has no builder for.
@@ -789,7 +789,7 @@ local PLATE_TEX = MEDIA .. "Square_White_Border.tga"
 -- never comes near the Swing Timer, which is 140px of runway at x -220..-80 — entirely outside
 -- the rim's x -54..+54. The plate alone clears by 11.5px and 67.5px.
 local SILL_X    =    0
-local SILL_Y    = -110
+local SILL_Y    = -125
 
 -- THE LANES, all local to the Sill group. Stack arithmetic, top to bottom:
 --   1px margin | threat 4 | 1px gap | health 11 | 1px gap | mana 11 | 2px margin  = 31
@@ -798,15 +798,18 @@ local SILL_Y    = -110
 -- packs with a discrete class resource carry a 6px pip lane under the mana rail and are 37
 -- tall. Paladin has no discrete resource (mana in all three specs, in every form there is),
 -- so lane 4 is omitted and the strip is 31.
-local RAIL_LEN     = 100   -- one pixel is one percent. Never change this without changing the
-                           -- breakpoint formula, which is the only reason it is 100.
-local THREAT_H     =   4   -- threat is an early-warning ratio, not a quantity: it gets the
+local RAIL_LEN     = 200   -- TWO pixels is one percent (v20 doubled it). The invariant was
+                           -- never "100" — it is that a rail is a whole number of pixels per
+                           -- percent, so a breakpoint is arithmetic instead of trigonometry.
+                           -- markX() below is the single place that knows, so the marks, the
+                           -- ruler and the number all follow from this one line.
+local THREAT_H     =   8   -- threat is an early-warning ratio, not a quantity: it gets the
                            -- thinnest rail and no number.
-local BAR_H        =  11   -- health and mana: tall enough for an 11pt number inside them.
-local LANE_THREAT_Y = 15.5
-local LANE_HEALTH_Y =  7
-local LANE_POWER_Y  = -5
-local PLATE_W, PLATE_H, PLATE_Y = 102, 31, 3
+local BAR_H        =  22   -- health and mana: tall enough for an 11pt number inside them.
+local LANE_THREAT_Y = 31
+local LANE_HEALTH_Y = 14
+local LANE_POWER_Y  = -10
+local PLATE_W, PLATE_H, PLATE_Y = 204, 62, 6
 -- THE RIM. How far the >=80% alarm frame sticks out past the plate, PER SIDE. The alarm is the
 -- same filled art as the plate (see PLATE_TEX above: 98.44% of that texture is fully opaque),
 -- so the ONLY construction that reads as an edge instead of a wash is "bigger than the plate,
@@ -815,7 +818,7 @@ local PLATE_W, PLATE_H, PLATE_Y = 102, 31, 3
 -- full strength. Everything inside sits behind a 45%-black plate and behind every rail, number
 -- and waterline. Both halves — the size AND the draw index — are asserted from the decoded
 -- string in the proof block at the bottom; drop either one and the rim is a wash again.
-local RIM = 3
+local RIM = 6
 local ALARM_W, ALARM_H = PLATE_W + 2 * RIM, PLATE_H + 2 * RIM
 
 -- x(v) for a 100-max resource, and the general form for anything else. Every breakpoint,
@@ -840,25 +843,30 @@ end
 -- to find out. The trade-off is stated where a player can see it: with a left-to-right fill
 -- the fill edge passes UNDER the digits at ~82%, and OUTLINE + a black shadow + the plate are
 -- what carry them through it.
-local NUM_X, NUM_SIZE = 32, 11
+local NUM_X, NUM_SIZE = 64, 20
+-- Mark widths, scaled with the rail. A ruler hairline is a hint; a breakpoint waterline is a
+-- decision boundary and is three times as thick. Both are named because they are written in
+-- two places — the builder and the proof block — and a literal in only one of them drifts.
+local RULE_W = 2   -- 25/50/75 hint hairlines
+local MARK_W = 6   -- a real breakpoint (the 20% mana floor)
 -- The threat rail is 4px tall, so a number cannot live inside it. Its sub-text is KEPT (the
 -- index is preserved and a user can re-enable it in /wa) but switched off, and parked at the
 -- same x as the others at 8pt so that re-enabling it puts it somewhere sane instead of 58px
 -- up in the buff row where v15 left it.
-local THREAT_NUM_SIZE = 8
+local THREAT_NUM_SIZE = 14
 
 -- The LINEAR fill path. Private.orientation_with_circle_types:
---   HORIZONTAL_INVERSE = "Left to Right"   HORIZONTAL       = "Right to Left"
+--   HORIZONTAL = "Left to Right"   HORIZONTAL       = "Right to Left"
 --   VERTICAL           = "Bottom to Top"   VERTICAL_INVERSE = "Top to Bottom"
 --   CLOCKWISE / ANTICLOCKWISE              = the radial path the rings used
--- so LEFT TO RIGHT IS `HORIZONTAL_INVERSE`, and the name lies about the direction in the
+-- so LEFT TO RIGHT IS `HORIZONTAL`, and the name lies about the direction in the
 -- usual WA way (gotchas.md) — plain HORIZONTAL drains from the right. Note this is the exact
 -- OPPOSITE of the aurabar convention, where HORIZONTAL is left-anchored and grows right; the
 -- Swing Timer below is an aurabar and correctly keeps HORIZONTAL.
 -- Switching to the linear path also swaps which fields are live: startAngle/endAngle go inert
 -- (emitted for the schema), compress/slanted/slant/slantMode become live and are deliberately
 -- left off, and crop_x/crop_y become a plain texcoord scale.
-local RAIL_ORIENT = "HORIZONTAL_INVERSE"
+local RAIL_ORIENT = "HORIZONTAL"
 
 -- ===== pack-local layout ====================================================
 -- Everything below is paladin's own stacking, not shared geometry. All offsets are
@@ -950,7 +958,7 @@ end
 -- fill path this time. Only three things differ from the v15 ring builder — orientation, the
 -- texture, and a width/height that are no longer equal — and everything else is byte-identical
 -- because those fields were never about being a circle. Field notes on the traps:
---   orientation HORIZONTAL_INVERSE -> "Left to Right". See RAIL_ORIENT above; getting this
+--   orientation HORIZONTAL -> "Left to Right". See RAIL_ORIENT above; getting this
 --     backwards ships a rail that empties from the left, which looks deliberate and is wrong.
 --   startAngle 0 / endAngle 360 -> INERT on the linear path (they were live for the rings).
 --     Emitted because they are in the region's default table.
@@ -1066,7 +1074,7 @@ end
 local RULER = { 25, 50, 75 }
 local function addRuler(region, height)
   for _, value in ipairs(RULER) do
-    addSub(region, waterline(value, 1, height, COL.ruler))
+    addSub(region, waterline(value, RULE_W, height, COL.ruler))
   end
 end
 
@@ -1130,7 +1138,7 @@ hp.conditions = {
 local mp = reg(rail("Paladin - Mana", BAR_H, LANE_POWER_Y, COL.mana,
   { F.powerTrigger(0), F.unitCharTrigger() }))
 addSub(mp, pct("percentpower", NUM_SIZE, NUM_X, COL.mpText))          -- sub.1
-addSub(mp, waterline(20, 3, BAR_H, COL.manaFloor))                    -- sub.2: the mana floor
+addSub(mp, waterline(20, MARK_W, BAR_H, COL.manaFloor))                    -- sub.2: the mana floor
 addRuler(mp, BAR_H)                                                   -- sub.3-5: 25 / 50 / 75
 mp.conditions = {
   F.condition(2, "inCombat", "==", 0, "alpha", 0.5),
@@ -2139,7 +2147,7 @@ do
     assert(node.regionType == "progresstexture",
       ("rail canon: %s is a %s, expected progresstexture"):format(id, tostring(node.regionType)))
     assert(node.orientation == RAIL_ORIENT,
-      ("rail canon: %s fills %s, expected %s (Left to Right)")
+      ("rail canon: %s fills %s, expected %s (fill anchored LEFT, grows RIGHT)")
         :format(id, tostring(node.orientation), RAIL_ORIENT))
     assert(node.width == RAIL_LEN,
       ("rail canon: %s is %s long, expected %d — one pixel must be one percent")
@@ -2321,7 +2329,7 @@ do
         :format(id, tostring(st.text_visible), tostring(visible)))
   end
   --     A number must fit inside the rail it prints in: three digits at 11pt is ~21px wide.
-  local widestNumber = 21
+  local widestNumber = 38
   assert(NUM_X + widestNumber / 2 <= RAIL_LEN / 2,
     ("geometry proof: a 3-digit number at x %d spills past the rail's right edge"):format(NUM_X))
 
@@ -2329,13 +2337,13 @@ do
   --     that would have caught the ring era's trigonometry drifting away from its own arc.
   for _, want in ipairs({
     { "Paladin - Threat", 2, 70, 2, THREAT_H, COL.notch,     "the 70 notch"        },
-    { "Paladin - Mana",   2, 20, 3, BAR_H,    COL.manaFloor, "the 20% mana floor"  },
-    { "Paladin - Health", 2, 25, 1, BAR_H,    COL.ruler,     "the health 25 rule"  },
-    { "Paladin - Health", 3, 50, 1, BAR_H,    COL.ruler,     "the health 50 rule"  },
-    { "Paladin - Health", 4, 75, 1, BAR_H,    COL.ruler,     "the health 75 rule"  },
-    { "Paladin - Mana",   3, 25, 1, BAR_H,    COL.ruler,     "the mana 25 rule"    },
-    { "Paladin - Mana",   4, 50, 1, BAR_H,    COL.ruler,     "the mana 50 rule"    },
-    { "Paladin - Mana",   5, 75, 1, BAR_H,    COL.ruler,     "the mana 75 rule"    },
+    { "Paladin - Mana",   2, 20, MARK_W, BAR_H,    COL.manaFloor, "the 20% mana floor"  },
+    { "Paladin - Health", 2, 25, RULE_W, BAR_H,    COL.ruler,     "the health 25 rule"  },
+    { "Paladin - Health", 3, 50, RULE_W, BAR_H,    COL.ruler,     "the health 50 rule"  },
+    { "Paladin - Health", 4, 75, RULE_W, BAR_H,    COL.ruler,     "the health 75 rule"  },
+    { "Paladin - Mana",   3, 25, RULE_W, BAR_H,    COL.ruler,     "the mana 25 rule"    },
+    { "Paladin - Mana",   4, 50, RULE_W, BAR_H,    COL.ruler,     "the mana 50 rule"    },
+    { "Paladin - Mana",   5, 75, RULE_W, BAR_H,    COL.ruler,     "the mana 75 rule"    },
   }) do
     local id, index, value, w, h, color, label = want[1], want[2], want[3], want[4], want[5],
       want[6], want[7]

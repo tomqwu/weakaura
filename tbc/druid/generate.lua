@@ -1,4 +1,4 @@
--- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v16).
+-- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v17).
 -- Run: lua5.1 generate.lua   (toolkit libs live in ../../tools/tbc-weakaura-creator/scripts/,
 -- fetch them once with that directory's setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (copy whole -> /wa -> Import).
@@ -768,15 +768,15 @@ end
 
 -- THE RAIL. The SAME progresstexture region the rings and the globes used, moved onto the LINEAR
 -- path — and the fields that are traps, in the order they bite:
---   orientation HORIZONTAL_INVERSE -> "Left to Right". Private.orientation_with_circle_types is
+--   orientation HORIZONTAL -> "Left to Right". Private.orientation_with_circle_types is
 --     transcribed verbatim in poc/diablo-globes/generate.lua:
---       HORIZONTAL_INVERSE = "Left to Right"   HORIZONTAL = "Right to Left"
+--       HORIZONTAL = "Left to Right"   HORIZONTAL = "Right to Left"
 --       VERTICAL = "Bottom to Top"             VERTICAL_INVERSE = "Top to Bottom"
 --     The key lies about the direction in the usual WA way, and it lies DIFFERENTLY from the
 --     aurabar, where HORIZONTAL is left-anchored and grows right (gotchas.md). On a
---     progresstexture, left-to-right is HORIZONTAL_INVERSE. VERTICAL from that same table is
+--     progresstexture, left-to-right is HORIZONTAL. VERTICAL from that same table is
 --     live in the shipped poc/diablo-globes string, so the linear path itself is proven here;
---     HORIZONTAL_INVERSE is the one field in v15 that no committed string in this repo has
+--     HORIZONTAL is the one field in v15 that no committed string in this repo has
 --     rendered. 30-second in-game check: at full resource the rail is solid; drop to ~50% and
 --     the EMPTY half must be on the RIGHT. If it is reversed the fix is one token, HORIZONTAL.
 --   startAngle 0 / endAngle 360 -> IGNORED on the linear path. Emitted for the schema.
@@ -811,7 +811,7 @@ local function rail(id, height, lane, color, triggerList, gate)
     selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
     xOffset = localX(SILL_X) + lane.x, yOffset = localY(SILL_Y) + lane.y,
     frameStrata = 1, alpha = 1,
-    orientation = "HORIZONTAL_INVERSE", startAngle = 0, endAngle = 360,
+    orientation = "HORIZONTAL", startAngle = 0, endAngle = 360,
     inverse = false, mirror = false,
     compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
     foregroundTexture = RAIL_TEX, backgroundTexture = RAIL_TEX, sameTexture = true,
@@ -1757,7 +1757,7 @@ assertWaterline("Druid - Rage Mark Maul Lit",   70, WATER_LIT)
 local function assertRail(id, height, lane, subTypes)
   local node = assert(byId[id], "missing aura: " .. id)
   assert(node.regionType == "progresstexture", id .. ": not a progresstexture")
-  assert(node.orientation == "HORIZONTAL_INVERSE",
+  assert(node.orientation == "HORIZONTAL",
     id .. ": orientation is " .. tostring(node.orientation) .. ", not the left-to-right linear path")
   assert(node.width == RAIL_LEN,
     ("%s is %gpx long; the lossless length for a 0-100 gauge is %d"):format(id, node.width, RAIL_LEN))

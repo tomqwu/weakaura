@@ -1,4 +1,4 @@
--- generate.lua — Rogue TBC All-Specs HUD (v55).
+-- generate.lua — Rogue TBC All-Specs HUD (v56).
 -- Reproducible lineage build: start from the committed v41 snapshot, then replay
 -- the reviewed v42 through v54 Lua migrations in order. The snapshot lives
 -- inside this script so the class still ships exactly one importable all-specs.txt.
@@ -133,7 +133,7 @@ local ok, result = pcall(function()
   for _, want in ipairs(RAILS) do
     local a = nodes[want.id]
     assert(a and a.regionType == "progresstexture", "rail canon: " .. want.id .. " is missing")
-    assert(a.orientation == "HORIZONTAL_INVERSE",
+    assert(a.orientation == "HORIZONTAL",
       "rail canon: " .. want.id .. " does not fill left to right")
     assert(a.width == RAIL_LEN and a.height == want.h,
       ("rail canon: %s is %sx%s, expected %dx%d")

@@ -298,11 +298,11 @@ do
 end
 
 -- ===== lanes 1-3: the rails =============================================================
--- HORIZONTAL_INVERSE is progresstexture's "Left to Right". (HORIZONTAL on a progresstexture is
+-- HORIZONTAL is progresstexture's "Left to Right". (HORIZONTAL on a progresstexture is
 -- Right to Left — it means the opposite of what it means on an aurabar. See the README.)
 local function toRail(id, lane)
   local a = byId[id]
-  a.orientation        = "HORIZONTAL_INVERSE"
+  a.orientation        = "HORIZONTAL"
   a.foregroundTexture  = SQUARE
   a.backgroundTexture  = SQUARE
   a.width, a.height    = lane.w, lane.h
@@ -485,7 +485,7 @@ do
   for _, want in ipairs(RAIL_CANON) do
     local a = newById[want.id]
     assert(a.regionType == "progresstexture", want.id .. " is not a progresstexture")
-    assert(a.orientation == "HORIZONTAL_INVERSE",
+    assert(a.orientation == "HORIZONTAL",
       want.id .. " does not fill left to right (orientation is " .. tostring(a.orientation) .. ")")
     assert(a.width == RAIL_LEN,
       ("%s is %s wide; one pixel is one percent only at %d"):format(want.id, tostring(a.width), RAIL_LEN))
