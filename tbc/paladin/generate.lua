@@ -1,4 +1,4 @@
--- generate.lua — "Paladin TBC - All Specs" (v21)
+-- generate.lua — "Paladin TBC - All Specs" (v22)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code)
 -- except the rail region tables, which wa_factory has no builder for.
@@ -798,7 +798,7 @@ local SILL_Y    = -125
 -- packs with a discrete class resource carry a 6px pip lane under the mana rail and are 37
 -- tall. Paladin has no discrete resource (mana in all three specs, in every form there is),
 -- so lane 4 is omitted and the strip is 31.
-local RAIL_LEN     = 200   -- TWO pixels is one percent (v20 doubled it). The invariant was
+local RAIL_LEN     = 300   -- THREE pixels is one percent (v22 lengthened it again). The invariant was
                            -- never "100" — it is that a rail is a whole number of pixels per
                            -- percent, so a breakpoint is arithmetic instead of trigonometry.
                            -- markX() below is the single place that knows, so the marks, the
@@ -809,7 +809,7 @@ local BAR_H        =  22   -- health and mana: tall enough for an 11pt number in
 local LANE_THREAT_Y = 31
 local LANE_HEALTH_Y = 14
 local LANE_POWER_Y  = -10
-local PLATE_W, PLATE_H, PLATE_Y = 204, 62, 6
+local PLATE_W, PLATE_H, PLATE_Y = 304, 62, 6
 -- THE RIM. How far the >=80% alarm frame sticks out past the plate, PER SIDE. The alarm is the
 -- same filled art as the plate (see PLATE_TEX above: 98.44% of that texture is fully opaque),
 -- so the ONLY construction that reads as an edge instead of a wash is "bigger than the plate,
@@ -843,7 +843,7 @@ end
 -- to find out. The trade-off is stated where a player can see it: with a left-to-right fill
 -- the fill edge passes UNDER the digits at ~82%, and OUTLINE + a black shadow + the plate are
 -- what carry them through it.
-local NUM_X, NUM_SIZE = 64, 20
+local NUM_X, NUM_SIZE = 96, 20
 -- Mark widths, scaled with the rail. A ruler hairline is a hint; a breakpoint waterline is a
 -- decision boundary and is three times as thick. Both are named because they are written in
 -- two places — the builder and the proof block — and a literal in only one of them drifts.
@@ -1275,7 +1275,13 @@ polish(lg)
 adopt(gBuffs, lg)
 
 -- ===== 12) Alerts: glowing prompts flowing upward beside the character =====
-local gAlerts = reg(F.dynGroup("Paladin - Alerts", -150, 96, TOP, "UP", "BOTTOM", 6))
+-- v22: the alert column moves -150 -> -210, mirroring the PvP column at +210, so the two
+-- flanking stacks are symmetric about the character and the strip between them can be 300
+-- long. The strip could in principle have run under the alerts without touching them — they
+-- grow UP from y -44 while the strip tops out at -88 — but the proof block asserts x
+-- separation from the alert column, and widening the strip until it depends on the alerts
+-- never growing DOWNWARD is exactly the kind of implicit coupling that guard exists to stop.
+local gAlerts = reg(F.dynGroup("Paladin - Alerts", -210, 96, TOP, "UP", "BOTTOM", 6))
 gAlerts.animate = true
 adopt(top, gAlerts)
 
@@ -1758,7 +1764,10 @@ local CLEANSABLE = {
 -- 34) the PvP column: mirrors the Alerts column on the other side of the character,
 -- so the PvE layout never moves. Must be a dynamicgroup — two children are clone
 -- sources, and clones inside a STATIC group stack on one spot.
-local gPvP = reg(F.dynGroup("Paladin - PvP", 150, 96, TOP, "DOWN", "TOP", 6))
+-- v22: the PvP column moves 150 -> 210 so the strip can be 300 long. Rogue has always kept
+-- its PvP column at 200; paladin was the outlier. Nothing about the column itself changes,
+-- and it is arena/BG-gated, so this is invisible in PvE.
+local gPvP = reg(F.dynGroup("Paladin - PvP", 210, 96, TOP, "DOWN", "TOP", 6))
 gPvP.animate = true
 adopt(top, gPvP)
 
