@@ -1,4 +1,4 @@
--- generate.lua — Rogue TBC All-Specs HUD (v59).
+-- generate.lua — Rogue TBC All-Specs HUD (v60).
 -- Reproducible lineage build: start from the committed v41 snapshot, then replay
 -- the reviewed v42 through v58 Lua migrations in order. The snapshot lives
 -- inside this script so the class still ships exactly one importable all-specs.txt.
@@ -86,24 +86,24 @@ local ok, result = pcall(function()
   -- v58 REWRITES THESE, it does not drop them. The numbers below are the v58 geometry,
   -- measured (see patch-v58.lua) and then asserted here against the finished string.
   local SILL_X, SILL_Y   = 0, -125      -- paladin parity: strip top lands on paladin's
-  local RAIL_LEN         = 200          -- TWO pixels is one percent (300 was too wide in play)
-  local PLATE_W, PLATE_H = 204, 74
-  local RIM              = 6            -- the alarm sticks out this far past the plate
+  local RAIL_LEN         = 160          -- 1.6px per percent; 200 and 300 both read too big
+  local PLATE_W, PLATE_H = 164, 45
+  local RIM              = 4            -- the alarm sticks out this far past the plate
   local ALARM_W, ALARM_H = PLATE_W + 2 * RIM, PLATE_H + 2 * RIM
   local GROUP  = "Rogue - Player Sill"
   local PLATE  = "Rogue - Sill Plate"
   local ALARM  = "Rogue - Alarm Frame"
   local RAILS  = {
-    { id = "Rogue - Threat Rail", h = 8,  y = 31,  subs = 2 },
-    { id = "Rogue - Health Rail", h = 22, y = 14,  subs = 4 },
-    { id = "Rogue - Energy Rail", h = 22, y = -10, subs = 8 },
+    { id = "Rogue - Threat Rail", h = 5,  y = 18.5, subs = 2 },
+    { id = "Rogue - Health Rail", h = 13, y = 8.5,  subs = 4 },
+    { id = "Rogue - Energy Rail", h = 13, y = -5.5, subs = 8 },
   }
   -- THE PIP LANE IS FROZEN AT 16px WIDE ON PURPOSE. These ten regions are also the ones that
   -- draw on the target's nameplate (see the nameplate canon at the bottom), and they carry ONE
   -- pair of offsets for both surfaces. A 96px row is right on a nameplate; a 264px row is not.
   -- The pip lane is a 0..5 counter, not a percentage gauge, so it has no reason to scale with
   -- RAIL_LEN. Only the height follows the lane stack.
-  local PIP_W, PIP_H, PIP_Y = 16, 12, -29
+  local PIP_W, PIP_H, PIP_Y = 16, 8, -17
   local PIP_X = { -40, -20, 0, 20, 40 }
   -- The columns that had to move so a 316px rim fits, and the two that did NOT. Measured
   -- minima at this rim width are Procs x >= 174 and PvP x >= 228, both at zero clearance;
