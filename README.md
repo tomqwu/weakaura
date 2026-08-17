@@ -24,7 +24,7 @@ use GitHub's copy button on the block to grab the whole string in one click.
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
 | Rogue — All Specs | Combat · Assassination · Subtlety | v56 | 58 | [string](tbc/rogue/README.md#import-string-v56) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v21 | 45 | [string](tbc/paladin/README.md#import-string-v21) · [raw](tbc/paladin/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v22 | 45 | [string](tbc/paladin/README.md#import-string-v22) · [raw](tbc/paladin/all-specs.txt) |
 | Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v17 | 45 | [string](tbc/druid/README.md#import-string-v17) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v16 | 40 | [string](tbc/warlock/README.md#import-string-v16) · [raw](tbc/warlock/all-specs.txt) |
 | Hunter — BM & Survival | Beast Mastery · Survival | v17 | 49 | [string](tbc/hunter/README.md#import-string-v17) · [raw](tbc/hunter/all-specs.txt) |
@@ -73,8 +73,9 @@ readout at exactly the moment you need to read them; and draw order is `controll
 order at +4 frame levels per child, so the flat transmit list must stay depth-first to match; and
 the fill orientation, because an inverted rail still looks like a working bar.
 
-**Paladin runs the strip at double size** (204×62, 200×22 rails, 20pt numbers, at y −125) as of
-its v21 — the template the other six will follow.
+**Paladin runs the strip long** — 304×62, 300×22 rails at **three pixels per percent**, 20pt
+numbers, at y −125, with its alert and PvP columns moved out to ∓210 to make room. That is the
+template the other six will follow.
 
 Every pack also carries a **PvP layer**: elements that exist only inside an
 arena or battleground (CC-on-you with the break decision, trinket availability, enemy trinket
