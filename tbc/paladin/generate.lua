@@ -1,7 +1,41 @@
--- generate.lua — "Paladin TBC - All Specs" (v22)
+-- generate.lua — "Paladin TBC - All Specs" (v23)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code)
 -- except the rail region tables, which wa_factory has no builder for.
+--
+-- v23 — LONG AND THIN, NOT BIG. v22's 300px rails inside a 304x62 plate under a 316x74 rim
+-- were rejected in play in their rogue equivalent, and the two earlier size passes were
+-- fixing the wrong axis: scaling the whole strip uniformly preserved the original 3.3:1
+-- plate and simply made the same stubby block bigger, so it read as a UI PANEL instead of a
+-- readout. A vitals bar wants to be LONG AND THIN — the fill's TRAVEL is the signal, its
+-- thickness carries nothing. So v23 keeps the rails long and takes the height back to near
+-- the original, on the profile now shared with rogue v60:
+--
+--        RAIL_LEN 160 (1.6 px per percent)   THREAT_H 5   BAR_H 13   RIM 4
+--        plate 164 x 36   rim 172 x 44   numbers 12pt at x +51 (threat 9pt, still off)
+--        ruler hairlines 2px, breakpoint waterlines 4px
+--
+--   v22 plate 304 x 62 = 18,848 px^2; v23 plate 164 x 36 = 5,904 px^2 — LESS THAN A THIRD of
+--   the area, while every rail stays 60% longer than the 100px original that read as too short.
+--
+--   * 1.6 PIXELS PER PERCENT, AND EVERY MARK STILL LANDS ON A WHOLE PIXEL. Every value this
+--     pack marks is a multiple of five and 1.6 x 5 = 8, so the 20% mana floor sits at x -48,
+--     the 70 threat notch at +32 and the 25/50/75 ruler at -40 / 0 / +40. The invariant was
+--     never the number 100 and was never "an integer number of pixels per percent" either —
+--     it is that markX() is the ONLY place a coordinate is derived, so the rail length is one
+--     constant and every mark follows it.
+--   * THE COLUMNS GO BACK. v22 pushed the Alerts column to -210 and the PvP column to +210 to
+--     clear a 316px rim. The rim is 172px now, so both return to the +-150 they held from v5
+--     through v21 — measured, not assumed: at -150 the alert stack clears the rim by 44px, at
+--     +150 the PvP stack clears it by 46px, and the PvP column's real binding neighbour is the
+--     COOLDOWN ROW (x -106..+106 six deep), which it clears by 26px. The proof block runs an
+--     all-pairs scan across the flanking stacks themselves, because a scan that only tests
+--     everything against the strip structurally cannot see two columns overlapping each other.
+--   * THE HEIGHT CAME OUT OF THE AXIS THAT WAS TIGHT. The strip's clearance to the seal buff
+--     row above — 2.0px in v22, the tightest number in the whole pack — is now 17.0px.
+--   * NOTHING ELSE MOVES. No aura is added, removed, renamed, re-parented or re-triggered;
+--     all 44 uids carry across (changed = 0, missing = 0) and the uid stream is untouched.
+--     The swing runway stays deleted (v19); it is not resurrected here.
 --
 -- v16 — THE SILL. The 100x100 concentric ring cluster at (-270, 40) is replaced by a
 -- 102x31 instrument strip directly under your character at ABSOLUTE (0, -110), built from
@@ -780,45 +814,67 @@ local PLATE_TEX = MEDIA .. "Square_White_Border.tga"
 
 -- ABSOLUTE SCREEN POSITION of the strip, carried ONCE by its group. Directly under the
 -- character, on the centre line, where distance-from-the-crosshair matches read frequency.
--- -110 is a MEASURED value, not a taste call: a 102x37 probe rectangle (the widest any pack's
--- Sill gets; paladin's plate is 102x31) is collision-free at this y in all seven packs with
--- every dynamic group projected six children deep, and it is the y with the best margins of
--- the five that were tested. In THIS pack the scan below is run on the ALARM ENVELOPE — the
--- 108x37 rim, which is the widest thing the instrument ever draws — and it clears the buff row
--- (y -80..-40) by 8.5px above and the cooldown row (y -190..-222) by 64.5px below, and it
--- never comes near the Swing Timer, which is 140px of runway at x -220..-80 — entirely outside
--- the rim's x -54..+54. The plate alone clears by 11.5px and 67.5px.
+-- SILL_Y is a MEASURED value, not a taste call, and v23 re-measures it against the new
+-- envelope rather than inheriting it: the scan below runs on the ALARM ENVELOPE — the 172x44
+-- rim, which is the widest thing the instrument ever draws, spanning x -86..+86 and
+-- y -141..-97 — and it clears the seal buff row above (y -80..-40) by 17.0px and the cooldown
+-- row below (y -222..-190) by 49.0px. The plate alone (164x36, x -82..+82, y -137..-101)
+-- clears by 21.0px and 53.0px. v22's envelope cleared the buff row by 2.0px, which was the
+-- tightest number in the pack; the height v23 gives back came straight out of that axis.
 local SILL_X    =    0
 local SILL_Y    = -125
 
--- THE LANES, all local to the Sill group. Stack arithmetic, top to bottom:
---   1px margin | threat 4 | 1px gap | health 11 | 1px gap | mana 11 | 2px margin  = 31
--- spanning local +18.5 .. -12.5, hence a 102x31 plate centred at local y = +3. The three rail
--- y-offsets are IDENTICAL in all seven packs; only the plate height differs, because the four
--- packs with a discrete class resource carry a 6px pip lane under the mana rail and are 37
--- tall. Paladin has no discrete resource (mana in all three specs, in every form there is),
--- so lane 4 is omitted and the strip is 31.
-local RAIL_LEN     = 300   -- THREE pixels is one percent (v22 lengthened it again). The invariant was
-                           -- never "100" — it is that a rail is a whole number of pixels per
-                           -- percent, so a breakpoint is arithmetic instead of trigonometry.
-                           -- markX() below is the single place that knows, so the marks, the
-                           -- ruler and the number all follow from this one line.
-local THREAT_H     =   8   -- threat is an early-warning ratio, not a quantity: it gets the
+-- THE LANES, all local to the Sill group, and DERIVED from this pack's own plate convention
+-- rather than copied from another pack's. Paladin centres its plate at local y = PLATE_Y
+-- (+6) — the offset it has carried since v16 — so the lane stack is laid out symmetrically
+-- about +6 and every lane y falls out of that one choice:
+--
+--   local y   +24.0  plate top          (PLATE_Y + PLATE_H/2)
+--             +22.5  content top          1.5px margin
+--   +20       +22.5 .. +17.5   threat  5   the early-warning ratio lane: thinnest, no number
+--                                    1px gap
+--   +10       +16.5 ..  +3.5   health 13
+--                                    1px gap
+--    -4        +2.5 .. -10.5   mana   13
+--             -10.5  content bottom       1.5px margin
+--             -12.0  plate bottom       (PLATE_Y - PLATE_H/2)
+--
+-- Three lanes of 5 + 13 + 13 with two 1px gaps is 33 of content; a 36px plate wears it with an
+-- EVEN 1.5px margin top and bottom. Packs with a fourth (discrete resource) lane carry 42 of
+-- content and a 45px plate — paladin has no discrete resource (mana in all three specs, in
+-- every form there is), so lane 4 is omitted here and the plate is 36. The arithmetic is
+-- asserted from the decoded string in the proof block; it is not left to this comment.
+local RAIL_LEN     = 160   -- 1.6 PIXELS PER PERCENT. Every value this pack marks is a multiple
+                           -- of five, and 1.6 x 5 = 8, so every breakpoint still lands on a
+                           -- WHOLE pixel (20 -> -48, 70 -> +32, 25/50/75 -> -40/0/+40). The
+                           -- invariant was never "100", and it was never "an integer number of
+                           -- pixels per percent" either: it is that markX() below is the SINGLE
+                           -- place a coordinate is derived, so the marks, the ruler and the
+                           -- number all follow from this one line.
+                           -- WHY 160 AND NOT 200 OR 300. A vitals bar wants to be LONG AND
+                           -- THIN: the fill's TRAVEL is the signal, its thickness carries
+                           -- nothing. v22 scaled the strip uniformly to 300, which preserved
+                           -- the plate's aspect and simply made the same stubby block bigger —
+                           -- it read as a UI panel, and the same move was rejected twice in
+                           -- play in the rogue pack at 300px and at 200px rails. 160 is 60%
+                           -- longer than the 100px original at less than a third of v22's area.
+local THREAT_H     =   5   -- threat is an early-warning ratio, not a quantity: it gets the
                            -- thinnest rail and no number.
-local BAR_H        =  22   -- health and mana: tall enough for an 11pt number inside them.
-local LANE_THREAT_Y = 31
-local LANE_HEALTH_Y = 14
-local LANE_POWER_Y  = -10
-local PLATE_W, PLATE_H, PLATE_Y = 304, 62, 6
+local BAR_H        =  13   -- health and mana: tall enough for a 12pt number inside them.
+local LANE_THREAT_Y = 20   -- derived above; the proof block re-derives the whole stack
+local LANE_HEALTH_Y = 10
+local LANE_POWER_Y  = -4
+local PLATE_W, PLATE_H, PLATE_Y = RAIL_LEN + 4, 36, 6   -- 2px of margin each side of the rail
 -- THE RIM. How far the >=80% alarm frame sticks out past the plate, PER SIDE. The alarm is the
 -- same filled art as the plate (see PLATE_TEX above: 98.44% of that texture is fully opaque),
 -- so the ONLY construction that reads as an edge instead of a wash is "bigger than the plate,
--- drawn first". 3px on every side is 6px on each axis: a 102x31 plate wears a 108x37 alarm,
--- and the 3px band protruding past the plate is the only part of it the player ever sees at
--- full strength. Everything inside sits behind a 45%-black plate and behind every rail, number
--- and waterline. Both halves — the size AND the draw index — are asserted from the decoded
--- string in the proof block at the bottom; drop either one and the rim is a wash again.
-local RIM = 6
+-- drawn first". A thinner strip wants a thinner rim: 4px on every side is 8px on each axis, so
+-- a 164x36 plate wears a 172x44 alarm, and the 4px band protruding past the plate is the only
+-- part of it the player ever sees at full strength. Everything inside sits behind a 45%-black
+-- plate and behind every rail, number and waterline. Both halves — the size AND the draw index
+-- — are asserted from the decoded string in the proof block at the bottom; drop either one and
+-- the rim is a wash again.
+local RIM = 4
 local ALARM_W, ALARM_H = PLATE_W + 2 * RIM, PLATE_H + 2 * RIM
 
 -- x(v) for a 100-max resource, and the general form for anything else. Every breakpoint,
@@ -833,27 +889,37 @@ local function markX(value, maxValue)
   return math.floor(x * 1000 + 0.5) / 1000
 end
 
--- WHERE THE NUMBERS GO (v16). Each percentage is a sub-text of its OWN rail, printed INSIDE
--- it at x +32 — 82% along a 100px rail, so two digits at 11pt (~14px) span x +25..+39 and
--- three digits (~21px) span +21.5..+42.5, both still inside the rail's right edge. That is
--- the v15 complaint fixed properly: v13/v14 hung the numbers on open screen, v15 moved one
--- of them onto a 44px face, and v16 gives every number a dark plate of its own to print on.
+-- WHERE THE NUMBERS GO (v16, re-scaled in v23). Each percentage is a sub-text of its OWN rail,
+-- printed INSIDE it at x = NUM_X — 82% along the rail at every length this pack has shipped,
+-- because NUM_X is re-derived with RAIL_LEN and never left behind. At 12pt the widest string
+-- the rails ever print is "100%", 4 glyphs at a generous 0.60 advance = 28.8px, so it spans
+-- x +36.6..+65.4 inside a rail that ends at +80. That is the v15 complaint fixed properly:
+-- v13/v14 hung the numbers on open screen, v15 moved one of them onto a 44px face, and v16
+-- gave every number a dark plate of its own to print on.
 -- text_anchorPoint stays "CENTER" and the offset does the work: INNER_RIGHT is proven on
 -- aurabars and icons in this repo but NOT on a progresstexture, and this is not the version
 -- to find out. The trade-off is stated where a player can see it: with a left-to-right fill
 -- the fill edge passes UNDER the digits at ~82%, and OUTLINE + a black shadow + the plate are
 -- what carry them through it.
-local NUM_X, NUM_SIZE = 96, 20
--- Mark widths, scaled with the rail. A ruler hairline is a hint; a breakpoint waterline is a
--- decision boundary and is three times as thick. Both are named because they are written in
--- two places — the builder and the proof block — and a literal in only one of them drifts.
-local RULE_W = 2   -- 25/50/75 hint hairlines
-local MARK_W = 6   -- a real breakpoint (the 20% mana floor)
--- The threat rail is 4px tall, so a number cannot live inside it. Its sub-text is KEPT (the
+local NUM_X, NUM_SIZE = 51, 12
+-- Mark widths. A ruler hairline is a HINT; a breakpoint waterline is a DECISION BOUNDARY and is
+-- twice as thick. Both are named because they are written in two places — the builder and the
+-- proof block — and a literal in only one of them drifts.
+--   THE SHARED PROFILE CALLS FOR 4px DIM / 8px LIT WATERLINES. Paladin has no dim/lit PAIR:
+-- its one breakpoint, the 20% mana floor, is drawn PERMANENTLY (that is the whole point of it —
+-- a threshold you can only see after you cross it is half a signal), and the "you are past it"
+-- state is carried by the rail turning red underneath the mark, which this pack has had since
+-- v8. A permanently drawn mark is the DIM role, so the floor takes the 4px dim width; nothing
+-- here lights up, so the 8px lit width has no member in this pack.
+local RULE_W  = 2   -- 25/50/75 hint hairlines
+local MARK_W  = 4   -- a real breakpoint (the 20% mana floor), always drawn
+local NOTCH_W = 2   -- the 70 threat notch: a hairline on a 5px rail is already a full-height
+                    -- mark, so it stays at the ruler width rather than the waterline width.
+-- The threat rail is 5px tall, so a number cannot live inside it. Its sub-text is KEPT (the
 -- index is preserved and a user can re-enable it in /wa) but switched off, and parked at the
--- same x as the others at 8pt so that re-enabling it puts it somewhere sane instead of 58px
+-- same x as the others at 9pt so that re-enabling it puts it somewhere sane instead of 58px
 -- up in the buff row where v15 left it.
-local THREAT_NUM_SIZE = 14
+local THREAT_NUM_SIZE = 9
 
 -- The LINEAR fill path. Private.orientation_with_circle_types:
 --   HORIZONTAL = "Left to Right"   HORIZONTAL       = "Right to Left"
@@ -925,7 +991,7 @@ local COL = {
   thText  = { 0.72, 0.95, 0.74, 1 },   -- threat, unchanged (the sub-text is off by default)
   -- v16 additions
   plate     = { 0, 0, 0, 0.45 },       -- the Sill itself: a dark bordered panel. This is what
-                                       -- makes an 11px rail and an 11pt number survive snow,
+                                       -- makes a 13px rail and a 12pt number survive snow,
                                        -- lava and Shattrath at noon, and what makes three
                                        -- bars read as ONE instrument instead of three things.
   ruler     = { 1, 1, 1, 0.18 },       -- the 25/50/75 hairlines. Deliberately faint: they are
@@ -1012,7 +1078,7 @@ end
 -- ("two concentric arcs around a live 3D portrait read as a unit — you"), and that argument
 -- was about a RING CLUSTER, which no longer exists here. Its uid does not go to waste and is
 -- not parked in a filler region: it becomes the Sill Plate, the dark bordered panel the three
--- rails are drawn on, which is the single element that makes an 11pt number readable over
+-- rails are drawn on, which is the single element that makes a 12pt number readable over
 -- snow, lava and a Netherstorm skybox. `model` -> `texture` re-typing carries the uid exactly
 -- as re-parenting and resizing do — only the uid() CALL ORDER is sacred — and it is the same
 -- move the rogue pack made in v47/v51 when portraits became rim textures.
@@ -1068,9 +1134,9 @@ local function addSub(region, sub)
   return #region.subRegions
 end
 
--- The ruler: 25 / 50 / 75 as 1px hairlines at 18% white, appended AFTER everything a version
--- might ever point a condition at. 33px of ink, zero footprint, and it is the difference
--- between estimating a fraction and counting quarters.
+-- The ruler: 25 / 50 / 75 as RULE_W (2px) hairlines at 18% white, appended AFTER everything a
+-- version might ever point a condition at. 78px of ink, zero footprint, and it is the
+-- difference between estimating a fraction and counting quarters.
 local RULER = { 25, 50, 75 }
 local function addRuler(region, height)
   for _, value in ipairs(RULER) do
@@ -1092,7 +1158,7 @@ top.frameStrata = 1
 local gRes = reg(F.group("Paladin - Resources", 0, G.bandY, TOP))
 adopt(top, gRes)
 
--- 3) HEALTH — LANE 2 of the Sill, 100 x 11 at local y +7. Was the 172x14 health aurabar
+-- 3) HEALTH — LANE 2 of the Sill, 160 x 13 at local y +10. Was the 172x14 health aurabar
 -- through v8, the outer ring of the player orb in v9/v10, the life globe in v11/v12, an 84px
 -- ring in v13-v15; same aura id, SAME UID every time, so this updates in place rather than
 -- orphaning. v16 changes its shape, its position and where its number prints, and NOTHING
@@ -1100,8 +1166,8 @@ adopt(top, gRes)
 -- gate are byte-identical to v15.
 -- Trigger 2 is the existing Unit Characteristics state feeder and drives the out-of-combat
 -- fade ONLY; progress comes from trigger 1 (Automatic progress = first active trigger).
--- THE NUMBER IS INSIDE THE RAIL NOW, at x +32, 11pt. Two digits span x +25..+39 on a rail
--- that ends at +50, so it sits clear of the right edge with room for a third digit.
+-- THE NUMBER IS INSIDE THE RAIL, at x +51, 12pt. "100%" — the widest string it ever prints —
+-- is ~28.8px, so it spans x +36.6..+65.4 on a rail that ends at +80, clear of the right edge.
 local hp = reg(rail("Paladin - Health", BAR_H, LANE_HEALTH_Y, COL.life,
   { F.healthTrigger(), F.unitCharTrigger() }))
 addSub(hp, pct("percenthealth", NUM_SIZE, NUM_X, COL.pctText))   -- sub.1
@@ -1120,7 +1186,7 @@ hp.conditions = {
 }
 -- adopted into the Sill at the bottom of this script
 
--- 4) MANA — LANE 3 of the Sill, 100 x 11 at local y -5. A paladin's power is MANA in all three
+-- 4) MANA — LANE 3 of the Sill, 160 x 13 at local y -4. A paladin's power is MANA in all three
 -- specs and in every form there is, so this rail is mana blue and needs no recolour condition
 -- — the druid, whose power type changes with form, is the pack that recolours by condition.
 -- Red below 20%, carried across from the v8 bar with `barColor` renamed to `foregroundColor`
@@ -1131,10 +1197,10 @@ hp.conditions = {
 -- ONLY power threshold anywhere in the pack. Nothing in the Alerts column fires on mana; no
 -- other aura carries a Power trigger at all. So for a Holy paladin — the one spec whose whole
 -- game is mana — this rail is the entire mana instrument, and a threshold you can only see
--- AFTER you cross it is half a signal. sub.2 draws it permanently at x = 20 - 50 = -30, a
--- 3x11 line brighter and oranger than the red the rail turns, so it stays visible once the
--- fill is red behind it. Prot and Ret get it too and will mostly ignore it, which is correct:
--- it costs 33px^2 and never moves.
+-- AFTER you cross it is half a signal. sub.2 draws it permanently at markX(20) = -48, a
+-- MARK_W x BAR_H (4x13) line brighter and oranger than the red the rail turns, so it stays
+-- visible once the fill is red behind it. Prot and Ret get it too and will mostly ignore it,
+-- which is correct: it costs 52px^2 and never moves.
 local mp = reg(rail("Paladin - Mana", BAR_H, LANE_POWER_Y, COL.mana,
   { F.powerTrigger(0), F.unitCharTrigger() }))
 addSub(mp, pct("percentpower", NUM_SIZE, NUM_X, COL.mpText))          -- sub.1
@@ -1149,7 +1215,7 @@ mp.conditions = {
 }
 -- adopted into the Sill at the bottom of this script
 
--- 5) THREAT — LANE 1 of the Sill, 100 x 4 at local y +15.5, the thinnest rail and the only
+-- 5) THREAT — LANE 1 of the Sill, 160 x 5 at local y +20, the thinnest rail and the only
 -- one with no number. It was the target cluster's outer ring in v13 and YOUR outermost arc in
 -- v14/v15; the reading has not changed, only the shape.
 -- The Threat Situation prototype is progressType "static" with hidden value/total args —
@@ -1170,14 +1236,14 @@ mp.conditions = {
 -- text_visible = false. `threatpct` is SCALED so 100 = pulling aggro: it is an early-warning
 -- ratio, not a quantity you spend, and "is the fill past the notch" is read faster than "is
 -- 68 nearly 70". It was also the one element of the old cluster that printed onto open screen
--- at 10pt with nothing behind it. sub.2 replaces it with a 2x4 notch at x = 70 - 50 = +20 —
--- the exact pixel where the first escalation condition fires.
+-- at 10pt with nothing behind it. sub.2 replaces it with a NOTCH_W x THREAT_H (2x5) notch at
+-- markX(70) = +32 — the exact pixel where the first escalation condition fires.
 local th = reg(rail("Paladin - Threat", THREAT_H, LANE_THREAT_Y, COL.threat,
   { F.threatTrigger() }))
 local thPct = pct("threatpct", THREAT_NUM_SIZE, NUM_X, COL.thText)
 thPct.text_visible = false
 addSub(th, thPct)                                        -- sub.1: kept, off
-addSub(th, waterline(70, 2, THREAT_H, COL.notch))        -- sub.2: the 70 notch
+addSub(th, waterline(70, NOTCH_W, THREAT_H, COL.notch))  -- sub.2: the 70 notch
 th.conditions = {  -- severe last: a later match overwrites the same property
   F.condition(1, "threatpct", ">=", "70", "foregroundColor", COL.thHigh),
   F.condition(1, "aggro", "==", 1, "foregroundColor", COL.thAggro),
@@ -1197,8 +1263,8 @@ noArena(th)   -- v6: an arena party is still a party, but has no threat table
 -- a 176x18 rectangle pulsing over the bar through v8, a 132px ring in v9, the threat ring
 -- itself flaring in v10, the target globe's rim in v11/v12, the target's outer ring in v13
 -- and a 100px annulus on the threat arc in v14/v15. It is now A RIM AROUND THE WHOLE STRIP:
--- 108x37 — the 102x31 plate plus RIM (3px) on every side — concentric with the plate at local
--- y +3, ADD blend, explicit red (1, 0.10, 0.10, 0.85), pulsing once a second.
+-- 172x44 — the 164x36 plate plus RIM (4px) on every side — concentric with the plate at local
+-- y +6, ADD blend, explicit red (1, 0.10, 0.10, 0.85), pulsing once a second.
 -- Same trigger, same 80% threshold, same three gates, same uid, same explicit red.
 --
 -- WHY IT IS BIGGER AND DRAWN FIRST, AND WHY THAT IS THE WHOLE DESIGN. Square_White_Border.tga
@@ -1208,8 +1274,8 @@ noArena(th)   -- v6: an arena party is still a party, but has no threat table
 -- CANNOT trace a hollow frame. Shipped at the plate's own size on ADD blend and drawn LAST,
 -- this was a full-area red quad over every rail, every number and every waterline for as long
 -- as threat stayed >=80% — washing out the readouts at exactly the moment they matter most.
--- The fix is geometric, not artistic: make it 3px larger per side and put it FIRST in
--- controlledChildren, i.e. at the BOTTOM of the stack. Only the 3px band protruding past the
+-- The fix is geometric, not artistic: make it RIM (4px) larger per side and put it FIRST in
+-- controlledChildren, i.e. at the BOTTOM of the stack. Only the 4px band protruding past the
 -- plate draws at full strength — a pulsing red rim around the instrument — while everything
 -- inside it sits behind a 45%-black plate and behind every readout, so no colour code is ever
 -- composited over. That construction is correct whether the art is filled or hollow, which is
@@ -1275,13 +1341,13 @@ polish(lg)
 adopt(gBuffs, lg)
 
 -- ===== 12) Alerts: glowing prompts flowing upward beside the character =====
--- v22: the alert column moves -150 -> -210, mirroring the PvP column at +210, so the two
--- flanking stacks are symmetric about the character and the strip between them can be 300
--- long. The strip could in principle have run under the alerts without touching them — they
--- grow UP from y -44 while the strip tops out at -88 — but the proof block asserts x
--- separation from the alert column, and widening the strip until it depends on the alerts
--- never growing DOWNWARD is exactly the kind of implicit coupling that guard exists to stop.
-local gAlerts = reg(F.dynGroup("Paladin - Alerts", -210, 96, TOP, "UP", "BOTTOM", 6))
+-- v23: the alert column goes BACK to -150, the slot it held from v5 through v21. v22 pushed it
+-- to -210 to clear a 316px alarm rim; the rim is 172px now (x -86..+86), so the 40px icons at
+-- -150 (x -170..-130) clear it by 44px with the stack projected six deep, and the same six-deep
+-- projection keeps it clear of the cooldown row and the buff row. MEASURED, not assumed — the
+-- frontier is x <= -106 at zero clearance, so -150 is 44px inside it — and the proof block
+-- re-runs both the strip scan and an all-pairs scan across the flanking stacks themselves.
+local gAlerts = reg(F.dynGroup("Paladin - Alerts", -150, 96, TOP, "UP", "BOTTOM", 6))
 gAlerts.animate = true
 adopt(top, gAlerts)
 
@@ -1764,10 +1830,16 @@ local CLEANSABLE = {
 -- 34) the PvP column: mirrors the Alerts column on the other side of the character,
 -- so the PvE layout never moves. Must be a dynamicgroup — two children are clone
 -- sources, and clones inside a STATIC group stack on one spot.
--- v22: the PvP column moves 150 -> 210 so the strip can be 300 long. Rogue has always kept
--- its PvP column at 200; paladin was the outlier. Nothing about the column itself changes,
--- and it is arena/BG-gated, so this is invisible in PvE.
-local gPvP = reg(F.dynGroup("Paladin - PvP", 210, 96, TOP, "DOWN", "TOP", 6))
+-- v23: the PvP column goes BACK to +150 with the alert column, for the same reason — a 172px
+-- rim does not need +210. Its binding neighbour is NOT the strip: the 36px icons at +150 span
+-- x +132..+168 and clear the rim (x2 = +86) by 46px, but the COOLDOWN ROW projected six deep
+-- spans x -106..+106 in the band y -222..-190, which the PvP stack (y -206..-44 at four
+-- children, its full complement) reaches into — so the real clearance is the 26px between
+-- +106 and +132. The all-pairs scan in the proof block is what measures that; a scan that only
+-- tests everything against the strip structurally cannot see two columns overlapping each
+-- other. Nothing about the column itself changes, and it is arena/BG-gated, so this is
+-- invisible in PvE.
+local gPvP = reg(F.dynGroup("Paladin - PvP", 150, 96, TOP, "DOWN", "TOP", 6))
 gPvP.animate = true
 adopt(top, gPvP)
 
@@ -1972,11 +2044,11 @@ pvpCd("Hammer of Justice (PvP)", "Hammer of Justice", 853, GATE_HOLY)
 -- Sibling stacking inside a group is exact, not "roughly creation order":
 -- FixGroupChildrenOrder walks controlledChildren and adds +4 frame levels per child, so
 -- EARLIER = FURTHER BEHIND. v16 uses that as the whole layering rule:
---   THE ALARM RIM IS FIRST — furthest BACK, 108x37, 3px proud of the plate on every side. It
---     is filled art (98.44% of Square_White_Border.tga is fully opaque), so the only part of it
---     that ever reaches the eye is the 3px band sticking out past the plate. Put it last
+--   THE ALARM RIM IS FIRST — furthest BACK, 172x44, RIM (4px) proud of the plate on every side.
+--     It is filled art (98.44% of Square_White_Border.tga is fully opaque), so the only part of
+--     it that ever reaches the eye is the 4px band sticking out past the plate. Put it last
 --     instead and the same region becomes a full-area ADD red quad over every readout.
---   THE PLATE IS SECOND — the 102x31 surface the rails print on, 45% black, which is also what
+--   THE PLATE IS SECOND — the 164x36 surface the rails print on, 45% black, which is also what
 --     hides the interior of the alarm.
 --   THE THREE RAILS stack on the plate in reading order, so a future overlay inserted between
 --     two of them lands where the comment says it will.
@@ -1986,16 +2058,16 @@ pvpCd("Hammer of Justice (PvP)", "Hammer of Justice", 853, GATE_HOLY)
 -- ABSOLUTE POSITIONS. The Sill group carries its screen position ONCE and every region inside
 -- it carries only its LANE offset, so a rail cannot drift from its own plate. The group offset
 -- is COMPUTED from the real parent chain below rather than typed, so it stays correct if the
--- band ever moves. Walk the chain (v16, listed in draw order, back to front):
+-- band ever moves. Walk the chain (v23, listed in draw order, back to front):
 --   top ................. (   0, -140)
 --   + Resources ......... (   0, +140)  = (   0,     0)  bandY cancels the top group's drop
---   + Player Sill ....... (   0, -110)  = (   0,  -110)  SILL_X / SILL_Y, carried once
---     + alarm frame ..... (   0,   +3)  = (   0,  -107)  108x37, x -54..+54, y -88.5..-125.5
---     + Sill Plate ...... (   0,   +3)  = (   0,  -107)  102x31, x -51..+51, y -91.5..-122.5
---     + threat rail ..... (   0, +15.5) = (   0, -94.5)  100x4,  y -92.5..-96.5
---     + health rail ..... (   0,   +7)  = (   0,  -103)  100x11, y -97.5..-108.5
---     + mana rail ....... (   0,   -5)  = (   0,  -115)  100x11, y -109.5..-120.5
---   The alarm and the plate are concentric; the alarm's extra 3px per side is the rim, and it
+--   + Player Sill ....... (   0, -125)  = (   0,  -125)  SILL_X / SILL_Y, carried once
+--     + alarm frame ..... (   0,   +6)  = (   0,  -119)  172x44, x -86..+86, y -141..-97
+--     + Sill Plate ...... (   0,   +6)  = (   0,  -119)  164x36, x -82..+82, y -137..-101
+--     + threat rail ..... (   0,  +20)  = (   0,  -105)  160x5,  y -107.5..-102.5
+--     + health rail ..... (   0,  +10)  = (   0,  -115)  160x13, y -121.5..-108.5
+--     + mana rail ....... (   0,   -4)  = (   0,  -129)  160x13, y -135.5..-122.5
+--   The alarm and the plate are concentric; the alarm's extra 4px per side is the rim, and it
 --   is the ONLY part of the alarm the player sees.
 -- This is verified by DECODING the shipped string and summing the parent chain, not by reading
 -- it off this comment, and v16 additionally re-runs the whole-pack rectangle scan off the same
@@ -2026,8 +2098,8 @@ W.uid()   -- was: Paladin - Target Health  (deleted in v14)
 -- 45) THE SILL PLATE — the aura v9/v10 built as the player portrait, v11 borrowed for a glass
 -- rim, v13 handed back and v14/v15 drew as a live 44px face. Same uid, same position in the
 -- stream, re-typed `model` -> `texture` and renamed. It is the dark bordered panel the three
--- rails print on, and it is load-bearing rather than decorative: it is what makes an 11px rail
--- and an 11pt number readable on snow, on a lit floor and against a Netherstorm skybox, and it
+-- rails print on, and it is load-bearing rather than decorative: it is what makes a 13px rail
+-- and a 12pt number readable on snow, on a lit floor and against a Netherstorm skybox, and it
 -- is what makes three bars read as ONE instrument.
 -- It keeps the player Health trigger it has always carried, so the strip appears and vanishes
 -- with you, and it GAINS the Unit Characteristics state feeder plus the same
@@ -2080,8 +2152,8 @@ adopt(gAlerts, reseal)
 
 -- Re-parent the regions into the Sill, BACK TO FRONT. Children draw in controlledChildren
 -- order and later ones draw on top, so this list IS the z-order:
---   ALARM FIRST   — the 108x37 rim. It is the same FILLED art as the plate, so it cannot trace
---                   an edge; what it can do is be 3px bigger per side and hide underneath. Only
+--   ALARM FIRST   — the 172x44 rim. It is the same FILLED art as the plate, so it cannot trace
+--                   an edge; what it can do is be 4px bigger per side and hide underneath. Only
 --                   the protruding band shows, and nothing is ever composited over a readout.
 --   PLATE SECOND  — it is the surface; the rails print ON it, and it is what covers the alarm's
 --                   interior. Anything drawn before it (only the alarm) shows only where it
@@ -2092,11 +2164,11 @@ adopt(gAlerts, reseal)
 -- in its original order, above. F.assemble walks controlledChildren depth-first, so the flat
 -- `c` list reorders with this list and W.verify's parent/controlledChildren cross-check
 -- fails the build if the two ever disagree.
-adopt(gPlayerOrb, flash)       -- 1) the >=80% alarm rim, 108x37, UNDER everything
+adopt(gPlayerOrb, flash)       -- 1) the >=80% alarm rim, 172x44, UNDER everything
 adopt(gPlayerOrb, pPortrait)   -- 2) the plate: the surface everything else prints on
-adopt(gPlayerOrb, th)          -- 3) lane 1, threat  100x4  @ local y +15.5
-adopt(gPlayerOrb, hp)          -- 4) lane 2, health  100x11 @ local y  +7
-adopt(gPlayerOrb, mp)          -- 5) lane 3, mana    100x11 @ local y  -5
+adopt(gPlayerOrb, th)          -- 3) lane 1, threat  160x5  @ local y +20
+adopt(gPlayerOrb, hp)          -- 4) lane 2, health  160x13 @ local y +10
+adopt(gPlayerOrb, mp)          -- 5) lane 3, mana    160x13 @ local y  -4
 
 
 -- ===== assemble (v2000 nested), encode, verify, write =====
@@ -2187,10 +2259,62 @@ do
         .. "address them as sub.N"):format(id, #node.subRegions, subCount))
   end
 
-  -- 2b) THE PLATE AND THE ALARM are CONCENTRIC textures on the same filled art, at local y +3 —
-  --     and they are NOT the same size. The plate is the 102x31 surface; the alarm is 108x37,
-  --     RIM (3px) proud on every side. Both are checked against their own declared size here,
+  -- 2a-ii) THE LANE STACK ARITHMETIC, re-derived from the DECODED heights and offsets rather
+  --     than from the constants that built them. Three lanes, top down, with 1px gaps, and the
+  --     whole stack centred inside the plate with an EVEN margin — that is what turns "the
+  --     rails got shorter and thinner" into a proof that they still fit the plate they print on.
+  do
+    local stack = {}
+    for _, want in ipairs({
+      { "Paladin - Threat", THREAT_H, LANE_THREAT_Y },
+      { "Paladin - Health", BAR_H,    LANE_HEALTH_Y },
+      { "Paladin - Mana",   BAR_H,    LANE_POWER_Y  },
+    }) do
+      local node = nodes[want[1]]
+      assert(node.height == want[2] and node.yOffset == want[3],
+        "lane canon: " .. want[1] .. " is not on the lane this file lays out")
+      stack[#stack + 1] = { id = want[1], h = node.height, y = node.yOffset }
+    end
+    local content = 0
+    for i = 1, #stack do
+      content = content + stack[i].h
+      if i < #stack then
+        local gap = (stack[i].y - stack[i].h / 2) - (stack[i + 1].y + stack[i + 1].h / 2)
+        assert(gap == 1,
+          ("lane canon: %s and %s are %gpx apart, expected the 1px gap the stack is built on")
+            :format(stack[i].id, stack[i + 1].id, gap))
+        content = content + gap
+      end
+    end
+    assert(content == THREAT_H + BAR_H + BAR_H + 2,
+      ("lane canon: the stack is %g of content, expected %d (5 + 13 + 13 and two 1px gaps)")
+        :format(content, THREAT_H + BAR_H + BAR_H + 2))
+    local top    = stack[1].y + stack[1].h / 2
+    local bottom = stack[#stack].y - stack[#stack].h / 2
+    assert(top - bottom == content, "lane canon: the lanes do not span their own content height")
+    local marginTop    = (PLATE_Y + PLATE_H / 2) - top
+    local marginBottom = bottom - (PLATE_Y - PLATE_H / 2)
+    assert(marginTop >= 1 and marginBottom >= 1,
+      ("lane canon: the stack (%+.1f..%+.1f) does not sit inside a %dpx plate centred at %+d "
+        .. "with a 1px margin"):format(top, bottom, PLATE_H, PLATE_Y))
+    assert(marginTop == marginBottom,
+      ("lane canon: the plate margins are %.1f above and %.1f below — the stack is not centred "
+        .. "on this pack's own plate offset (%+d)"):format(marginTop, marginBottom, PLATE_Y))
+    print(("lanes: threat %+d/%d, health %+d/%d, mana %+d/%d -> %g of content spanning "
+      .. "%+.1f..%+.1f inside a %dx%d plate at local y %+d (margin %.1fpx top and bottom)")
+      :format(LANE_THREAT_Y, THREAT_H, LANE_HEALTH_Y, BAR_H, LANE_POWER_Y, BAR_H, content,
+        top, bottom, PLATE_W, PLATE_H, PLATE_Y, marginTop, marginBottom))
+  end
+
+  -- 2b) THE PLATE AND THE ALARM are CONCENTRIC textures on the same filled art, at local y +6 —
+  --     and they are NOT the same size. The plate is the 164x36 surface; the alarm is 172x44,
+  --     RIM (4px) proud on every side. Both are checked against their own declared size here,
   --     and the RELATION between them is pinned separately in 2b-ii below.
+  --     THE PLATE IS RAIL_LEN + 4 WIDE, not a typed literal: 2px of margin each side of the
+  --     rail, so a change to the rail length can never leave the plate behind.
+  assert(PLATE_W == RAIL_LEN + 4,
+    ("plate canon: the plate is %d wide for a %d rail; it must be RAIL_LEN + 4")
+      :format(PLATE_W, RAIL_LEN))
   for _, want in ipairs({
     { "Paladin - Sill Plate",   "BLEND", COL.plate, PLATE_W, PLATE_H },
     { "Paladin - Threat Flash", "ADD",   COL.flash, ALARM_W, ALARM_H },
@@ -2311,8 +2435,13 @@ do
       .. "here is how Twist NOW ended up showing Horde art to Alliance paladins")
   end
 
-  -- 2c) THE NUMBERS. Each percentage prints INSIDE its own rail at x +32, y 0. The threat one
-  --     is switched OFF but keeps index 1, because sub.N refs are positional.
+  -- 2c) THE NUMBERS. Each percentage prints INSIDE its own rail at x = NUM_X, y 0. The threat
+  --     one is switched OFF but keeps index 1, because sub.N refs are positional.
+  --     BOTH SPELLINGS OF THE OFFSET, AND THEY MUST AGREE. WeakAuras reads text_anchorXOffset
+  --     (SubText.lua); the bare anchorXOffset is emitted by the region's own default() and read
+  --     by nothing, and no Modernize step bridges them — v20 is the version where 21 offsets
+  --     across the packs turned out to be doing nothing at all. verify-packs.lua fails if the
+  --     two ever disagree, and this asserts it here so the build fails first.
   for _, want in ipairs({
     { "Paladin - Health", NUM_SIZE,        true  },
     { "Paladin - Mana",   NUM_SIZE,        true  },
@@ -2327,6 +2456,11 @@ do
     assert(st.anchorYOffset == 0,
       ("geometry proof: %s%% is at y %s, expected 0 — it must ride its rail's centre line")
         :format(id, tostring(st.anchorYOffset)))
+    assert(st.text_anchorXOffset == st.anchorXOffset and st.text_anchorYOffset == st.anchorYOffset,
+      ("geometry proof: %s%% carries (%s,%s) under text_anchor*Offset but (%s,%s) under the bare "
+        .. "spelling; only the text_ one is read, so they must be written together and equal")
+        :format(id, tostring(st.text_anchorXOffset), tostring(st.text_anchorYOffset),
+          tostring(st.anchorXOffset), tostring(st.anchorYOffset)))
     assert(st.text_fontSize == size,
       ("geometry proof: %s%% is %spt, expected %dpt"):format(id, tostring(st.text_fontSize), size))
     assert(st.text_fontType == "OUTLINE",
@@ -2337,15 +2471,25 @@ do
       ("geometry proof: %s%% visibility is %s, expected %s")
         :format(id, tostring(st.text_visible), tostring(visible)))
   end
-  --     A number must fit inside the rail it prints in: three digits at 11pt is ~21px wide.
-  local widestNumber = 38
+  --     A number must fit inside the rail it prints in, and it must not be taller than it
+  --     either. The widest string these rails ever print is "100%" — 4 glyphs — and 0.60 em of
+  --     advance per glyph is generous for Friz Quadrata digits, so the width is DERIVED from
+  --     the font size instead of being a literal that outlives the size it was measured at.
+  local GLYPH_ADVANCE, WIDEST_GLYPHS = 0.60, 4
+  local widestNumber = WIDEST_GLYPHS * GLYPH_ADVANCE * NUM_SIZE
   assert(NUM_X + widestNumber / 2 <= RAIL_LEN / 2,
-    ("geometry proof: a 3-digit number at x %d spills past the rail's right edge"):format(NUM_X))
+    ("geometry proof: \"100%%\" at %dpt is %.1fpx wide and centred on x %+d, so it reaches "
+      .. "%.1f and spills past the %dpx rail's right edge (%d)")
+      :format(NUM_SIZE, widestNumber, NUM_X, NUM_X + widestNumber / 2, RAIL_LEN, RAIL_LEN / 2))
+  assert(NUM_SIZE <= BAR_H,
+    ("geometry proof: a %dpt number does not fit inside a %dpx rail"):format(NUM_SIZE, BAR_H))
+  assert(THREAT_NUM_SIZE < NUM_SIZE,
+    "geometry proof: the threat number is not the smaller one; it prints on the thinnest lane")
 
-  -- 2d) THE WATERLINES, each at x = v - 50, read off the shipped string. This is the check
+  -- 2d) THE WATERLINES, each at markX(v), read off the shipped string. This is the check
   --     that would have caught the ring era's trigonometry drifting away from its own arc.
   for _, want in ipairs({
-    { "Paladin - Threat", 2, 70, 2, THREAT_H, COL.notch,     "the 70 notch"        },
+    { "Paladin - Threat", 2, 70, NOTCH_W, THREAT_H, COL.notch, "the 70 notch"        },
     { "Paladin - Mana",   2, 20, MARK_W, BAR_H,    COL.manaFloor, "the 20% mana floor"  },
     { "Paladin - Health", 2, 25, RULE_W, BAR_H,    COL.ruler,     "the health 25 rule"  },
     { "Paladin - Health", 3, 50, RULE_W, BAR_H,    COL.ruler,     "the health 50 rule"  },
@@ -2364,8 +2508,18 @@ do
     assert(sub.anchor_mode == "point" and sub.self_point == "CENTER",
       "mark canon: " .. label .. " is not point-anchored; it would stack at dead centre")
     assert(sub.xOffset == markX(value),
-      ("mark canon: %s is at x %s, expected %s (= %d - 50)")
-        :format(label, tostring(sub.xOffset), tostring(markX(value)), value))
+      ("mark canon: %s is at x %s, the one formula says %s (= (%d/100 - 0.5) * %d)")
+        :format(label, tostring(sub.xOffset), tostring(markX(value)), value, RAIL_LEN))
+    -- EVERY MARK LANDS ON A WHOLE PIXEL, and that is the reason 160 is the length. Every value
+    -- this pack marks is a multiple of five and 1.6 x 5 = 8, so 1.6px per percent still puts
+    -- each waterline on an exact integer. A half-pixel mark is a blurred two-pixel smear on a
+    -- 2px hairline, which is most of the hairline.
+    assert(sub.xOffset == math.floor(sub.xOffset),
+      ("mark canon: %s lands on x %s, which is not a whole pixel at %d px per rail")
+        :format(label, tostring(sub.xOffset), RAIL_LEN))
+    assert(math.abs(sub.xOffset) <= RAIL_LEN / 2,
+      ("mark canon: %s is at x %s, outside its own %dpx rail")
+        :format(label, tostring(sub.xOffset), RAIL_LEN))
     assert(sub.yOffset == 0, "mark canon: " .. label .. " is off its rail's centre line")
     assert(sub.width == w and sub.height == h,
       ("mark canon: %s is %sx%s, expected %dx%d"):format(label, tostring(sub.width),
@@ -2381,6 +2535,15 @@ do
   --     or the one threshold this pack has disappears exactly when it fires.
   assert(COL.manaFloor[1] > COL.lowMana[1] and COL.manaFloor[2] > COL.lowMana[2],
     "mark canon: the mana floor is not brighter than the low-mana fill it sits on")
+  --     ...and the INK HIERARCHY holds: a ruler hairline is a hint, a breakpoint waterline is a
+  --     decision boundary, and the boundary must be the thicker of the two. The threat notch
+  --     rides a 5px lane where a hairline is already a full-height mark, so it stays at the
+  --     ruler width by design and is excluded from this ordering.
+  assert(RULE_W < MARK_W,
+    ("mark canon: the ruler (%dpx) is not thinner than the breakpoint waterline (%dpx)")
+      :format(RULE_W, MARK_W))
+  assert(NOTCH_W <= RULE_W and NOTCH_W <= THREAT_H,
+    "mark canon: the 70 threat notch outgrew its own lane")
 
   -- 3) DRAW ORDER (v16). Children draw in controlledChildren order, later on top. The ALARM
   --    RIM must be FIRST — it is filled art, so anywhere above the plate it is a full-area ADD
@@ -2437,11 +2600,31 @@ do
   --    enough, so this projects EVERY region in the pack — with every dynamic group grown six
   --    children deep, because those grow without bound — and asserts that the strip overlaps
   --    NONE of them.
-  --      THE ENVELOPE SCANNED IS THE ALARM'S 108x37, NOT THE PLATE'S 102x31. The widest thing
-  --    this instrument ever draws is the rim, which is RIM (3px) proud on every side, and it
+  --      THE ENVELOPE SCANNED IS THE ALARM'S 172x44, NOT THE PLATE'S 164x36. The widest thing
+  --    this instrument ever draws is the rim, which is RIM (4px) proud on every side, and it
   --    is drawn precisely when the player is under threat pressure and least able to tolerate
-  --    a collision. Scanning the plate would certify 3px of screen the strip actually uses.
+  --    a collision. Scanning the plate would certify 4px of screen the strip actually uses.
   local DEPTH = 6
+  -- The box arithmetic below — sum the parent chain, treat (x,y) as a CENTRE — is only valid
+  -- while every region is anchored to the SCREEN CENTRE. The two flanking dynamic groups are
+  -- the licensed exception: they anchor by the EDGE they grow away from (Alerts BOTTOM/UP, PvP
+  -- TOP/DOWN), which the projection below accounts for. Assert it rather than assume it, or a
+  -- future UNITFRAME/NAMEPLATE anchor would silently make every number in this proof fiction.
+  do
+    local GROW_SELF = { UP = "BOTTOM", DOWN = "TOP", RIGHT = "LEFT", LEFT = "RIGHT",
+                        HORIZONTAL = "CENTER", VERTICAL = "CENTER", CIRCLE = "CENTER" }
+    for _, ch in ipairs(back.c) do
+      assert(ch.anchorFrameType == nil or ch.anchorFrameType == "SCREEN",
+        ("geometry proof: %s is anchored to %s, so summing its parent chain is not its screen "
+          .. "position"):format(ch.id, tostring(ch.anchorFrameType)))
+      assert(ch.anchorPoint == nil or ch.anchorPoint == "CENTER",
+        "geometry proof: " .. ch.id .. " does not anchor to the screen centre")
+      local want = ch.regionType == "dynamicgroup" and GROW_SELF[ch.grow] or "CENTER"
+      assert(ch.selfPoint == nil or ch.selfPoint == want,
+        ("geometry proof: %s anchors by %s, expected %s")
+          :format(ch.id, tostring(ch.selfPoint), tostring(want)))
+    end
+  end
   local strip = {
     x1 = cx - ALARM_W / 2, x2 = cx + ALARM_W / 2,
     y1 = cy + PLATE_Y - ALARM_H / 2, y2 = cy + PLATE_Y + ALARM_H / 2,
@@ -2453,7 +2636,8 @@ do
   }
   assert(strip.x1 == plateRect.x1 - RIM and strip.x2 == plateRect.x2 + RIM
     and strip.y1 == plateRect.y1 - RIM and strip.y2 == plateRect.y2 + RIM,
-    "geometry proof: the scanned envelope is not the plate plus a 3px rim on every side")
+    ("geometry proof: the scanned envelope is not the plate plus a %dpx rim on every side")
+      :format(RIM))
   local mine = {
     [SILL_ID] = true, ["Paladin - Sill Plate"] = true, ["Paladin - Threat"] = true,
     ["Paladin - Health"] = true, ["Paladin - Mana"] = true, ["Paladin - Threat Flash"] = true,
@@ -2515,7 +2699,8 @@ do
 
   -- 4c) THE ALERT COLUMN, kept from v14/v15 and re-pointed at the strip. It grows UP without
   --     bound from (-150, -44), so only the HORIZONTAL gap is depth-independent — and that gap
-  --     is what the check has always been about.
+  --     is what the check has always been about. v23 brings the column back from -210 to -150
+  --     and this is the assertion that licences the move.
   local alerts = nodes["Paladin - Alerts"]
   local alertX = absolute("Paladin - Alerts")
   local widest = 0
@@ -2529,21 +2714,127 @@ do
   assert(alertGap > 0,
     ("geometry proof: the Sill (x %.1f..%.1f) overlaps the alert column (x %.1f..%.1f) at a "
       .. "%d-deep stack"):format(strip.x1, strip.x2, alertLeft, alertRight, DEPTH))
+  --     ...and the same statement for the PvP column on the other side, which v23 also brings
+  --     back (+210 -> +150). It grows DOWN, so it too is depth-independent only horizontally.
+  local pvp = nodes["Paladin - PvP"]
+  local pvpX = absolute("Paladin - PvP")
+  local pvpWidest = 0
+  for _, cid in ipairs(pvp.controlledChildren) do
+    pvpWidest = math.max(pvpWidest, nodes[cid].width or 0)
+  end
+  local pvpLeft, pvpRight = pvpX - pvpWidest / 2, pvpX + pvpWidest / 2
+  local pvpGap = pvpLeft - strip.x2
+  assert(pvpGap > 0,
+    ("geometry proof: the Sill (x %.1f..%.1f) overlaps the PvP column (x %.1f..%.1f) at any "
+      .. "stack depth"):format(strip.x1, strip.x2, pvpLeft, pvpRight))
+
+  -- 4d) THE ALL-PAIRS COLUMN SCAN. The scan above tests everything against the SILL, which
+  --     STRUCTURALLY CANNOT SEE TWO FLANKING STACKS OVERLAPPING EACH OTHER — and v23 moves two
+  --     of them 60px inwards. That blind spot is not hypothetical: the same gap in the rogue
+  --     pack hid a 140px kick-lockout bar sitting on top of a weapon-proc icon for a version.
+  --     So every column is boxed as a whole — widest child, tallest child, projected DEPTH deep
+  --     along its own grow direction — and every PAIR is tested.
+  --       THE BOX MATHS. selfPoint names the corner of the CHILD that sits ON the anchor, so it
+  --     decides which way the stack hangs: LEFT/RIGHT hang to one side, and everything else —
+  --     TOP and BOTTOM included, which is what a DOWN- or UP-growing column uses — is
+  --     horizontally CENTRED on the anchor. The static buff row is boxed from its children's
+  --     real offsets, because a static group's children do not stack.
+  do
+    local function dynBox(id)
+      local g = assert(nodes[id], "column scan: missing " .. id)
+      local gx, gy = absolute(id)
+      local widestC, tallestC, n = 0, 0, 0
+      for _, cid in ipairs(g.controlledChildren or {}) do
+        widestC  = math.max(widestC,  tonumber(nodes[cid].width)  or 0)
+        tallestC = math.max(tallestC, tonumber(nodes[cid].height) or 0)
+        n = n + 1
+      end
+      local depth = math.min(n, DEPTH)
+      local space = tonumber(g.space) or 4
+      local x1, x2 = gx - widestC / 2, gx + widestC / 2
+      if g.selfPoint == "LEFT" then x1, x2 = gx, gx + widestC
+      elseif g.selfPoint == "RIGHT" then x1, x2 = gx - widestC, gx end
+      local y1, y2 = gy - tallestC / 2, gy + tallestC / 2
+      if g.selfPoint == "TOP" then y1, y2 = gy - tallestC, gy
+      elseif g.selfPoint == "BOTTOM" then y1, y2 = gy, gy + tallestC end
+      local runY = (depth - 1) * (tallestC + space)
+      local runX = (depth - 1) * (widestC + space)
+      if g.grow == "DOWN" then y1 = y1 - runY
+      elseif g.grow == "UP" then y2 = y2 + runY
+      elseif g.grow == "RIGHT" then x2 = x2 + runX
+      elseif g.grow == "LEFT" then x1 = x1 - runX
+      elseif g.grow == "HORIZONTAL" then x1, x2 = x1 - runX / 2, x2 + runX / 2
+      elseif g.grow == "VERTICAL" then y1, y2 = y1 - runY / 2, y2 + runY / 2 end
+      return { id = id, x1 = x1, x2 = x2, y1 = y1, y2 = y2, depth = depth }
+    end
+    local function staticBox(id)
+      local g = assert(nodes[id], "column scan: missing " .. id)
+      local box
+      for _, cid in ipairs(g.controlledChildren or {}) do
+        local ch = nodes[cid]
+        local ax, ay = absolute(cid)
+        local w, h = tonumber(ch.width) or 0, tonumber(ch.height) or 0
+        local r = { x1 = ax - w / 2, x2 = ax + w / 2, y1 = ay - h / 2, y2 = ay + h / 2 }
+        if not box then box = r else
+          box.x1, box.x2 = math.min(box.x1, r.x1), math.max(box.x2, r.x2)
+          box.y1, box.y2 = math.min(box.y1, r.y1), math.max(box.y2, r.y2)
+        end
+      end
+      box.id, box.depth = id, #(g.controlledChildren or {})
+      return box
+    end
+    local cols = {
+      dynBox("Paladin - Alerts"), dynBox("Paladin - PvP"), dynBox("Paladin - Cooldowns"),
+      staticBox("Paladin - Buffs"),
+    }
+    -- The strip's own envelope joins the all-pairs set, so the columns are measured against it
+    -- with the SAME box model rather than only through the per-region scan above.
+    cols[#cols + 1] = { id = "Paladin - Player Sill (alarm envelope)", depth = 1,
+      x1 = strip.x1, x2 = strip.x2, y1 = strip.y1, y2 = strip.y2 }
+    local pairOverlaps, tightest, tightestPair = 0, math.huge, "nothing"
+    for i = 1, #cols do
+      for j = i + 1, #cols do
+        local a, b = cols[i], cols[j]
+        if a.x1 < b.x2 and a.x2 > b.x1 and a.y1 < b.y2 and a.y2 > b.y1 then
+          pairOverlaps = pairOverlaps + 1
+          print(("  ! %s (x %.0f..%.0f y %.0f..%.0f) overlaps %s (x %.0f..%.0f y %.0f..%.0f)")
+            :format(a.id, a.x1, a.x2, a.y1, a.y2, b.id, b.x1, b.x2, b.y1, b.y2))
+        else
+          local gap = math.max(math.max(a.x1 - b.x2, b.x1 - a.x2),
+                               math.max(a.y1 - b.y2, b.y1 - a.y2))
+          if gap < tightest then
+            tightest, tightestPair = gap, ("%s / %s"):format(a.id, b.id)
+          end
+        end
+      end
+    end
+    assert(pairOverlaps == 0,
+      ("geometry proof: %d pair(s) of flanking stacks overlap each other at %d deep; one would "
+        .. "render behind the other"):format(pairOverlaps, DEPTH))
+    print(("column all-pairs scan: %d boxes (%s), %d pairs, %d overlaps; tightest %.1fpx (%s)")
+      :format(#cols, table.concat({ "Alerts", "PvP", "Cooldowns", "Buffs", "Sill" }, "/"),
+        #cols * (#cols - 1) / 2, pairOverlaps, tightest, tightestPair))
+  end
 
   print(("geometry: Sill (%d, %d); plate %dx%d at x %.1f..%.1f, y %.1f..%.1f; alarm rim %dx%d "
-    .. "at x %.1f..%.1f, y %.1f..%.1f (+%dpx per side); rails 100x%d/%dx%d at lanes "
+    .. "at x %.1f..%.1f, y %.1f..%.1f (+%dpx per side); rails %dx%d/%dx%d/%dx%d at lanes "
     .. "%+.1f/%+.1f/%+.1f")
     :format(cx, cy, PLATE_W, PLATE_H, plateRect.x1, plateRect.x2, plateRect.y1, plateRect.y2,
       ALARM_W, ALARM_H, strip.x1, strip.x2, strip.y1, strip.y2, RIM,
-      THREAT_H, RAIL_LEN, BAR_H, LANE_THREAT_Y, LANE_HEALTH_Y, LANE_POWER_Y))
+      RAIL_LEN, THREAT_H, RAIL_LEN, BAR_H, RAIL_LEN, BAR_H,
+      LANE_THREAT_Y, LANE_HEALTH_Y, LANE_POWER_Y))
   print(("collision scan (ALARM envelope %dx%d): %d projected rectangles (dynamic groups %d "
-    .. "deep), %d overlaps; tightest clearance %.1fpx (%s); alert column clears by %.1fpx")
-    :format(ALARM_W, ALARM_H, #rects, DEPTH, overlaps, nearest, nearestWho, alertGap))
+    .. "deep), %d overlaps; tightest clearance %.1fpx (%s); alert column clears by %.1fpx, "
+    .. "PvP column by %.1fpx")
+    :format(ALARM_W, ALARM_H, #rects, DEPTH, overlaps, nearest, nearestWho, alertGap, pvpGap))
   print(("draw order: %s"):format(table.concat(order, " -> ")))
-  print(("numbers: health %dpt and mana %dpt inside their rails at x %+d; threat %dpt OFF; "
-    .. "waterlines threat 70 @ %+d, mana 20 @ %+d, rulers 25/50/75 @ %+d/%+d/%+d")
-    :format(NUM_SIZE, NUM_SIZE, NUM_X, THREAT_NUM_SIZE, markX(70), markX(20),
-      markX(25), markX(50), markX(75)))
+  print(("numbers: health %dpt and mana %dpt inside their rails at x %+d (widest \"100%%\" "
+    .. "%.1fpx -> x %+.1f..%+.1f inside a %dpx rail); threat %dpt OFF")
+    :format(NUM_SIZE, NUM_SIZE, NUM_X, widestNumber, NUM_X - widestNumber / 2,
+      NUM_X + widestNumber / 2, RAIL_LEN, THREAT_NUM_SIZE))
+  print(("marks (%g px per percent, x = (v/100 - 0.5) * %d): threat 70 @ %+d, mana 20 @ %+d, "
+    .. "rulers 25/50/75 @ %+d/%+d/%+d — every one a whole pixel")
+    :format(RAIL_LEN / 100, RAIL_LEN, markX(70), markX(20), markX(25), markX(50), markX(75)))
 end
 
 local outPath = dir .. "/all-specs.txt"
@@ -2553,14 +2844,14 @@ local outPath = dir .. "/all-specs.txt"
 -- expired with the version bump, exactly as designed — the three ids are now absent from both
 -- sides of the comparison, so the list is gone and the strict default is back.
 local cont = W.uidContinuity(encoded, outPath)
--- v19 DELETES ONE REGION, so it spends a licence — one id, named, matching the WA-REMOVED
--- line beside the burned uid above. This is the only way an aura may ever disappear from this
--- pack: declared here and declared there, so the removal is a reviewable line in a diff rather
--- than a count that dropped. `changed` is still unforgivable — an id that kept its name and
--- swapped uid is an update-flow break, not a removal — and everything else must still survive.
--- The licence expires at the next version bump, when the id is absent from both sides and the
--- strict default (no uid may disappear, full stop) comes back on its own.
-W.assertUidContinuity(cont, "paladin", { "Paladin - Swing Timer" })
+-- NO ALLOWANCE LIST, and that is the point of this line. v19 deleted the swing runway and
+-- spent a one-version licence naming "Paladin - Swing Timer" here; the licence expired exactly
+-- as designed at the next version bump, because the id is now absent from BOTH sides of the
+-- comparison. v23 is a pure geometry change — nothing is added, removed, renamed or
+-- re-parented — so the strict default is the whole contract: every uid the previously shipped
+-- string carried must still be here (missing = 0), and an id that keeps its name while
+-- swapping uid (changed = 0) is an update-flow break either way.
+W.assertUidContinuity(cont, "paladin")
 
 local out = io.open(outPath, "w")
 out:write(encoded)

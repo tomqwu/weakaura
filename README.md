@@ -24,12 +24,12 @@ use GitHub's copy button on the block to grab the whole string in one click.
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
 | Rogue — All Specs | Combat · Assassination · Subtlety | v60 | 58 | [string](tbc/rogue/README.md#import-string-v60) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v22 | 45 | [string](tbc/paladin/README.md#import-string-v22) · [raw](tbc/paladin/all-specs.txt) |
-| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v17 | 45 | [string](tbc/druid/README.md#import-string-v17) · [raw](tbc/druid/all-specs.txt) |
-| Warlock — All Specs | Affliction · Demonology · Destruction | v16 | 40 | [string](tbc/warlock/README.md#import-string-v16) · [raw](tbc/warlock/all-specs.txt) |
-| Hunter — BM & Survival | Beast Mastery · Survival | v17 | 49 | [string](tbc/hunter/README.md#import-string-v17) · [raw](tbc/hunter/all-specs.txt) |
-| Priest — All Specs | Shadow · Holy · Discipline | v16 | 41 | [string](tbc/priest/README.md#import-string-v16) · [raw](tbc/priest/all-specs.txt) |
-| Mage — Arcane & Frost | Arcane · Frost | v16 | 44 | [string](tbc/mage/README.md#import-string-v16) · [raw](tbc/mage/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v23 | 45 | [string](tbc/paladin/README.md#import-string-v23) · [raw](tbc/paladin/all-specs.txt) |
+| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v18 | 45 | [string](tbc/druid/README.md#import-string-v18) · [raw](tbc/druid/all-specs.txt) |
+| Warlock — All Specs | Affliction · Demonology · Destruction | v17 | 40 | [string](tbc/warlock/README.md#import-string-v17) · [raw](tbc/warlock/all-specs.txt) |
+| Hunter — BM & Survival | Beast Mastery · Survival | v18 | 49 | [string](tbc/hunter/README.md#import-string-v18) · [raw](tbc/hunter/all-specs.txt) |
+| Priest — All Specs | Shadow · Holy · Discipline | v17 | 41 | [string](tbc/priest/README.md#import-string-v17) · [raw](tbc/priest/all-specs.txt) |
+| Mage — Arcane & Frost | Arcane · Frost | v17 | 44 | [string](tbc/mage/README.md#import-string-v17) · [raw](tbc/mage/all-specs.txt) |
 
 Every pack is class-gated and auto-adapts across the **supported builds listed in the table**
 through Spell Known gates. The current product scope is primarily level-70 single-target
@@ -41,24 +41,24 @@ also adds an active-form state gate so Cat never receives the Bear rotation.
 
 The health/power/threat display has been through five shapes: a centre bar stack, unit orbs,
 one shared orb size, Diablo-style globes, and concentric rings around a live 3D portrait. All
-seven packs now ship **the Sill** — a **102×31 instrument strip** (102×37 where the class has a
-discrete resource) sitting at absolute **(0, −110)**, directly under your character:
+seven packs now ship **the Sill** — a **164×36 instrument strip** (164×45 where the class has a
+fourth, resource lane) sitting directly under your character:
 
 | lane | size | reading rule |
 |---|---|---|
-| alarm rim | plate +3px per side | pulses red at ≥80% threat; drawn **first**, so only the rim shows |
-| plate | 102×31 | a near-black ground, so 11px rails survive snow, lava and Shattrath at noon |
-| threat | 100×4 | green → orange at 70 → red on aggro; **absent** when you are on no threat table |
-| health | 100×11 | fill, exact % inside the rail, colour flips inside your defensive window |
-| power | 100×11 | fill, exact % or raw value, with ability costs drawn as waterlines |
+| alarm rim | plate +4px per side | pulses red at ≥80% threat; drawn **first**, so only the rim shows |
+| plate | 164×36 | a near-black ground, so 13px rails survive snow, lava and Shattrath at noon |
+| threat | 160×5 | green → orange at 70 → red on aggro; **absent** when you are on no threat table |
+| health | 160×13 | fill, exact % inside the rail, colour flips inside your defensive window |
+| power | 160×13 | fill, exact % or raw value, with ability costs drawn as waterlines |
 | resource | 5×(16×8) | rogue combo pips — since v58 on the **target’s nameplate**, falling back to the strip when no plate exists; mage arcane stacks; omitted where a class has none |
 
-**A rail is a whole number of pixels per percent.** That is the lever the whole design turns on:
-every breakpoint becomes arithmetic instead of the trigonometry a ring needs —
-the rogue's 35-energy mark moves from `(23.575, −17.128)` to `x = −24` on its 160px rail. It cut the footprint from 10,000 px² to 3,774 at the original 100px length — paladin and rogue have
-since traded some of that back for legibility, at 304×62 and 304×74 —
-deletes the 3D portrait — 1,936 px² carrying no decision — and puts every number on a dark bed
-instead of on a moving model.
+**A rail is 160px at 1.6 pixels per percent.** Every value these packs mark is a multiple of five
+and 1.6 × 5 = 8, so every breakpoint lands on a whole pixel — arithmetic instead of the
+trigonometry a ring needs —
+the rogue's 35-energy mark moves from `(23.575, −17.128)` to `x = −24`. The strip also deletes
+the 3D portrait — 1,936 px² carrying no decision — and puts every number on a dark bed instead of
+on a moving model.
 
 Rails fill **left to right** — `orientation = "HORIZONTAL"`. WeakAuras' own dropdown labels
 `HORIZONTAL_INVERSE` as "Left to Right", and that label is wrong: in
@@ -73,9 +73,12 @@ readout at exactly the moment you need to read them; and draw order is `controll
 order at +4 frame levels per child, so the flat transmit list must stay depth-first to match; and
 the fill orientation, because an inverted rail still looks like a working bar.
 
-**Paladin runs the strip long** — 304×62, 300×22 rails at **three pixels per percent**, 20pt
-numbers, at y −125, with its alert and PvP columns moved out to ∓210 to make room. That is the
-template the other six will follow.
+**Long and thin is the point.** Earlier versions scaled the strip uniformly, which kept the
+original 2.8:1 plate and simply made the same stubby block bigger — it read as a UI panel and was
+rejected at both 300px and 200px rails. The fill’s *travel* is the signal; its thickness carries
+nothing. 160×13 is 60% longer than the first 100px rails at less than half the area of the fat
+version, and paladin’s clearance to its buff row went from 2px to 17px because the height came
+out of the axis that was actually tight.
 
 Every pack also carries a **PvP layer**: elements that exist only inside an
 arena or battleground (CC-on-you with the break decision, trinket availability, enemy trinket
@@ -90,15 +93,14 @@ acceptance note instead of presenting static serialization as an in-game test.
 ## Packs
 
 - **tbc/rogue/all-specs.txt** — full HUD, v60 of a 60-iteration build: since **v54 the Sill**
-  (see the shared geometry above), the widest version of it at **102×37**, because the rogue is
-  the one pack whose strip carries a fourth lane. The **five combo pips move into the strip**,
-  16×12, and since **v58 they ride the target’s nameplate** — combo points are a property of the
-  target — falling back to their strip lane whenever no nameplate exists. Energy stays a
-  **raw number, not a percent** — 35 and 40 are absolute costs — and its two breakpoints are
-  waterlines the fill crosses at `x −15` and `x −10`, dim where the breakpoint is and lit the
-  moment you can afford Eviscerate or Sinister Strike. The alarm rim is 108×43. 58 auras in, 58
-  out, every UID stable. Also: combo pips keep their green→orange gradient and the brief
-  scale/brightness pop on gain,
+  (see the shared geometry above), at **164×45** because the rogue is one of the two packs whose
+  strip carries a fourth lane. The **five combo pips** are 16×8 and since **v58 they ride the
+  target’s nameplate** — combo points are a property of the target — falling back to their strip
+  lane whenever no nameplate exists. Energy stays a **raw number, not a percent** — 35 and 40 are
+  absolute costs — and its two breakpoints are waterlines the fill crosses at `x −24` and `x −16`,
+  dim where the breakpoint is and lit the moment you can afford Eviscerate or Sinister Strike. The
+  alarm rim is 172×53. Combo pips keep their green→orange gradient and the brief
+  scale/brightness pop on gain, plus a
   spec-adaptive cooldown row
   (16 spells, talent-gated, tooltips + keybind labels), animated alert flow (SnD missing,
   Riposte window, Feint-at-70%-threat, Evasion-below-50%-HP), weapon enchant proc tracker
@@ -192,9 +194,9 @@ acceptance note instead of presenting static serialization as an in-game test.
   and Icy Veins burn-window timers, Ice Barrier uptime and missing alarm, Clearcasting proc,
   mana thresholds with Evocation/mana-gem prompts, Ice Lance shatter window, and a 10-icon
   cooldown row showing only what is down; Arcane and Frost only. Since **v14 — the Sill** (see
-  the shared geometry above) at **102×37**, the wider variant, because the mage is the second
+  the shared geometry above) at **164×45**, the four-lane variant, because the mage is the second
   pack with a fourth lane: the **Arcane Blast stack counter moves off the buff row and into the
-  strip** as a 100×6 lane fed by the debuff itself, so the lane's *length* is how long you have
+  strip** as a 160×8 lane fed by the debuff itself, so the lane's *length* is how long you have
   before the stack falls off while its three pips show how many you are holding — two facts in
   600 px² where the icon spent 1,600. The 30% conserve breakpoint becomes a waterline at
   `x −20` instead of a bead at the angle its threshold implied. 44 auras in, 44 out, every UID

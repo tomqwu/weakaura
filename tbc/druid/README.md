@@ -1,4 +1,4 @@
-# Druid TBC — Bear, Restoration & Balance (v17)
+# Druid TBC — Bear, Restoration & Balance (v18)
 
 One pack covering **Feral tank (bear)**, **Restoration** and **Balance** for TBC Anniversary
 (2.4.3 / WeakAuras `internalVersion` 45, `tocversion` 20501). Built with
@@ -12,12 +12,117 @@ battleground — in PvE the pack is exactly what v3 was, minus nothing.
 
 The whole thing hangs off one draggable top-level group anchored at screen centre `(0,-140)`;
 the five sub-groups below can be dragged independently. **From v15 your state is drawn as
-The Sill**: a 102 × 31 instrument strip directly under your character at `(0, -110)`, stacked
-from three 100px rails — threat, health, primary power — where **one pixel is one percent**,
-both numbers are printed *inside* their own rail, and every rage breakpoint is a full-height
-waterline. It replaces the v12–v14 ring cluster (three concentric arcs around a live 3D
-portrait at `(-270, 40)`), which cost 10,000 px² to carry the same three gauges and spent 19%
-of that on a face that never changed a button press.
+The Sill**: an instrument strip directly under your character at `(0, -110)`, stacked from three
+rails — threat, health, primary power — with both numbers printed *inside* their own rail and
+every rage breakpoint drawn as a full-height waterline. **v18 makes it long and thin**: 160 × 13
+rails on a 164 × 36 plate, **1.6 pixels per percent**, where every value the pack marks is a
+multiple of five so every mark still lands on a whole pixel. It replaces the v12–v14 ring cluster
+(three concentric arcs around a live 3D portrait at `(-270, 40)`), which cost 10,000 px² to carry
+the same three gauges and spent 19% of that on a face that never changed a button press.
+
+## v18 — long and thin, not big
+
+**The rails read as too short, and the fix is not "make the strip bigger".** The sibling packs
+tried that twice — 300px rails, then 200px — and the player rejected both, because scaling the
+whole strip uniformly preserves the original 2.8:1 plate and simply makes the same stubby block
+larger. It reads as a **UI panel** rather than as a readout.
+
+**A vitals bar wants to be long and thin.** The fill's *travel* is the signal; its thickness
+carries nothing. So v18 keeps the rails long and puts the height back near the original:
+
+| | v15–v17 | **v18** | |
+|---|---|---|---|
+| health / power rails | 100 × 11 | **160 × 13** | 60% longer |
+| threat rail | 100 × 4 | **160 × 5** | thinnest lane, no number |
+| plate | 102 × 31 | **164 × 36** | 5 px taller |
+| numbers | 11 pt at `x +32` | **12 pt at `x +51`** | still inside the rail |
+| ruler hairlines | 1 px | **2 px** | |
+| rage waterlines | 3 / 5 px | **4 / 8 px** | dim / lit |
+| threat number | 10 pt, hidden | **9 pt, hidden** | unmoved, still at `x −32` |
+
+**1.6 pixels per percent, and every mark still lands whole.** Every value this pack marks is a
+multiple of five and 1.6 × 5 = 8, so nothing lands between pixels:
+
+| mark | value | x |
+|---|---|---|
+| Mangle reserve | 20 rage | **−48** |
+| ruler | 25% | **−40** |
+| ruler | 50% | **0** |
+| Maul window / threat notch | 70 | **+32** |
+| ruler | 75% | **+40** |
+
+The invariant was never the number 100 — it is that `waterX()` is the **only** place a coordinate
+is derived, which is what makes the length a single constant. The build asserts each mark against
+a literal *and* asserts that it is a whole pixel.
+
+### The lane stack is derived from this pack's own plate, not copied
+
+A druid has no discrete class resource — rage, energy and mana are all continuous pools already
+carried by the power rail — so this is a **three-lane** strip where the rogue and mage packs have
+four, and its plate has sat at local `y +3` since v15. The offsets fall out of that convention:
+
+```
+content = 5 + 1 + 13 + 1 + 13 = 33, centred on the plate centre (+3) -> -13.5 .. +19.5
+  threat  +19.5 - 5/2                        = +17
+  health  +19.5 - 5 - 1 - 13/2               =  +7   (unchanged from v17)
+  power   +19.5 - 5 - 1 - 13 - 1 - 13/2      =  -7
+36px plate around 33 of content -> 1.5px of margin above AND below
+```
+
+| lane | region | size | local (x, y) | absolute y span |
+|---|---|---|---|---|
+| **Sill Plate** | `texture` | 164 × 36 | `(0, +3)` | −89 … −125 |
+| **threat rail** | `progresstexture` | 160 × 5 | `(0, +17)` | −90.5 … −95.5 |
+| **health rail** | `progresstexture` | 160 × 13 | `(0, +7)` | −96.5 … −109.5 |
+| **power rail** | `progresstexture` | 160 × 13 | `(0, −7)` | −110.5 … −123.5 |
+| rage waterlines | 4 × `texture` | 4/8 × 13 | `(−48 / +32, −7)` | on the power rail |
+
+The build asserts the stack arithmetic, the 1 px gutters, that the whole stack fits inside the
+plate, and that the two leftover margins are **equal**.
+
+### Nothing moved on screen, and that is a measurement
+
+The plate grew by 5 px of height, so the frontier was re-scanned *before* anything changed rather
+than copied from another pack:
+
+```
+sill:            x -82..82   y -125..-89   (164x36 = 5904 px2)
+envelope scan:   30 regions, dynamic groups projected 6 clones deep, 0 overlaps
+                 tightest gap on any axis: 11.0px to the buff row (v17 had 13.5px)
+                 nothing above the strip at all
+column all-pairs: 4 flanking stacks, 6 pairs, 0 overlaps, tightest 14.0px
+                 Druid - Buffs      x  -86..86    y -176..-136
+                 Druid - Alerts     x -170..-130  y  -64..206
+                 Druid - Cooldowns  x -106..106   y -222..-190
+                 Druid - PvP        x  132..168   y -272..-26
+```
+
+**No column moves**, and no column needed to: the strip clears everything up to a ±8 px pad and
+only collides with the buff row at ±12. It would still clear by 7.0 px if this pack ever grew the
+±4 px alarm rim the profile allows — **and it does not grow one**. This pack has never had a
+threat flash (decoding v12 for `alphaPulse` returns zero hits), and inventing one would consume a
+new uid for a region that has never existed here. The 70 notch and the aggro-red rail remain the
+escalation this pack ships.
+
+The **all-pairs column check is new in v18**. The sill-versus-everything scan structurally cannot
+see two flanking columns overlapping *each other* — a blind spot that hid a real defect in the
+sibling rogue pack for several versions, where a 140 px kick-lockout bar sat over a weapon-proc
+icon. Nothing in this pack is wrong today; the check is added now so it is already here the day
+something is.
+
+### What does not change
+
+Not one trigger, load gate, condition, colour, spell id or region type. Diffed field by field
+against the shipped v17 string, the only differences anywhere in the pack are `width`, `height`,
+`xOffset`, `yOffset` and `subRegions` on the nine sill regions — the form-adaptive power trigger
+(no `use_powertype`, so it follows every shapeshift), both spec-gated threat rails, the
+not-in-arena size gate, the Bear-form gates, the buffs, alerts, cooldown row and PvP layer are
+untouched.
+
+**Nothing to delete afterwards.** 45 tables before, 45 after, all 44 child uids byte-identical
+(`changed = 0`, `missing = 0`, `parentSame = true`, verified with **no** removal allowance). Zero
+new `uid()` calls consumed. **Leave the `Arrangement` category ticked in the update dialog** —
+sizes and offsets travel in it, and unticking it keeps the v17 geometry.
 
 ## v17 — the rails were filling the wrong way
 
@@ -982,35 +1087,38 @@ the nine children carrying a local `(-270, +150)` each.
 
 | | absolute anchor | lane 1 | lane 2 | lane 3 | backdrop |
 |---|---|---|---|---|---|
-| the Sill | `(0, -110)` | **100 × 4** threat | **100 × 11** health | **100 × 11** power | **102 × 31** plate |
+| the Sill | `(0, -110)` | **160 × 5** threat | **160 × 13** health | **160 × 13** power | **164 × 36** plate |
 
 Those are **absolute** coordinates for the group; every region below carries a *local* offset
-inside it, listed in the [v15 section](#v15--the-sill). `generate.lua` converts absolute → local
-in exactly one place and then re-walks the assembled string and asserts the group's anchor, each
-lane's offset, each rail's size, the 1 px gutters between lanes, and every rage waterline's
-position against `x = v − 50` before it will write a file. Nine auras in all: four rails (two of
-them the mutually exclusive threat pair), one plate, four rage waterlines.
+inside it, listed in the [v18 section](#v18--long-and-thin-not-big). `generate.lua` converts
+absolute → local in exactly one place and then re-walks the assembled string and asserts the
+group's anchor, each lane's offset, each rail's size, the 1 px gutters between lanes, the even
+1.5 px margins above and below the stack, and every mark's position — before it will write a
+file. Nine auras in all: four rails (two of them the mutually exclusive threat pair), one plate,
+four rage waterlines.
 
-**The rail length is 100 px on purpose.** One pixel is one percent. That is the exact length at
-which a 0–100 gauge is lossless: every pixel beyond it re-draws a state the eye cannot separate,
-every pixel below it discards one. It is also what makes every breakpoint arithmetic instead of
-trigonometry — `x(v) = (v / maxpower − 0.5) × 100`, and for any flat 0–100 pool simply
-`x = v − 50`.
+**The rail is 160 px long, i.e. 1.6 pixels per percent** (v18). It is long because the fill's
+*travel* is the signal, and thin (13 px) because the fill's thickness carries nothing — a
+uniformly scaled strip reads as a UI panel rather than as a readout, which is what the sibling
+packs proved twice. 160 rather than a rounder number because every value this pack marks is a
+multiple of five and 1.6 × 5 = 8, so every breakpoint still lands on a **whole pixel**:
+`x(v) = (v / maxpower − 0.5) × 160`, giving 20 rage at `−48`, 70 at `+32` and the ruler at
+`−40 / 0 / +40`.
 
 **`x = 0` is not an eyeballed number either.** The Alerts column occupies `x −170…−130` and the
 PvP column `x +132…+168`; both are *vertically growing* dynamic groups, and both are separated
-from the strip's `x −51…+51` by more than 79 px at any stack depth (a dynamic group with
+from the strip's `x −82…+82` by 48 px at any stack depth (a dynamic group with
 `align = CENTER` and `stagger = 0` cannot move a clone sideways). Vertically the strip spans
-`y −91.5…−122.5`, with nothing at all above it and **13.5 px** of clearance to the buff row at
-`y −176…−136`. The build projects every dynamic group six clones deep and asserts zero
-overlaps against all 30 other drawn regions in the pack.
+`y −89…−125`, with nothing at all above it and **11.0 px** of clearance to the buff row at
+`y −176…−136`. The build projects every dynamic group six clones deep, asserts zero overlaps
+against all 30 other drawn regions in the pack, and separately runs an **all-pairs check across
+the four flanking stacks** — the one thing a sill-versus-everything scan cannot see.
 
-Every rail is a `progresstexture` in **`HORIZONTAL_INVERSE`** orientation — WeakAuras' "Left to
-Right" — on the bundled `Square_White.tga`. Two traps live in that one token. First, the key
-lies about the direction in the usual WeakAuras way. Second, **it lies differently on the two
-region types**: on an `aurabar`, `HORIZONTAL` is the left-anchored one that grows right; on a
-`progresstexture`, `HORIZONTAL` is *Right to Left* and the left-to-right value is
-`HORIZONTAL_INVERSE`. `startAngle` / `endAngle` are ignored on this linear path (they were the
+Every rail is a `progresstexture` in **`HORIZONTAL`** orientation — the left-anchored fill that
+grows rightward — on the bundled `Square_White.tga`. The trap lives in that one token: the
+dropdown label lies, captioning `HORIZONTAL_INVERSE` as "Left to Right" when it is the
+*right*-anchored one. `LinearProgressTexture.lua` is the authority, and v17 fixed the
+transcription after a live check. `startAngle` / `endAngle` are ignored on this linear path (they were the
 full circle on the ring path) and are emitted only for the schema; `crop_x / crop_y = 0.41` is
 the texcoord scale here rather than the circular identity it was, and with a uniform white quad
 it cannot alter the art at all. `backgroundOffset 0` keeps the unfilled part of the rail exactly
@@ -1026,7 +1134,7 @@ progresstexture is `foregroundColor`, where an aurabar wants `barColor` — and 
 skips a change whose property the region does not have, silently and with no editor warning, so
 a mechanically ported escalation would simply never fire.
 
-The **Sill Plate** is a plain `texture` region: `Square_White_Border.tga` at 102 × 31, tinted
+The **Sill Plate** is a plain `texture` region: `Square_White_Border.tga` at 164 × 36, tinted
 black at 45% alpha, at `frameStrata 2` — WeakAuras' `BACKGROUND`, the *lowest* strata — and
 **first** in `controlledChildren`, i.e. the bottom of the frame-level stack. Both of those say
 the same thing: the plate is the backdrop and everything else is drawn on it. It carries the
@@ -1037,28 +1145,29 @@ WeakAuras' default rather than the intended shade.
 
 **Always loaded**, for every spec and every level:
 
-- **Health**, the 100 × 11 lane-2 rail in green, with `%percenthealth` printed **inside it at
-  `x = +32`, 11 pt** — two digits span `+25…+39`, three digits `+21.5…+42.5`, still 7.5 px
-  inside the rail's right edge. White with an `OUTLINE` and a black shadow, over the plate. It
+- **Health**, the 160 × 13 lane-2 rail in green, with `%percenthealth` printed **inside it at
+  `x = +51`, 12 pt** — the widest string it ever prints, `100%`, spans `+35…+67`, still 13 px
+  inside the rail's right edge, and 12 pt fits inside the 13 px lane it prints in. White with an
+  `OUTLINE` and a black shadow, over the plate. It
   keeps the low-health escalation added in v8: **amber under 50%, red under 25%** (severe
   condition last, so it wins), plus a `maxhealth <= 0 → alpha 0` guard, because a
   progresstexture with a zero total draws a *full* bar rather than an empty one. `sub.2–4` are
-  the **ruler**: three 1 px hairlines at 18% white, at 25% / 50% / 75%.
-- **Power**, the 100 × 11 lane-3 rail, with `%percentpower` at **11 pt, `x = +32`**. Its Power
+  the **ruler**: three 2 px hairlines at 18% white, at 25% / 50% / 75% — `x −40 / 0 / +40`.
+- **Power**, the 160 × 13 lane-3 rail, with `%percentpower` at **12 pt, `x = +51`**. Its Power
   trigger omits `use_powertype` entirely, so WeakAuras resolves the type from
   `UnitPowerType(unit)` at runtime and the rail follows every shapeshift — the trigger registers
   `UNIT_DISPLAYPOWER` unconditionally, so the switch is immediate. The resolved type is a stored
   conditionable value, which is what drives the colour, and the rail is always coloured for the
   resource it is actually reading: **blue mana** as the base (caster, tree, moonkin), **red**
   when the type resolves to rage (bear), **yellow** when it resolves to energy (cat). Because
-  rage and energy both cap at 100, on a 100 px rail the percentage *is* the absolute value, so
+  rage and energy both cap at 100, on a 0–100 scale the percentage *is* the absolute value, so
   for a bear the number and the scale finally agree. Same ruler at `sub.2–4`.
-- **The plate**, 102 × 31, behind all of it.
+- **The plate**, 164 × 36, behind all of it.
 
 Both rails and the plate carry the extra Unit Characteristics trigger that has fed the
 out-of-combat fade since v1 and drop to **50% alpha out of combat**.
 
-**Threat is the 100 × 4 top lane, and it is *yours*** (v13 — before that it was the target
+**Threat is the 160 × 5 top lane, and it is *yours*** (v13 — before that it was the target
 cluster's outer ring). Two mutually exclusive auras share that one lane, as they have since v7,
 and at most one of them ever loads:
 
@@ -1067,8 +1176,10 @@ and at most one of them ever loads:
 - the **caster** rail (Balance-gated) is green, **orange at 70%** of the pull threshold and
   **red when you pull**.
 
-`sub.2` on both is a 2 × 4 white **notch at `x = +20`** — the 70 line, from the same
-`x = v − 50` the rage waterlines use. For the caster that is the ceiling to stay under, and the
+`sub.2` on both is a 2 × 5 white **notch at `x = +32`** — the 70 line, from the same `waterX()`
+the rage waterlines use. It stays a 2 px hairline because against a 5 px rail it already is one,
+and widening it would turn the top lane into a two-tone bar. For the caster that is the ceiling
+to stay under, and the
 orange condition fires on exactly that value; for the bear, whose semantics are inverted, it is
 the floor to stay above. The `%threatpct` number is still `sub.1` but ships **switched off**
 (`text_visible = false`) and parked at the left end (`x = −32`) so re-enabling it in `/wa` does
@@ -1100,11 +1211,12 @@ returns zero hits — and inventing one would have meant consuming a new uid for
 never existed here. The 70 notch and the aggro-red rail are the escalation this pack ships,
 exactly as they were.
 
-Four bear-only **rage waterlines** sit on the power rail. On a 100 px rail a threshold is one
-subtraction — `x = v − 50` — so **20 rage** (the cost of a Mangle, the reserve you never spend
-below) is a line at `x = −30` and **70 rage** (where Maul plus the next Mangle still leaves you
-capping) is a line at `x = +20`, both spanning the rail's full 11 px height. Each is a 3 px dim
-line with a 5 px opaque twin that **pops in over 0.25 s when you cross its value** and fades when
+Four bear-only **rage waterlines** sit on the power rail. On a rail a threshold is one
+subtraction — `x(v) = (v / maxpower − 0.5) × 160` — so **20 rage** (the cost of a Mangle, the
+reserve you never spend below) is a line at `x = −48` and **70 rage** (where Maul plus the next
+Mangle still leaves you capping) is a line at `x = +32`, both spanning the rail's full 13 px
+height and both on whole pixels. Each is a 4 px dim
+line with an 8 px opaque twin that **pops in over 0.25 s when you cross its value** and fades when
 you drop back under, so the crossing itself is the signal. They stay four separate auras rather
 than sub-regions because the aurabar tick sub-region does not support a progresstexture at all
 and the two sub-region types that do cannot carry their own animation — and the pop *is* the
@@ -1521,43 +1633,57 @@ UID — is never forgivable under any setting.
 Since **v10** the script also proves the layout, not just the encoding: after assembling, it
 re-walks the parent chain summing every `xOffset`/`yOffset` exactly as WeakAuras does, and from
 **v15** asserts that the sill group itself resolves to `(0, -110)` and that every one of its nine
-children lands on its canonical lane offset — with `0 / -110 / 100 / 4 / 11 / 102 / 31` spelled
-out as literals once, so a sign flip in the constants block cannot pass a proof written in terms
-of those same constants. A group offset edited later, or a coordinate written locally instead of
-converted, fails the build instead of quietly sliding the HUD. **v15 ships eight proofs**, the
-rail-canon replacements for v13/v14's ring canon — they are rewritten rather than deleted,
-because they are the reason a geometry change in this repo has never silently shipped wrong:
+children lands on its canonical lane offset — with `0 / -110 / 160 / 5 / 13 / 164 / 36` spelled
+out as literals once (v18's numbers), so a sign flip in the constants block cannot pass a proof
+written in terms of those same constants. A group offset edited later, or a coordinate written
+locally instead of converted, fails the build instead of quietly sliding the HUD. **v18 ships ten
+proofs**, the rail-canon replacements for v13/v14's ring canon — rewritten at every geometry
+change rather than deleted, because they are the reason a geometry change in this repo has never
+silently shipped wrong:
 
-- **the one-pixel-is-one-percent proof** measures each rage waterline back from the *centre of
-  the power rail* and asserts the offset equals `(v/max − 0.5) × 100` — written in that readable
+- **the 1.6-pixels-per-percent proof** measures each rage waterline back from the *centre of
+  the power rail* and asserts the offset equals `(v/max − 0.5) × 160` — written in that readable
   algebra deliberately, not in the integer-safe rearrangement the builder uses, so it is a check
   of the formula rather than a restatement of it — then asserts the mark is a whole pixel, spans
-  the rail's full height and does not hang off either end;
-- **the rail canon** asserts every rail's region type, **`HORIZONTAL_INVERSE`** orientation, 100px
+  the rail's full height and does not hang off either end. A companion assertion proves the
+  *property* the length rests on: every value the pack marks is a multiple of five, and at 1.6 px
+  per percent every one of them lands whole;
+- **the rail canon** asserts every rail's region type, **`HORIZONTAL`** orientation, 160px
   length, canonical lane height, `Square_White` texture, visible track with `backgroundOffset 0`,
   `0.41` crop, `compress`/`slanted` both off (they are LIVE on the linear path and would bend the
   scale), its exact lane offset, and the **exact number and type of every sub-region** — a stray
   `CLOCKWISE` here would silently draw a pie wedge instead of a bar;
-- **the lane-stack proof** derives each lane's y span from the assembled tables and asserts every
-  rail sits inside the plate with the 1px gutter the lane arithmetic promises;
+- **the lane-stack proof** derives each lane's y span from the assembled tables and asserts the
+  stack arithmetic (`5 + 1 + 13 + 1 + 13 = 33` of content), the 1px gutters, that every rail sits
+  inside the plate, and that the two leftover margins are **equal** at 1.5px — an instrument with
+  1px of sky and 2px of floor reads as slipped;
 - **the collision scan** (v15, replacing v13's single alert-column clearance) projects **every**
   drawn region in the pack to an absolute rectangle — dynamic groups **six clones deep**, in each
   group's own grow direction with its own spacing — and fails on one overlapping pixel. It prints
-  the tightest vertical gap as a number in the build log (13.5px, to `Druid - Lacerate`) rather
-  than leaving it as a claim in a comment;
+  the tightest gap on either axis as a number in the build log (**11.0px**, to the buff row's
+  `Druid - Lacerate`) rather than leaving it as a claim in a comment, and asserts that the strip
+  would still clear everything if this pack ever grew the profile's ±4px alarm rim (7.0px);
+- **the column all-pairs proof** (v18) boxes each of the four flanking stacks as the union of its
+  children projected six deep and tests all six pairs against each other. The scan above tests
+  everything against the *sill*, which structurally cannot see two columns overlapping each
+  other — the blind spot that hid a real defect in the sibling rogue pack. Tightest pair here is
+  14.0px (`Druid - Buffs` / `Druid - Cooldowns`);
 - **the removal proof** (v13) asserts that no region whose id names the target survives in the
   assembled child list, so a stray `adopt()` cannot ship a cluster the release notes say is gone;
 - **the plate proof** (v15, replacing the portrait proof) asserts the region type, the
-  `Square_White_Border` art, the canonical 102 × 31, `frameStrata 2` — and, the one that matters,
+  `Square_White_Border` art, the canonical 164 × 36, `frameStrata 2` — and, the one that matters,
   an **explicit four-component colour**, because on a `texture` region the tint field is `color`
   and leaving it empty draws in WeakAuras' default rather than the intended shade. It also
   asserts that **no `model` region survives** anywhere in the pack, so "the portrait is gone" is
   a fact about the shipped string rather than about the constructors;
 - **the readability proof** (v15) asserts each percentage as it is actually shipped — token,
-  point size, `anchorXOffset`/`anchorYOffset`, `CENTER` anchor, `OUTLINE` and `text_visible` —
-  with `11 pt at (+32, 0)` and the threat number's switched-off state written as literals once;
-  then asserts that three digits from `x = +32` still end inside the rail. A companion assertion
-  checks the ruler hairlines at `−25 / 0 / +25` and the 70 notch at `+20`, on the same scale;
+  point size, **both** offset spellings (`anchorXOffset`/`anchorYOffset` *and* the
+  `text_anchor*Offset` pair WeakAuras actually reads, kept equal since v16), `CENTER` anchor,
+  `OUTLINE` and `text_visible` — with `12 pt at (+51, 0)` and the threat number's 9 pt
+  switched-off state written as literals once; then asserts that the widest string, `100%`, ends
+  inside the rail and that the point size fits inside the 13px lane. A companion assertion checks
+  the ruler hairlines at `−40 / 0 / +40` and the 70 notch at `+32`, on the same scale, each of
+  them a whole pixel;
 - **the draw-order proof** (v15) asserts the sill's `controlledChildren` against a written-out
   list — plate first, threat, health, power, then the four waterlines — *and* that the flat child
   list the string actually ships is depth-first in that same order and starts immediately after
@@ -1565,8 +1691,8 @@ because they are the reason a geometry change in this repo has never silently sh
   of the rail they mark, and `controlledChildren` order is the only thing that sets it (+4 frame
   levels per child, so first = furthest behind).
 
-## Import string (v17)
+## Import string (v18)
 
 ```
-!WA:2!T3vc0TXX5zpcwXYWxuuh2wXogw2sMuXwgNeeQwjbxuKuGeGlaPoSAiwSya3vCXUR2DbjbZPzCszCUzsCsTDUysCsDDAAzo6rAstyBtBUANW(E(Tn1Tnp(YlrjnoTp1K20C8sNz2DXfbHOiPSKDSFwJwm7mZUZ8)9)9)pZ)mRaJ0o3h(UN92wkhl345vLvIklkR2Vdhos5W9bdO0oNSKUQSOimFuEbX8QqPhrP9yQLeY76ECLwqu0vkrwDOYUSZldVkKv3vhrGSQDQCJnMDuwnDi(g7W(g9czf15DXWkiwTHtjpju1mVBYopg2XGUgGvDCCI0yIqLD3S7usu5wwTA4kHGUYEAETi3B5CYQ5HQrSgkuAlIOW0tZQM3vgzzrDbf1PswOGguhKtHfpsORCxMnwMirXniPhF3UyGA6YQS6cYsU2VRiSISsCWCMTmVAzZg4WZRchdxImLvGmJPkxszEZsKwyA4wxqqQGSArAB4CbZBykxaaGJLylPZlRMuHCBnN5WsOccJ5uLLJMrxmA6SQ6oZvqqsqJ3ze8FP7CgDvHXgdQQn4(vTU8HJOtE6SLuz9UijvtbkkkKxBpT7osjCLYPiYwgQodn)(YR5CzTs5GtG73PlvOGWulmA0WPZmA6mHzYu5wPuH4BXKov8ejoxjny8PWVxPnBHSmsSfHAoNppmhUfiDE1EJNivpdNyUsswVwoxiVG2PljH7nta9YkkQSDw61zmV)aY5Hp5vynCfp)yqLTN(mLWIdx9ucJgpgVGoCrZ7AowF1ZXkjyoy2f6f3ZIqwnyADS4BmD(Rc5kIKSeCP8LmfzJsgtu1G4b18AZqkk5TefmsrwbPEqDHRakiQBui0HW)9T0yoZPbflKswqspx04dMjoZEfYxfQNIoEs1AohUiqvjwXrWpn8Z9(xOGkESb)EXQZ64Cymdwe3djlYZpx6OmXJp486YCtyw(TLAxEXn6ctCKmN8OjKJN40hJrJJve6yESKGHcU0SXo9jHhgCmpPpjycAIikZM35cMpg67l6WZE7ORhGA)QqhfDy0EWdvor3It0T6e9sEL7hDBpmUBEhO9JUlgQyoNPAloR7eTpNZGf0JsGmzrDG6e9sDIUB09GoOZARhkHYohgxexr5zjyvOQGMUaNMvtGgSH6IUxKBKNN8kqV87hDFOdJXmAS6ePeKFgvzDQ0cGoIZC8qHX41F55Ozc5r9pYCKxhorwnTS50XJjs67MPyjScStgAU7pNMaHpGjgZW9fdnYUrNiBemkNB3OrCgrdRcsU4C6WPWpq4XuzviGoLDgnr4bsLjzKeHJE0WXI1xM(gjEUIcQQYQ8ODOAv(5YHFI5j1GjsI4dgdnQs4(is7cSCWtfoF(KsAN6yq2Xdt05o1aW8cSNkJzD1oLjwEukmE0iuX3b1hJfDdOxg6MDIIIf8ymfYb6MCYWkQWZ6GzsH868Fl0RyROyleVG)8JK2Fc4yJXWztzK6kDFq)bu2owXItfIB3QJFbiQencR)Do)aDuFhy)mC8qUX7bDBBDMjyvfyX97zeKIkxmhRoZeSILGG9kRS3dFyvoEm)luBp7hno1SYmky6vOQEze3(r84wWbsyUIStXBcQgVD3KkEFhgjsQcaveXH2TtuyuKzpuoSWvD0YaZ)Ekag0UaB(txcBwj)aStTLQ)qqAlO2tDLEcCWaemTYoRcHiu8eAxP88lOruYmh(ZwBz6rgZrBwggnmlUoygSCnmb48G7gJkxg3jgdlY0slxsLdEGB5k2cbOAlPUjNOHaiohKrk7(i2KdUfX9iZXfZUx)KHKqezKhVMPoqfpxHkpDkZFLMybDQHu6WBZhOoYbM9MuANaghvJNnV8Kh3YO1C08ijlUpZwrHtFF7tPTAkBvZmk3DLIpQP1OrRuPrZd5WuQIJQOIVGWhbw2SrSP)IeE4mjv2bntS9kzc)l3Xia1iHX)8CMnRWuW80mFGLmPIoH1R6I07tKJcfkJv(n1TjsPidMCW4k3ElE3mZi3GLkMdQICPI5djf0AiX85ynKCTBzEAMC2o94yoR2eBBVTEufM21qLyZt4KDLjtDTG9B6s08MeROs4jM5ywxSuL2HALl5Wzs0h(9UTAAblAxL91I(cfaqTjXuquwwTo5A9VcKNfX7HDTudDrZXYjWIjSck)S7CjlEQbSiUU(orVsEu7G5jcVrvmFRSj)ySzkw2kJrmBNSw2ogTiHNJwj7CW0xSEdNibY18wd94QPSDRlIvLg3UjTu(uo06JLKspMFRMJT47gXM(fXI6XXIw5w1VwSkw3bw06L1Q7IsZVuT9ySzeMRM8)Rx(XCCygUrltzE9uR1uL2W8wHTOOOmw8kBpxf6iREi6tsz6NN6khLYbG6)nHYKLAPLyHIhDsIrk0WK0LP5sCYACj5jLYIo2(rhhDctlBZx9gB7bhbD)4kmbd2)v9Yz9QmHs2zWOo9YfzLY6vhkLDE9jXgmlxa7Xf26j96SOGzBWlG5nXOed6ytSQJb1XwUPVgvVrwIz9ekTz56FAb9suSe1o)kDqicb9JFVDq6w4QLwN4589IPHlEVeqaX1alxniLmBnntfFfEL8no(kiHnnFoBQAlz8mYy3OWoJP5eLfXsD(TkqxROSSoFkRAGh(iC)9iOQPZVGv94efu4jMJqNc97Q0wvXNLg55QMt0AnchiWmCYfviTlpXk(vIMUFs(EdqSb0njXNd0RWbk)xtz7vTaufueBHJeBYuPKIOgSCqvbjI3Gq(5OVIeiFU(gmDFXIVGSQawWr7qZ3BsM(ozYbZeoHjOCklq5UDQsRhmp)ShcjdqkeBPOZSfKAD2nrA8iSSSepAcaAsQPp0uRU1Udv1IEfEm047ni1s1lZ2MhD6LDrs8GT2HMUsLqLrJ7OwZJNnv93)vT6w9qVAa61GETOxh1ag61dqpaAg0Ba9GO34dGEta0Vh(9Dw0Bg9qO3cg09wrVTRDlO3(zpo6DGENO3fanh6DJEpO3l6HXf79HE)OFFa6r2f6rXf6XW0MOpqvQs0hexKpea9HZI(iO5rFu0hd3EFC0JZJ(eyHu(TI(dOCpON4SNe9hszxqp5gLrb9Pwjzc6pIh9PT4kq)XwueO)K64gqlupDa6ZSn29yYcG(SzrFUSOpFw0FAw0Fww0FUPI(G152(Fb6lq08(ln1MrFXMR2H(ky1m0IO)AQgf6VbG(BZI(Q8O)UkQjO)Ea6RD2PrFDkYFROPp7RYePJ(guGDMCsdpwxjoAY(1rFlE0)a6FeHqFB0svqRO)PMHtVH1beTFt00wXOPt3GZyu3tjaQkaULWMV5Wkt2(MU3ae0x73xfGm(9RRandj)u4c7nqnfUrOS0QaL73ckR02(Q7HVV9zdTBoUMIPdBdPvCVchlQR1AItCyTaLopp1QQljyvKAvzESSunMBe9OHBIpn13iMzIElwQvpgynPx5OIELTHCpDxR(1nA1CxOT2z)QnRv8TXAfY)FrvxFeIUUPkED63M6(3pnTEJ2y13bwTPB3q5sEENw(fUo)lYYANNauFWOt2XB3oQJfyAoE1b17IV3tYEHWcCQR4InnWCkKLKKc7R3(eTlfmq1oMNanWd80OXVQMmHpBl(ERV4ZGNhm9zHjh80cYHZzZnql8fi1qhRM(jTXQxhhBzeRAxJMUYD26ABRCxLo4EBDfwjr06LxO5AYVaFWQXhWqxO9lHCcxfHtGOeyUgvK0qbQNsqESCrp5Pf9E8KzwDkbxu1BsZt7IF(AETxM(A)0oQ7nFjY0iQOsNTzD4VuL5IG(RmN7b6l30jDGFdky7gp99VAFjqacFdb3GzO2bAucbezCPpNRFSWyG6GbJAJbWKD4HnmthzCDBOR)htz5sXtO7ITG3oIvkzinFEgNLkji0LyejgD2)eeGZc2yNtUse0NXEEJor5VQl4HA03Bty41HflRnu5s2a7vtMeqnJRf6qjTyIHtny5yBUJRFF7rQLnjjjlykRUSkEouZvb8M1EqNH(Z9619fLr)vcUD0YH)cix5iZYfQJoKkjikjlPtgT)r504XZAD8zSd3ses7sfanraHBf0pIEjPQrkWMhIEgV4AqlYAsA5Sr1apJn5K896T7bYeCdjUUMvvCH(bKz5E2ksg0pep33l66eNx5bDK8)GosI(XONb9twBJ6O)tCz)Vw7d4xtdQh55okBPOE7jAW4BWX7BdbQewA0wEcL2SJQwcwoIMrnHG2kAVXOrzSAaF7HfQkaD1JGk0o80BVsJiuaMtuwUOYoReFy4PlnbuIItR(0yiRjZK68vlhj6AC6UspjRAXQLBazsyzvHk3AZF8MXfUtLB2(2XGfLvzffMwqAmxmYSQORfDDeFxUbuBOTJLSxlalz3jAxBLi9VrtN9WcDSKUUG1zp79BhT390UBBt2e0fbhDGSnXSTxKpK)nWktyk7xYUNebpQRzbliYCkkj2cNizhjv9DuXuhrI4F0rCI61bbG2VtcQy27yEbozjZyPClxbPNH91cFJL4KLfZlpPu6jfWwQx0(NKq)YVY4u(4wDDgF(c6pawujLusSCw84WxOjJdQ9gMzGEgoX6wr8LF)NBCiujmj6H6meScpDYgy8)r6)PwAmr5j7rfEMsqjUYMSOri5XViMc)iIwXBHFosEPndFl5Ye0GtVRfixBVk)0YuzvSDqVNDKDmJYbjh6tmdVa34sqnnhZq)j2dNLYvsxxwkP56xsBRec4ISD6ZZmoJ8ZUl6ml27(0wdtMaGE70xKMT6zeh)VD0JsM4qL2uzJ0Ml23GdgNz0ijZKj5a2ZRG08y2Q5WDDZ4CVK5FnQSvqKS(zL4G6WAdEyhmKSwXhFuiglH8z)lYYR7aXm0fgf1oIqWVyT1Fn66V7ReJ37WtOijd31qDeMNqwJ)VitJjyOlY7m2O4SvIO7)TYoTZKSEVXe0ibunFwcBA(HmaV4SevDSdWMQPeDpxMK0wQPnKZTSICi6I1emYCA6SCJRHNMzTRrvw8SmtvPmldNsrW0uDgHIqRYwzkP4ctIXZb9CqckIWl9kCm7DG(n1Q)AaUISgaWQRQEiSQA3b7gNgQ7UOPbnaownnwdWvUbuwnaBTQ(5HEkdWlYuP0aCv8gGTH)Zv7Wa4CxgGRbyaUwQuZaCDyfmdW1BaUb8pAZaSDdq74)Sd(nhWTbyNui9TwbsBaWVb7g)gysZBaUj8q4nJ8za2Z6ayIXoMWsrIf5jYF8(JZf3xhfdyblna3kfuAaEjvHJ)udWTTzJ9CEHIqSSJ9eEdg0n(pDhjuq)HIekK7GmE7kuiFmE6Q7abz8e0xi30up0uVmEd62JNxabTPJGUhmaQyxDo2ro6i59NXFRaq)SlcaO9uHyYaC7nHmYaS3lei2Gn4Vqx(AbXtlbc9V5beUSZ2Rn46g3ubx9oZkaxFZTqwNIt3RAErLy6h9iTcD9)CraDDGAqxUWOlFRQzrt0N3nn033btU5pIh3b6oIh)(ChXR7q0epr81L3Gr6oKh3rc1Tpm1x3(jx53dJ3aEdfIWc2ThAQ31l0953CynbMrmcc57KFaVfoXX0Y0ku2)7ZcCy(20qrpbgO4Rlss3KKq4emAbN4bB3mab3eOlssqss3uuJ7xa1SgrnNaJAowzPs8Qf9mE(oAfQ5N)CkuZPJeiqq3mE9J9TIMgGM2fnni1tkFNx)X)TtyI1(Oyf2WykLZx)Xff64mNPv4K)Vl1Uyxdk4RJ5j86HK4NKeGKqOsOwF8s4t8sS(4ZhjXpjjaLaH6iE3D)caK1kaHy9PJP86owQehBQjeAf(4xCze(4jma3LbOddqNgGdyaEPgaSG9Emah0aCVga3VG8FTk)j2roAQZ41Bb2a5tl1k5)V8Y)zqvZK0p9EdfkcE23bIeYp27vS1eIFgHO(zeQ7xyU4B6Zf)nIrsPtMsDsn)dFSH90kK0V6sksYDesit27WPqB5rQjCiQqPPfG5jrubk5kLQCrf9QrvjQiKvLJvtxqASQNGQKYrDnGGg547u9Gb2NKeuDcwDODJSJQbcQKODMvovGzuHqxYfOH8PsJvjUnrJ6swY1aWQHnkcR64AJli5QJ06LWpQ8DwZHDKU1ND1xXILKG0a2quy(k0WCzkTz0uy5Gx3gngnlWjlwQOuAsJ5GEKOYzUy4mSIcJjHoSQMol54XrosuKqQunyzQMh)nywAKK6XXmyHHv7SDEASF2XI5llXwuGJEser7ARr0Kv1rbNBmvbZZNX1md5ssGe2ltmgrHIc6xdzNyNGCf)YCYs4hVKEpSC6YQ5ychRVHtNtLnVqjTh8Ar(V65WYsZGA8G72gvUS9GyyrOQU28fkjkgvqLte)MAf5OHaKyeD9IBGytHH6Mg9ITGF)P1ZjNHFK8jN9or)gW5JCtclL(Qv4LEQ963DLnqNjVerynywLTtdhFT7VXSk7U(97ODW7B)(Qg23z3oJUkl34riNpgZgbRiavf4sZlpzsPSlv3pxqJ(xmq28LjVdZr3w)dYweUTtCiKlg6pToOD3CuRij4YEBSJbVK73Ps7KNdgXiRcjBMDSufMDjv8BzA7Mtzx1RAcnx))LQCgdifIUBGjDfZ4zt3rc0EtwLDqUgso2N1w8njw(duLL3IfFByjxBmPeMckwlxV5EPNK6NY5JTjK10EaH23KWFTWn)Mm5MNNEKcPhTT1opn5KSsodT9H1puCv90Tq(T2PyZjikOxE0CyCVAjnE0nyaEdMoiw4OhV)r6Qp2XpYuRKwN3wbYaiSQ861hX)f0eXY5CY66YfPBHcF2r)VrU(zBBo6XiLgZqnSeLC2kPrMe5khxjnCdKJwGY0HwYtW83tz(7NPDpioafoqZoB7LZF1Tpfyo6zvK0QZy3QKN9s4RL0ihGCYTu2U99YyNn(fBjlSLzgzPTnT1YUoDP1M5Le9GGRTiKV6(Aulk0a8W15UH5rnYC)zSAyWlzoDybSnaVVwcOd)DRZXJkq0Ct4zOUgiNYWd0QWizao9AeIAaEu0ZyaESvhyAa(agGpiPN9HmaF4kWpdWhPwONbyEBmNb4JAa(yKwYa8XnapoUTmaFcCp(t2aYzTymOUyfGboD5FjSrvoEOMj98sM0Zw(tSEavhyTdQQSrJ3imBRbVoRt4BaE)kD0ijgLHFujYr6dZpQwg7gGyowSHOQiLoJosHOPoTGp5mTKmB8NNGuQB3GPSR62PZv9dyXAZNSV9S2Uy0ZVwDBp6SONgS6BESzXY7znaVzdWdHFxElgG3kPvmaVTTDMFcze4TB6sGb4DyaEN4s8UMRI7YgG3DdMXnaVhCrEVz3WOu64mjjOJnS1xtxwKK1R9eoUC9)My3LIJP0zR62F2ggV)wcJfjwGKiAXvbXjpE0(lfnJB3dF6wcIfF(ii(zLT046NnSRnd2W1O5W68VJaL27Q5wxEYSBgTiEgO1aJ4HHsgSlLuE0yAjmQ4ZhTA6Zx3H8yaEsdWN6IN9rsb8v)wv(zdyb35Zqz9WcDviuUGOqbynGJP1707P7rRqOoBTHsPNdaowZoJpbLPWckyBjkHsBrvLNmVROv(6trWhBkoKFE9D6sMh5fSo8UT8m8SF0Nlld5JpfE6pn4sEIW(7jvVt0DXHvAPl5YxgJFEKQFOtS(YJr)(lnEK0zgEW6oeDoA4e3DUQBeX6)IPya(YOXxIu)rhiE0EdpyFrBzdzawS(6gPN4HzwXb4lO5km0SkSePcn)HDEQPA0Kd2ZWPJVI643IrJSGEn9DKjzYmROw(SCbRzpP09Li(GrJVYHc7zS2SowQWr7RNtSEQQsBPJ2BYKjgTpYNflMHtL58u9l0WqS6ocFIBPPocpJ9c72s)GR1zgChXa8viTXx00vMZzUQqvWPBEo2qf0voNOBSLW6XRsQyYJKbxGpB9UjBa(CeFBwGymdpEzZ0ya(sRGMP4rNMXx8KEfL5BPzkLNpzMYAnJEeVD53BepU96MK4nsGaHcXGVky3m(d43x3m(841RFgpHce0pJp)(d6zdU5A(TaRzndJPiCgUtimu)qLoAPPSZ8CamMBdmG6BJ2YdzFAJIgRYzuQUSIlPYog0(ebrZQ(vI3o6y0BLEsHc6fHs5TdPgn3bPtH9U0mVn5mGyhilZ2twLJg8lZYzhPm69SPdR7PuzXcQeCR7(kRj6wga1REJgAldGMdRpYFgGsKKjwzqSmatAh)kdWuvJCLbOmAxB1amnkOb4vDngGx9EzIzaEn4RET8gGxNb41BaEaAmOmaZun4tvp5x2HkrZa8Gng4jWMsCNI6TihKzq5iH9sM005NWrALMZMNS8IHfNKTSMTznmDDZmRTK1PFZ8eUTMTT1QZ39Z2tOpqdKA8xWw9cVEcQUb47scZJ1361SMmrdnn8mHl1jRChXAjtKbMjINYefEtle7v)uknVSKnoTHp)enUXK)(n8LSWms8R(x6c(AJu)DUoD2AzZf)UYROfcDNfBkcnNjr3AhAUja5wNBjK1cqR6seWFHb2maFplqwhWadkXfpYi8sTeK9pFraK5Cdk7na)GkoAFOMkVnaZ98fz96IuPQCU4q9MQ8KXg7i8hPLY5VZLA58GTuo37mnpYcvCjzJgzHlTsWg2931jbpA5Ucmvq(jlxiClLG)lxElbJ80nvcQ0(k9F852YsChDvLLAPtoHiSGUMARNKXtF5TS8bVRMklpxd(6)CB5iUtUQYXt21KJxo2qhjKS)wkh)xV8woUkltLb4BCzUOJUyswrFLUksTm(Rni88lCMtQmqXjYfNRLcV)TlVfERsW2naFMNpl8gYT0Wb6LD8ECdBPW7F)IOWJS8krIL8ydI2YHQUNGtnrkxziFQHG6UIHNss1TSBCjyXY23B5A22VKVrrnBh8AauVUnT14WBMKPE2BvowOMHJMS8g53C2xTdCM8bo9jgYxYJ39ABbv)ZErBH8HdBgbDyr6gyv6OMlV(dLfLq5MAYMxTpCj70C6aw6D4r6fPBLvR2ilYveY1vxYIpVb4xSnPHQ2YgGFzJnHb4xLLOO8RBOAV7ZU(Q2pCDvT((0RVQ9XVGQg6E9YkvEfSnzF2ITz9TGW)CtMMUhjzm4rtDs3Ek3sMMF6frMM1CWciBA8eQw)ZMZEy871BiVu6HNXRhYo9szN0nBTlY)wi5kDjooi5tvo6oWD8fQSlR7lF2ZZ)SO8STfJ(wJYWD3mbOuVkPp9y(llj0BlfG)SkcW(U0jaFk6YTgvugpbOSMe9)cYhiIU7YRpFHI4XDxEJeWtOaKe6rQ2ljXh9SqgIXtOqbDtt9qt9st9rt9ttdqpwTUxqbQs(q5t(YTpdBHcqoDyEZJshEiCzY2nxqcMYSqzFo)zR7MxJbpAdHZIpU(aU9ne0ZGUBjoR6hqInDCw7fBpF75N9Lu3hSUtIEzOFTb4nq9F6NB)TDJ8DD7BUTlV)UUHDhzfFl36MtzQ4Hf6n8y92KVLBTRX47GboO72N4kFn))p
+!WA:2!T31c4XXr99m(Ij2xEzj)ijMeYfLyhztIZ9uNo3yG7LSK8jDN27K8JKIU9UDUBxR92D9U7jPt8mIaveElGanHNciqtdLwXJslfk42sBbA7G63x(2stB5tF8bbAdTFUqlLhF0zMD37LoDwwso2jK8fpEVzNz2DM))()7))z(pZAWyDM)JCxZDRlLJn)eCQYkrLfLvh0HdhPC4(qbu6mVSKUQSOiKlkVGiNku6ru6mMAzbox3TR0cIIUsjYQdv2TDEz4vHS6U6ocKv9ak3qZzhLvthIVXoTVr)qwrDExmScI1A4uYtbvnZ7gTZJHTi01qSQtGtKkkcv2tRUtzrLBE1QHRec6k7T11ICVLZjRYbvJynuOSJiIcZmdRkNRmYYI6ckQtNSqbnOoiNclEKqx5onBSmrIIBqsp(UCXa10Lvz1fKLCTFxryfzLYdZz2Y8QvmBGJSGkSiUezQOazkQkxwzbZsKwyg4wxuqQGSAjAB4CrZBykxaaGJLylRZlRMuHCBnN5WsOccfDQYMNMrpmA6SQ6oZvqqsqJ3ze8FP7CwDvHIfHQAdVFvRlF4i6KNoBzvwVNLKQPafff402BNUJugxPCkISvGQZsZFaonNlRvohCsC)oD5cfeMEXXJgoDMXtNjmtMQ3kLkeFlM0PINiX5kRbJpn(9kTzlKLrITeuZ5cCWC4wG05v7pEIu9nAI5llz9A5CrobTtxwc3BMe6LvuuPdw61zmV)qYCWN4kSgUIZveQ0r6ZugloC1xzmA848c6WZAExZX6TppRKG5GzpOxCFNfYQbtRJfFf15VkKRisYsWL4kBkYgNmMOQbXdQCAZskk5TefmsjwbP(q9GRakiQxui0HX)9n3CoZRbflKswqspx04dNjotxcC1G6POJNuTMZHlcuvIvCm8td)CVVflOIhBWVxS6SoohgZGfX9rYI88ZLokt84dVGUC(jnl)2sTBV4gDXjpAMtDSeYXtC6JZOLNve6ybSKGHcU0SXodiHhgCSaPpjycAIikZY5CrZhd99fDK5Un01bqDEvOJHocAV4HkNOB2j6wCIEjVY9JU1hg3nVD0(r3jdvmNZuTfN1DG2NZzXc6XjqMSOUrha9sDIUl0DJoKZ6RhkHYUgfxexr5zjyvOQGMUqEnRManCt1fDpi3ippXvGE53h6ErhbJz0y1jsji)SQY6uPfaDuN54Hcf51hihntipAWXMN86KxKvtlBoD8yIK(EykvgRa7KHM7(ZPjq4dyIXm6aXqJTh0jZgbJYZVh0yoJOHvbjxCoD404hi84QSkeqNYUIMi8qPYKmsIWrpw4yXgiZaJfpxjbvvzvE0ovTk)85WprosnyIKi(WXqJReEaI0UaBE49hMJlPK29FCi7eHj6C3)qqob27pJzD1UFtS84uy84rOIVdPxKfD9Oxg6MCIIIf8ymfYb6gDYWkQWZ6GzkboD(yorVITIITy8c(5glT)eWIfzYBZzK6kDFi)bu6aRzLxfIB4AdGbi6enJR)To)iD0ahC)m55H5NOp0TU1zNKvvGf3XNvqkQCPCS6mtYkwgc6swPRJCe188ycyO2E3pAcQDLzvW8Rqv9kO87hXJBbhiH5lXonVjQAIoDtQ49EeKiPkaujuE0ECIcJIm3HZHLUQJxby(3tdWO2fz5oDzSDfUHyNEl1(HG0wqDE7e8SYUQbFi07ekxjo(f1ikyMd9zRVm9jJ5NnldJgMbxhmlwMgMaAEW9GrKlJF)lIfxAPLlRMhEWB(k2cbKAlLUrNOraO8oids2DpS5gClI7mMdjM9SbjJgHiIhpEntDGkDUcvF6uw)QnXI6uJO0r2wpgD0do3nQ0jbioUgplN8uNWYG1808ijNDFMTIsE99TpLDuxzRzIr5UQw8XnTenE1knohmpMovCCfv8feUiWYMnIn1xKWJMjPYoPzITvjt4EZFCcinsy8ppNzZkmnKJM5dSKjn0jTEvpl9(erOqHkyfFt9AIukYWjhoUYT1M3nZmYnC5s5GQixQyUqsbTgsmFowdjxZwwGMzEBhECmVvBITRVJ(ufMX1iLz5i8XUYKPHwW(nDjAEtHvsjCeZECRlwQA7qTWLC0mjga)EVJ6AblkxL91M(cfaqThXuquwwTb5AJVcKNfXZHDUutDrZXYjXIjSUj)C7AjloQHSiTUUWOxjpQtWceH34kMVv2eFm2KelBLXyMTtwl7gJxIWXrRKDoyQlwVHtKa5AbRHEC1u6W6Iy1OWTBslLpLdV(yiPuJCB1CSfF3i2uViwuFooRvU18PfRI1BGZA9YA1DrP5xQ(Em2ecZvt()1l1yU8yYTXRqjD9uVLuLDGPScBXorjR4v6ixv6iREi6trz5xG6ghLYbGg8nHYKLALLyDIhDkIbk0OK0LP5sCWAcj5PKYIo((rNaDstRAlu7gB7bhdDF4kmjd23v9kz9QmPs2zXOo9kLyLY6vhkLDb9PWglRua7Tf2Yj96SOGzBYdGfmXOeJ5yZRQfH6yR20xJA3ilXKEcLDy52FAb9YuSe1g)kDoicb9JFVDq6w4QLwN4189GPHlDpeqaXTal3miLmBDntv)eEL8np(kiHnlFoBQAlz8SYyxOWoIP5eLfXsD8TgqxRKSSoFkRAGh(iC)9jOQPZVOv9YlkOWtSeHUF0VTYoQj(S0ipxTCIwV93abMnVCjfs7YtSGFLOzgKKV3aeBa9ss85a9kCG4UsNkDuZeqnurSfpASPsLskIAWkbvfKiUcc5NN(osW85gy40del(IYQcyjhThTq)jzg4ujhot4eMOYPTqL7XPkTEqo(5omsgGui2rrNzlivBBMinEewowMhnjanf1ShA6v3s3HRziVkhgAIUcsTs9YST3rNwzpKepylDOzQwjuf0eoQ304tNQX7)QwDlEOxna9AqVw0RJA8c96bOhanl6nGEq0B8bqVja63b)(oh6nJEi0Bbd4ERO321Sf0B)Ppb6DGENO3fanp6DJEpO3l6HXf79HE)OFxa6r2j6rXf6dGPmrFWA0KOpeUiFya6JKf9rrlG(yOpoU9(eOhJh9jXYhUTI(9O8oOh)Ppf63NYSGEInkBc6tVsIe0Fap6ZyXtG(dTOhq)rnWlGwSrQa0NDBS71Kba95YI(8zrFHSO)4SOVyw0FIPs(Wn4U(Fk6lr06(Zm1KrF5wRYH(Ayvm0zr)fuTj0Fja9xLf915r)1vvrq)na0F7tpd6Bqr9BfnZt)QSq5OVjfuNjN0Of7jXXsoOo6VJh93J(hqi03gTuvKk6FSvy0RFDGrh0eoTvmC60n5jg1TucIQkIBjST78yfjBFs7kab(159wfjJF)6jqRGYpjUWEduxHBgllTky5bTWYk7yFn8W33(SX2Tgytb1fTX0kUxHxfn0ATWdoSAGYbop1QM)iyDK61z(azPQm3e6rl2chAASrmZe9wS0RERB5cuXY2kUNERxb7fB1CGlu10VERALr2yTc5)VOQSpgrz3uhVbfCtL)7JM2OfBS(7qR28SBQCjpVZh)cxP)fzzQZtaQdy0z64TxhnsdmtEE1H17HV)tXEHqd8QVIl28aZRqwmskUVrlu0(uWa16zEc0erWtHM4QAX09ST37TXIplEcW0NfMDWtByhoNn5aTWxGCdDVAkO0gRrLCSTrSUDDQ6k3r7RTT2Dn(G7P9vyLmrRxIHwRk)cecRgHadDj2VeskCvesbIsG5ItrsdfOjob5I5IEQtl69ejZS6CcUO63K2N2h)c19EVm99(PC0WR(sKzruvNoBR6XFLQtfb9NBo1d0xTLZ5a)guW2lEAhOwNjqacHdb4GPO2jACcdezGzaNRFWqrqd4GXTbby2o84gMQJmWUn01Dnoi0CP4j8DXw0B3XkNmKMpptWsffe(smKedphCscYzrBWZPwje6ZApTrNiUTFbpuJ(EBcdVoSOzTXkxYgy3ozEa1nUwOBL0Ijgn1WvIT5oU(9ThPw2KLKSuPS6YQ4PrnFvWBw7bDg6p7YR7lkJ(ReC7OTd)fqUYrMKluhDyvs8tswwNmA)JYPXJNZ6eZAhPLiK2LkaAHac3kOFe9ssvJuGLdIEgV4AqlYAsA5Sz1apfNAk((927qzcUHexDSQIl0pGmr3NUQKb9dXt)9IUoX5vEqhj)3PJKO)d0ZG(XRTrD0)jUS)xR9b8RUj1dU8hJTCuV9fny8n449TIavJinAlpUYoSdOwc28enJ6I(SvGEJrdWyTy92hluva6QpbvODKP7OAJiuaMtuwUKYUQgAy4PlpjuIItR90yiRiZu681khjWA51DLEkw1s1k3qYKiYQcvULw)4ndj8buUj7BhdwswLvuygbPIUyKzvrxd6AjoVC9ODG6alzVgawYUl0U3kr6FdME7Hf6yjDdXPZEc83gQR92PBBB2e0fbhDWSTWUTxKpK)TV(jonL9lz3tIGh11SGfezofLeBXtMS7KQ(oMyQJkrCq6Oor97Gaqh0jbvm3TVGqEzjZqPCZxbPNHD2cFJLYlllYjpLu6PeWwQpR9pjr9LFLHO8XS66m(8f0FaSOskPKyLS4XHVulghu7pmZq9nAI1TI4l)(o3eqOsysGd1ziyfE6SnW4)Jo4tUurr5P6tfEMYqP8vmzrJqYJ)Syk8JkAfUf(5j5L2mYTKltqJl9UxKCT9I8tlt1fX2b9E2b2XmihKCOpXm8c5NqcQP5yw6pXE4SuUY66Ysjnx(sABLqaxKoOppZqmYp3UPtTOR9PTgMnba92PViTAb0iE(FBOhLmZHQTPYgPnp7adpCCMXJKmtMKdrB(BWS5XSvZJ76MH4EjZ)ACzRyiz9ZQra1H1E7WowizTcn(4qmwc5Z(xKvx3bIzKlmkQDgHGFXAR)k01DxxjgV3TNqrsgUNr6ompHSg)FrMbtWqxJ3zTrXzRgm3)BLDzNjz1EJjOrcLkxwcBk3igGxCwIQo2byt1uIUNltsAl10MY5MxroeDX6IfzonD28tOHNNz9Rsvw80mtvTmldNwrW0uDgHsqRYwDoP4ctcXZH8CickIWl9kCm3TJ(11R)AaUISgaWQRQEySQAVb7fNgQ3EOPbnaownnwdWvUbuwnaBTM(5HFsdWlYuP0aCv8gGTH)Z2DyaCUBdWvdmaxdvQzaUwScMb46maxp(h7Wa0HbOt8F2j)Md42aSlkK(wQcPna43G9GFdmP5na3iEi8Mq(ma7DDamXyhtyPiXI8KCNyW45J7R7sbSGLgGBHcknaVKAWXFIb4w3SXEoVqriw2XECVbd6g)NEJekO)qrcfYDqgV9ekKpgp90BGGmEc6lKBAQhAQxgVbD7XZlGG20rq3ngavQNdu8OhBmo)z83oa0p9IaaAVvjMma3wliJmaDDHaXgUj)f6XxBiEAlqyWnpGWLD2ETbx3WMk4Q)zxb46BTfY6uC6(v5evIPFSJ2o01)Zfb01bRdD5cJU8TQMfnrFE30qFFhm5M)iEChO3iE87ZDeVUdrt8eXxpEdgP3qEChjuV(WuF96NCLFpmEd4nuiclyVEOPExVq3NFZH1cygXiiK)a8d5TWjpUwM2HY(FFwGdZ3Mgk6XXafF9qs6LKecNGrl4epy7Mbi4Ma9qscss6LIAC)cOM1iQ5KyuZXRivMxTKNj46UDOMF2ZPqnNosGabDZ41p23kAAaAAp00GupP8DE9h)3mHjwBLIvydJPCoFdgxuO7ZCM2Ht()Uu7IDDOGVbMNWRhsIFssascHkHA9XlHpXlX6JpFKe)KKauceQJ4927laqwRaeI1NUN2R7yPsC8PNuOD4JF(Lr4Jh3aCNgGUnahWaCqdWl1aGfS3Tb4qgG7Xa4(fK)Rv5pXoYXsDgVElWgGlTu7K))Il)NbvDts)0Dfkue8SVdejKFS3RyRje)mcr9ZiuVVWCX30Nl(BeJKsNmL6uA(h94J6PDiPF5LuKK7iKqM01OPqB5rQlCiQqPzeGCKiQaLCLsvUKIETOQeveYQMNvtxqQyTdpvs5OUgsqJCYDQDMahqscQojRo0Ur2zTabvw0oZQhiWmQqOl5c0q(uTXQg3MOrDjl5AiyTWgfHvDcTjeKC1DA9Y4hf3bQ7Cos35ZUgOuPYsqAaBikmFnAyUmL2mAkS5Hx7gngnlMxwSCjP0KgZb90qLZCXWzyffkkHoIQMol5KXronuKqQulyzQMN8nywAKK6ZXSyHHv70bpn2p78SCvKyljKNEier7ERr0Kv1rbNVOQG5XZ4QNLCjjqcDXeJruOKG(vt2i2jixXVCEzj8JxsVp286YQ5ychBGrtNtLLtOS2dEni)BFESS0mOgp4ESrLlBpigweQQRTqHYIIrfuZlIFtTIC0iasmIUoXnqSPWqDtJEXw0V)065KZWpgxY5Ud0VgC(i3KWsPVEvEPNSl)URUf6m5LicRHZQ0bnC81VdhZQSNg3XJ2bVVZ7TwyFNRdgDv28teHC8ymBeSIauviFAE5PskLDPg(5IA0)IbYYvH8ompDx9pmBj42o5HrUyO)06m2DtrTIKGl7DXog8sU)bu6K8CWigzvizVSJLQWSlPIFltB3Ck7UrvtO56)Vu1JyaPq0nemPRygpB6osG2BYQStY1qYj(S(IVjXYFWAS8wS4Bdl52btkHPHI1Z1BUv6jP(PC(yBcznThqO9nj8xlCZVjtU5fONMq6HABTZttoeRKJp7ay9dfx1oClKFRD)S5eef0RmEomUxTSgp66naVbthelCStm4y9ma7ehD6vsRZBRazaewvE9gJ4)IAIy5CozDD5s0TqHp7O)3mx)C7yE6jiLgZqnSeLCSkPrMe5kx(YA4gihTavOdTKNG5VN283ptNEq5bu4an7SDwHB7DonyE6XuK0QZA3QKN9s4RL0iNDCYTu6W(EzSZg)ITKf2YmJS02M2AzxNU0AZ8sIEqW1weYxDFnQhfAaE4gC3W8KgzU)mwnm4LmNoSa2gG3xBb0H)Un44rviAUj9mspdLtz0HAxyKmaNEncrnapk6zmaFGvhyAa(GgGpePN9HnaFKQWpdWhTEONbybBmNb4Jza(4KwYa8jmapgUTmaFsCp(t1eYzTymOHyfGbo94FjSr188qnt65LmPNT8Ny9aQo4AhuvDNgVry2wdED2GW3a8(v6Uzsmkd)4sKt0hMFuTc2naXCSydr1qkhi6yfIM60c(KZ0wYSjEEcsPHDdMYUByRoxZpGZwF(K9TN12fJE81Ay)rNf9uGvFZJnhwEpNb4nBaEi87YBXa8wjTIb4TTTZ8JjJaVDtxcmaVddW7exI318vDx2a8UBYmUb49GlY7n7ggLshNjjbDSHT(A6YIKSE9hWXLB83e7UuCmLoBv3)Z2W493wySiXcKerlUgio5jIoy5OzC7E0t3wqS4ZhbXpRSLgx)SH9SzWgUgnh2G)DeOuxRMBDCKz3mEj8mqRdgXddLmypkP8OX0wyuPNpA10NVEd5Xa8egGp9fp7JKc4RXTQ8ZgWI8NpdLncl0vHq5cIcfG1boMr)aEpDFAfcDG2BOu65aGJ1SZ4tszkSGc2wIsOSJOQYtX5kA1p8ue8XMId5NxFNUK5rEbRZVBBpep7h95ZYq(UtHN(ttUKNiS)(s1)K9wAuL26sU8LX4NhP235eRp6y0p9stejDMrhUHtrNJMoYDNR2grSXpykgGVkAILi1F8HIhT)Wdpq022qgGZ2yDJ0x8WmR4e8f0CfgAvfwIuHw)Wop1unAYH7B00XxrD8BXOrwqVw(oYKmzMvulFwUG1QNu6bseF4OXx5qH9mwBvhlv4Od03jxpvvzhPJ2FYKjgFaYxelMrtL58u9l0WqS6ocFYBULocpR9c72w)GR3zgChXa81iTXx20vMZzUQqvXPBEo2qf0vpOOBSLW6XQrQyYJKbxGpxJUjBa(8eFBwKymdpEzZ0ya(kRGMP0XMHXx8KEfL5BRzkLNpzMYAnJEeV943BepU96MK4nsGaHcXGVkyVm(d43xVm(841RFgpHce0pJp)(d6zdU5A(naRzTcJPiCM8NuyKbHkD3wtzN55aym3gya13gTLhY(0gfnw1ZOudzfxsLTi0(ebrZQXvI3o6y0BLEkHc6LGsC2HuJM7W0PWENAM3MCgqSdKLz7jRMNg8lZYzhPm69SPdB4PuDXcQgCR76kRl6wga1TVrdTLbqZH133pdqzsYKRmiwgGPSJFLby6ArUYaubT7TAaMbf0a8QUAdWRUlMygGxd(QxlVb41zaE9gGhGgdkdWS1c(uTt(LDOs0mapyZbEcSPe3POElLhYmSCKWEjtA68t4iTsZzlqwEXWItXwrZ2SgMUUvM1wY60VzEc3wZ22A3b8(z7j0hOjsn(lyREHxpbv3a8DjH5X6Z8AwtMOrMbEMWLpaRC3XAltKbMjINYefEtle71(AkTGSKnoTPV)enVXK)(n9PSWms8R(N6c(6Ju)DSoD2AzZf)U6ROfcDxLAjcnNjr3AhAUja5wNBjK1cqR2seWFHb2maFplqw3WadlLpEKX4LAli7F6IaiZ5gu2Ba(bvD0(WTuEBaM)5lY61fPsn5CPr6pvLPIv8O8hTTY5VZLA58WTvo3)SToYcvDjzJgzHlTsWM293nibpwLEcmDq(PQuiCBLG)ZxElbJ8uTucQ05k9F852YsChDvLLAPtoPiSGUMA7NKXtD5TS8bVZwklpxt(6)CB5iUtUQYXt1Zutuj2ihnKS)2kh)xU8woUkltLb4BEzUOJUyswrFLUksTn(Rnj88lCMtPmuPjZfpFBfE)RxEl8wLGTBa(SpFw4nIBPrd0p7e95g2wH3)2frHhz5vIel5XhgTLdxBpbNAYuUYq(udb1DfdpLKABz34sWsvSV3Y1TTFjFJIA1o41aOETBARXH3mjt9S3QCSyDdhTy5n42C2xTdDgUaN(KJ4l5j6DTTGQFXx0wiF4WMvqhwIUbwLoM5YR)qzrjuUXwS5vhaxYdyoDal9o8i9zPBLvR2ilYveY11wYIVGb4NVnPrQ1YgGFrZnHb4xMLOO8RAQAV7NE9vTF46QAd8zwFv7tCbvn094LvQYkyBY(SfBZ6BbH)zMmn9owYyWJL6uU9uPTmn)KlImnR5Gfq204juT(xmN9Y43R3qEP0dpJxpKD6LYUOB2AxK)zqYv6Y5ZdjFPYr3oUJVy1Dz9aCzpp)lIYZ2wmgynkd3tReGs9RK(0f9xrsO)2ka)PvfGdCPta(K0LBnQOmEcqznj6)5Kpqe92JxF(cfXJ7E8gjGNqbij0JuTxsIp6zHmeJNqHc6MM6HM6LM6JM6NMgGESADVOcuL8DYN8DBFw2cfG51HCMhLo8q4YKTBUGemLzHY(C(Zw3nTgdE0gcNfFc9HC7BeONHD3wCwTpGeB64Sol1jxNCZ9sA4dw3PqVm0VYa8gO(p9ZS)2Ur(UU9T22L3Fx3WUJSIVLB9Mxz64Hf6pCX(BX3YTo1y8DOahYDNtELVM))
 ```

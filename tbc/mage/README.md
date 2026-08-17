@@ -1,4 +1,4 @@
-# Mage — Arcane & Frost HUD (v16)
+# Mage — Arcane & Frost HUD (v17)
 
 Programmatically generated WeakAuras pack for TBC Anniversary (WeakAuras internalVersion
 45, tocversion 20501). One import covers raid Arcane (40/0/21) and raid Frost (10/0/51):
@@ -38,8 +38,13 @@ full-height waterline. It is 2.65× denser than the cluster it replaces and it s
 crosshair instead of 270px off to the left. **The 3D portrait is gone** (its UID becomes the
 plate the whole instrument is read against), the threat *number* is switched off, and the Arcane
 Blast stack icon leaves the buff row to become the fourth rail (see below). The 80% threat alarm
-is a **red rim**: a 108×43 quad, 3px proud of the plate on every side, drawn at the *bottom* of
-the stack so only the protruding band shows and nothing is ever painted over a readout.
+is a **red rim**, drawn at the *bottom* of the stack so only the protruding band shows and nothing
+is ever painted over a readout.
+**v17 makes the Sill long and thin**: the rails go from 100px to **160px** — 1.6 pixels per
+percent — while the lanes gain barely any thickness, so the strip is 164×45 instead of 102×37 and
+every gauge reads by *travel* rather than by bulk. Nothing is added or removed; the strip moves up
+5px so its rim's bottom edge stays exactly where it was, and the PvP column moves out to `+260`,
+which fixes a 98px overlap with the cooldown row that had been shipping since v14 (see below).
 Spell IDs only — aura triggers carry every rank ID as
 strings and cooldown triggers carry the numeric rank-1 ID, so the pack is safe on zhCN and
 any other localized client. There is no custom code anywhere, so the import dialog shows no
@@ -47,6 +52,130 @@ code-review panel. Import `all-specs.txt` (or the fenced block at the bottom of 
 whole: copy all → `/wa` → Import → paste. Heads-up: the `/wa` editor preview force-shows
 every aura at once with placeholder data (load gates ignored, identical fake "55.1"
 timers, both specs' icons visible together) — judge the pack in combat, not in the preview.
+
+## v17 — long and thin: 160px rails, and the PvP column stops sitting on the cooldown row
+
+**A vitals bar wants to be long and thin.** The fill's *travel* is the signal; its thickness
+carries nothing. v14's Sill was 100×11 rails on a 102×37 plate — dense, but too short to read at a
+glance. v17 makes the rails 60% longer and the lanes barely thicker:
+
+| | v14–v16 | **v17** |
+|---|---|---|
+| rails | 100 × 11 | **160 × 13** |
+| threat | 100 × 4 | **160 × 5** |
+| arcane lane | 100 × 6 | **160 × 8** |
+| plate | 102 × 37 | **164 × 45** |
+| rim | ±3 | **±4** |
+| number | 11pt at x +32 | **12pt at x +51** |
+| ruler / waterline / pip | 1 / 3 · 5 / 7 px | **2 / 4 · 8 / 12 px** |
+
+No aura is added, removed, renamed or re-parented; no `uid()` call moves. Every trigger, load gate,
+condition, colour and spell ID is byte-identical to v16. The whole version is geometry plus one
+column move.
+
+### 1.6 pixels per percent, and every mark still lands on a whole pixel
+
+The invariant was never the number 100. It is that `railX()` is the **only** place a coordinate
+along a rail is derived, and that a rail is a whole number of pixels per *five* percent. Every
+value this pack marks is a multiple of five and 1.6 × 5 = 8, so decoded straight out of the
+shipped string:
+
+| mark | value | x | width | edges |
+|---|---|---|---|---|
+| threat notch | 70 | **+32** | 2 | +31 … +33 |
+| health / mana ruler | 25 / 50 / 75 | **−40 / 0 / +40** | 2 | exact |
+| mana conserve, dim | 30 | **−32** | 4 | −34 … −30 |
+| mana conserve, lit | 30 | **−32** | 8 | −36 … −28 |
+| arcane pips | 30 / 50 / 70 | **−32 / 0 / +32** | 12 | −38 … −26, … |
+
+Every width is **even**, so a mark centred on a whole pixel has whole-pixel *edges* too. Two of
+those lists were literal x values through v16 — `{ -25, 0, 25 }` for the ruler and
+`{ -20, 0, 20 }` for the pips — and would have stayed bunched around the middle of a rail 60%
+longer without failing anything. They go through `railX()` now, which is what made 100 → 160 a
+one-constant change everywhere else.
+
+### The lane stack, derived rather than copied
+
+This pack centres its plate at local `y = 0`, so the four lanes are walked down from the plate's
+own top edge, one 1px gutter at a time — the build asserts the arithmetic, and the numbers below
+are read back out of the decoded string:
+
+```
+plate            +22.5 .. -22.5     (45 tall)
+  margin           1.5
+  threat rail      +21 ..  +16       (5)   local y +18.5
+  gutter             1
+  health rail      +15 ..   +2      (13)   local y  +8.5
+  gutter             1
+  mana rail         +1 ..  -12      (13)   local y  -5.5
+  gutter             1
+  arcane lane      -13 ..  -21       (8)   local y -17
+  margin           1.5
+```
+
+42px of content, 1.5px of margin top and bottom, 45px of plate. Horizontally the plate is the rail
+plus 2px each side: 164.
+
+### The strip moves up 5px, and nothing else moves vertically
+
+The rim grew from 43 to 53 tall, i.e. 5px on each side. Below the strip is the buff row (icons
+spanning `y -136 .. -176`), which v16 cleared by 4.5px; above it, in the band `x -86 .. +86`, there
+is nothing at all — measured, not assumed. So all ten new pixels come out of the empty screen
+above: `SILL_Y` goes `-110 → -105` and **the rim's bottom edge stays exactly where it was, at
+-131.5**. Every clearance below the strip is byte-identical to v16.
+
+| neighbour | box | clearance |
+|---|---|---|
+| `Mage - Ice Barrier` (buff row) | x −20…20, y −176…−136 | **4.5px** (tightest, unchanged from v16) |
+| `Mage - Arcane Power Window` | x −65…−31, y −173…−139 | 7.5px |
+| `Mage - Icy Veins Window` | x 31…65, y −173…−139 | 7.5px |
+| `Mage - Alerts` (10 deep) | x −172…−128, y −66…450 | 42.0px |
+| `Mage - Cooldowns` (10 deep) | x −178…178, y −222…−190 | 58.5px |
+| `Mage - PvP` (6 deep) | x 190…330, y −290…−26 | 104.0px |
+
+Scanned against the **172×53 alarm envelope**, not the plate — the rim is the widest thing the
+strip ever draws and it appears exactly when the player can least absorb a surprise. Dynamic
+groups are projected `max(children, 6)` deep. **The buff row does not move.** That was the rogue
+pack's problem, and only because a 316px rim needed a 110px corridor.
+
+### The PvP column moves to +260, and the binder was never the strip
+
+Two separate measurements, both taken off the decoded string:
+
+* **The strip.** This column's widest child is the 140px `Mage - CS LOCKOUT` aurabar, and the group
+  is anchored `TOP` — which is horizontally **centred**; only `selfPoint` LEFT/RIGHT hangs to one
+  side — so it claims `x 80..220` at every depth its stack reaches. The v17 rim reaches `x +86`:
+  a **6px overlap**. Minimum x is 156.
+* **The cooldown row, which is tighter and which v16 was already violating.** `Mage - Cooldowns` is
+  a 10-icon horizontal row spanning `x -178..+178` at `y -222..-190`, and this column grows *down*
+  from `y -44` through `y -290`. At +150 the kick bar's band overlapped it by **98px**. Minimum x
+  is 248.
+
+`+260` takes the binding one plus 12px. **That second defect shipped in v14, v15 and v16** and no
+check here could see it: the only geometry proof in this pack tested everything against the *sill*,
+and two flanking columns overlapping *each other* is not a sill collision. v17 adds an **all-pairs
+column scan**, which is what caught it — the same blind spot hid a real defect in the rogue pack (a
+140px kick bar drawn over a weapon-proc icon).
+
+| pair | clearance |
+|---|---|
+| PvP ↔ Cooldowns | **12.0px** (the binding one) |
+| Cooldowns ↔ Buffs | 14.0px |
+| Alerts ↔ Buffs | 92.0px |
+| PvP ↔ Buffs | 125.0px |
+| Alerts ↔ Cooldowns | 146.0px |
+| Alerts ↔ PvP | 318.0px |
+
+### The canon is rewritten, not deleted
+
+Every literal in the build's `CANON` table is re-derived to the new profile, and two new proofs are
+added: every marked value is a multiple of five and lands on a whole pixel *with whole-pixel
+edges*, and both spellings of every subtext offset (`anchorXOffset` **and** `text_anchorXOffset`)
+agree. The lane offsets are no longer four magic numbers — the proof walks them down from the
+plate's own top edge and fails if any one drifts. Both scans print their full box list on every
+build, so the tables above are transcripts rather than retellings.
+
+44 auras in, 44 out. `changed = 0, missing = 0, parentSame = true`, no allowance list.
 
 ## v16 — the rails were filling the wrong way
 
@@ -1343,25 +1472,25 @@ What changed:
 
 ## Layout
 
-**The Sill** (v14 — ONE 102×37 instrument strip, centred under the character at `(0, -110)`,
-replacing the ring cluster that sat at `(-270, 40)` from v11 to v13. The geometry is the canonical
-set shared by all seven class packs, so any two of them can be diffed and match: 100px rails,
-4 / 11 / 11 / 6 tall, at local y +15.5 / +7 / −5 / −14.5 on a 102×37 plate). Each rail is a
-`progresstexture` in `orientation = "HORIZONTAL"` — "Left to Right" — on WeakAuras'
-bundled `Square_White` art, so the value is **length along a 100px scale where one pixel is one
+**The Sill** (v14, resized in v17 — ONE 164×45 instrument strip, centred under the character at
+`(0, -105)`, replacing the ring cluster that sat at `(-270, 40)` from v11 to v13. The geometry is
+the canonical set shared by all seven class packs, so any two of them can be diffed and match:
+160px rails, 5 / 13 / 13 / 8 tall, at local y +18.5 / +8.5 / −5.5 / −17 on a 164×45 plate). Each
+rail is a `progresstexture` in `orientation = "HORIZONTAL"` — "Left to Right" — on WeakAuras'
+bundled `Square_White` art, so the value is **length along a 160px scale where 1.6 pixels are one
 percent**, with the unfilled part drawn as a black 55%-alpha track on the same art so a partial
 rail reads as a gauge rather than as a shape appearing out of nothing. Behind all four is the
-**sill plate**: a 102×37 black slab at 45% on the flat, uniform `Square_White` art — no border and
+**sill plate**: a 164×45 black slab at 45% on the flat, uniform `Square_White` art — no border and
 no rounding, because that texture has neither — the SECOND child of the group, which is what makes
-an 11px rail and an 11pt number survive a snowfield or a lava floor. It carries the UID the live 3D
+a 13px rail and a 12pt number survive a snowfield or a lava floor. It carries the UID the live 3D
 portrait used to. Behind *that*, as the FIRST child and therefore the furthest back of all, is the
-**alarm rim**: 108×43, the plate plus 3px per side, additive red at `{1, 0.1, 0.1, 0.85}`, so only
+**alarm rim**: 172×53, the plate plus 4px per side, additive red at `{1, 0.1, 0.1, 0.85}`, so only
 the protruding band is visible and the rest hides behind the plate. Both WeakAuras squares are
 *filled* — `Square_White_Border.tga` decodes to 98.44% fully-opaque pixels with a minimum RGB of
 167 across its entire 240×240 inset core, i.e. a filled square with a dark bevel at its edge, **not
 an outline** — so no single region can trace an edge, and the alarm reads as an edge purely because
 it is oversized and underneath. Both halves are asserted on every build.
-Top to bottom: the **threat rail** (100×4) is green, orange from 70%, red the moment you pull
+Top to bottom: the **threat rail** (160×5) is green, orange from 70%, red the moment you pull
 aggro, with a white notch at the 70 mark and the alarm rim pulsing red *around* the instrument
 above 80%
 — mage burst has no passive threat dump, so this rail is the warning system, and it is the one
@@ -1369,13 +1498,13 @@ thing here the default UI never shows. It is party/raid only and never loads in 
 and it hides itself at zero threat rather than reporting a relationship that does not exist, so
 most of the time the strip is three lanes: **the threat lane appears only when threat is real**.
 Its percentage subtext still exists at index 1 but ships switched off — the notch is the read.
-The **health rail** (100×11) is next, green, with the percentage **11pt at the right-hand end,
+The **health rail** (160×13) is next, green, with the percentage **12pt at the right-hand end,
 inside the rail**, running orange below 50% and hot red below 30%, where the Ice Block prompt
-fires, and three faint hairlines marking the quarters. The **mana rail** (100×11) follows, blue,
+fires, and three faint hairlines marking the quarters. The **mana rail** (160×13) follows, blue,
 its percentage in the same place — mana is the mage's real clock, since Arcane plans its pool to
 hit zero as the boss dies — and it carries the conserve breakpoint as a **full-height waterline
-at x = −20** (the 30% mark: `x = 30 − 50`), dim by default with a brighter, wider line popping in
-the moment you cross it. The **arcane lane** (100×6) is the bottom rail: three pips for Arcane
+at x = −32** (the 30% mark: `1.6 × 30 − 80`), dim by default with a brighter, wider line popping
+in the moment you cross it. The **arcane lane** (160×8) is the bottom rail: three pips for Arcane
 Blast stacks, and the rail itself drains with the debuff's remaining window, turning red at three
 stacks. The plate, both unit rails, the conserve waterline **and the arcane lane** each carry the
 `inCombat == 0 → alpha 0.5` condition — the plate is a sibling of the rails, so nothing propagates
@@ -1433,7 +1562,8 @@ running**, in full colour with the countdown, and disappear when the ability is 
 group collapses the gap, so absence means available: an empty row is everything up.
 
 **PvP column** (v4, arena and battleground only — invisible everywhere else). A dynamic group
-at +150, mirroring the Alerts column on the other side of the character and growing downward:
+at +260 since v17 (it was at +150 through v16, where its 140px bars overlapped both the alarm rim
+and the cooldown row — see the v17 note), opposite the Alerts column and growing downward:
 Trinket DOWN and Will of the Forsaken DOWN (32x32, desaturated, present only while the charge
 is spent), the Enemy Trinket countdowns (32x32, one clone per opponent, arena only), the
 140x12 CS LOCKOUT bar, the Polymorph OUT rows (36x36, one clone per opponent, arena only), and
@@ -1582,8 +1712,8 @@ version: **leave the Update dialog's *Arrangement* category checked**, because t
 the re-ordering and the move to `(0, -110)` all travel in it, and unchecking it leaves the rails
 at their old ring geometry.
 
-## Import string (v16)
+## Import string (v17)
 
 ```
-!WA:2!T3xFyUXX59XHqsMcuYI3XpfLSeeLilpkjYdahUpOPKmaoC8ajoaWf4UJhflbwaSa7Ydy3L7U4UdNQSlpzfZ660yFoXpXUjnUinkP(JA7ZkkkPo2rxDvQtIBMCnwz9t(J4Y26i78rDztAABsCZ7mZU4Rdh4DhjvOKREEeUDNDMzNzE)9(79DM5DhIMO7SF6h)kp8kz4ZoDonf1Gkfv0oLdhoI7O3J6tT7SkYgAkflkKlOOuXCAcY7xT7X4li46jDfViFfbnxjKkw8Qzu0YjOfWQwu3rGIsZppVwoxjvukAiPQnxS851fmqzu5HkXq9(PvsYabHkYVwwEzbxhY1iAk6gzy1LOwfwrgE7v1ekiPiNSIQaxbnLYQvzzjH08c35ssY5v0kXBa5W5sShW6fieYXk8Lnev0IPsESUZmq)jVubNA8zPj0pNUbVMHZm5LKL0fDga(JHZfm0Kkuqqtp6H0SU8teWG825lRX7zzYV6QcflkLtF)D3BGYqHYOshnwGME4C6oVQE5mcZaD1eLZNxAULsf0FIKPsK0pxYApkUMa8iUeXdfjY1kRleAoODLGvdP5K5ljO7SAoHmqnq68AJgks8rgpYILLTAwoxkNK(flld9Mze8WxSOAx80RtYE(yk5e(CBXA4kuUccQDL4sLbjGRrkxSORjfLmewM9u2G9DViVSeBWSF8ohzzbEDHegGeRGH47cVVaYkYcRKd6)KCKImMOPladQ50xGKvsReFSaL4LKhbFuOa4JH7f7g7b(7UAnLf1fkMpUIKSrMGHIMme3bKYP2Lf4IGQCfHmKEnidcAY8fNaExWB9zxkVgmYaTkEdEhxJxoliGhHKe5TNjrqUqHIw1qj7mS8VT472tzPClD4c(U08gNvnzGH40ZYxuWrvqoWrHw62iNWYWGGJQKEKedYeOOcFoNlXEn0wl23vEymQMscERF4AQe(lYRvYfTX0Cpb0vmeQLTKIAc8gU44LkwlTrf4lAiYsBhwPngVmplL7VXuccTlbTzeCfrswqDFRXJmQ3Qy6xrGFW3b(oX3fc)UW9JVBrSZI3nE747bFV3j(D7eFFuvg8oCI7YjUBq(7eVlN4D7eVNOhcV3pbi7UF8(bap(bWpi(94e)q4hg7c)i4dKg)OoXpg(G4d5e)paFyCpFUTGpc(XXpXDJFscmQvOG3Rp4a3h2hGhWoWd8S4bDGhcFC87feL4tSuUE7TVGZipY5MFc8t7a)moXVphy)oXbCIdcYgxqNZX1meMZOSMWKA8QeLa1DfmI)XINmwGi(dEA)dpC4KHNieRJ96W79biDMvavWuguzJAwJ0vzxoor7gyjkiyaDZRwppKhKEXA5)ad2lmOO2DTesPaAh8gkAh4PFkoQ(U6oSK8jKmktvHOJFTmY9UDYLLrdtWxUz)Ch9E0b9bIMmLK00u0arhcVDnREjiVwmtrb5CKUQhO3rgoA)iFE8(YOQjaOC69WJpFv(IQI8XlxuxybBv7UDtlYQelQDbeoz1emesPPyqZkQjOYuQhpmrFnpFwHZ7pxUyY6NFsb(P9t4mp)yc5K4pFswRw)8mUOuuAOJAuGNjHzcCl5)WaALJ2aDamH68gKgOG4c1F7Nyj(tNpEOruMm)KLO4eafKruqQGOXKzO5tqeh4hBrIKlBrED90lrUusMAlj9cKB0btjIGuggen2dxPYGnlNAw5yp4Ppe(EshqJxcyLP1WHYOdpSOqGX8FYq4P3dwnDaG5plKvNbi1fCXmCGPoJkP9Ood8saBugvkXlN2JHGmaTMfErvYdm1PZWUon(yP5MvkNH43MbHXJHJI3ZfS08Oau84zy0ewAG0MoX6tAkoQMsyZLrDxeKQRGI8eZEcAs6gsz1TvIFUwkBdWq8Kecbc0Rpc0dFwgQdpfHF4CCbIekkG0oYH4YkkKD6rW79oxygEnjEakUGKCqLsz4n4MHVyzb0buupWt9uAzf5LliOV)dHVmL7CbvnIsIrfm)HWVFOgCG)alwIForwV8YD3lPGN4PWlqkcc)cy(npJsQwqQ40TbVfIWoY7aNreNLGTcm0jncnHQ2mg5TXwyHtJZdiQjWfsJVirKJLpewbRYac4lrtsJ(BLV5voEgqkPLQcI935qWByj(CxSSUHqUX4NBR1VrsERyNXVd3(aRkWlsDx1r8exRiOr5CIlPtS1X0Hs3yEgrbCuILho9I8YgOfaob)eG6hCpq38QWODbqVtpHszTSch5b3YwjDBkydKOGeolTV7)41eg4e4lFGbOsHN2skWOL6Nsl5a)cxlFT3k1TRAfLJVaKm(YoyYERctk2qeiLBpSFHQa)rRvOLySNuqt7f)pZrUY(aswO7NsxKpNYSN1YZYfPPr(z5dwJd(GhuDhnK36ogQ(e1YEkM)J1z(tLtil4euXuarzwjIpeORYQeBhwc4F8KXu3jnrWdtfIhtzNKO8gWpC71yvR0Cc5OjE5vyUpmfRPcsya7VmntejVu(kyFvzmve5AGOXIgs9r6qdKLqMOLlLrqdVpnWrgsgTgxyVm7XLQ00ywuiJ(d4GmWpGphlAv3e7sJOjnVRZuMphXPkxjt2un1uZEf6dMf8wIyBDHjTUyLAvg1t1yJNmsyOtSJgQglNNupyh6yuCe1VsU8fvu0AssB1oq1FxKzaS7vAU)YgxNbKBapK4v25kwgjhZYWj4YaLiRkrAMsL1OS9xGZ2SYvTsycw9K2YbWuLalSCScTVQwd7q2u7Y6IHRBJYUkSuvb6Mk35YwPvFEwmd73vpyH7EzR3HvBcizwPXMLGiB4eUpGTXE8ZdLBttjMjlq)MQcLH3DJKJQ7a4Q8BrlrzPev7ktnkO69icbAv6COO0miWolHvumnws0IBS4BgPT8JVjxD)kzwQIJpdXoexAIDPXXt0oNJoRyRTnjzr82VMn1M1a0ckG3)WmY0bdv4NNoJT6Iw9skkgIXTkr6QuUYrK00nexYQCzlkPksj8bRWQ7OEx3cKDT6PuJtHmm6Z3czvkrCWsxKyoze8h9uK094JO6ni5hVoiMBQ8nu7QoZz9b0tSuWsbMCOZm88XcdkLYKjXiiUiTjse4zchnr4HdTKIMe41aTdvD0yCHpxSOj9hHjqNZsG(UDQrlNqoXRCC8pgc)Hi2EWxzR4)jGDM7JAl7dlI)NMg)reX)4i8)mQvc8pXABy4umI67emm8pgiKBKzNnxOxObd5Ra8azHgPTX8d4JqN39jy5)n)qnr8JnHm4TPm8rAodFW1WEWPUY(WFCe(NuDhhSPx4bpi(tWMqZpn(tI)u4)54FMlJ)zr4)fqh7Nd)Pbu3pp(FLF8Varl0b(LW)IQ9UkIPMQW2ywa)lHu756uQ6uA4Va(Fn(ZG)S4ph(ZdnIVCA8xeH)s7fVK)2Wj2CLWsex9k7e)Y1PWW)Yq18ki8VsA8RI)vHE0Vg(FRi(RqyACG)1TPxCpi(U(zqyH9I)Qusf8xte)BGF(nsv9M)weGZnAn4Dv1ajHnT)CV2Q5TWllI)3z7x3xhT(8rRvFSXZVw(g3s((hDD9Hggy(3dSt4xh)BsjIW)hq4VrA8VLi(3Ug7c(3bH)MV5Nh)FKsyCslcd3(OwgOoj5zqlkd8VlLHqOWCzIeRF)r0hd)7jIxb)Fc)7J)w43OMAp(pODk8NFlBcn(JSr04xaCDxvzwWLKl3T7oOQEnBnvAMx3kQmcwlVxyQShET0BO1CZ6E)siIkxdAGQpwNlTTsxD10J15cSAcInQkY)F90RJE6Rxx)JlofQr0bFU0lsLaejnIOrYuhv3fzcYAcxQSKMan3eNtttxNNA5p9BDk3JsuUbTgpS5ut(DiFnRBhoW56TNEgAGtnq21w3UL1h4vAOz)FH2S)VIAUL)D30Ds6QaynJHAnDF1woaGtXE9aGba)7FDWwClEc8HX3vKMMb)K9MF04N23q9p241Nb)EPZGFga1rxqp6Q2pTSYSY2OWlTkSy16zABhR287FxnkmiUZ(DThEv3DtCd1wmWt8ul34daNESfBupBBIrj9AljxBjKJ2jCEw7Lemp0(op2Jgz56Jv2GUcGz0fbxnNgFHaepvPJ3TrEyvsRvnmqEEy6hxWducAwwxcNt1QWzMXIo2zhUCKHNjyRch6ej(E2uauPsv6s4rxxP0nZt89BqKS92y77S3H7(ylQYg0(352i2)YaZek7062w)SxXK04xqDxWCfpQ7J28SkR7C7FjugpTTmE6yz822Y496xg7obZlB8ZC81WiH4QmsCFwEwswihQ4u4ExxMBABn9dqpp1I1nAv0ZQQcsc3snznJf(CT4lAetwZftYgOW5T)E96PtBIYBbMIoTLFM97JnN0MTcfjE8ljM1x8r9PS2wHAEtWoETTBkCwbxb41GjOQPU)M3ckQnyxtkjNtzw19wl)vCnHGKSU1dQVhvBJUhv3d6279OAzR(rGY5ZRV6TRYxKs(oLuWrM2hx72UQhTQuwfz2kY(GBH0Xaap8GvYQOuegnKtmRe4KYY23s2fxX1SNFro3U7Zt)CU92Rx30F9q)1lNNbC7TpoVE7RxFRRXMbE2RnTGGQFY2AyWrwObrkdjWC)mh)nwPqrLzhH4zLGC2kSv4GToKKhSmWtFYIwl3A6fijr38(4sZjuSk52i0DuE3lrU2Ez9wSGDrOoj1hBPXC4GMj7v3la5grAwtq3exAljPOu2PLf01DqFczFr17I(IcWcMGRSB6epoWbvxhZ1a1WIcqM1qTPmSC4OrdXLkqSKjJngDwb3pEjYSkatJlc9D2EiVc7pPuSwpsRBZwBTNTIwc71OmT1EpNsaeT4h3(oY2i5alCM1ftZtu1IPz7biWjq35hsuHoXsrdNOWzhU0ONPGiXnb4)cmVIsjQs)c2ykgRgHw4VwDx2jswtQHL0j7MtU0eBHvoJj6Htt07akbModrryFmhcS0zAjLDTQuiAg2(jcwKUQWCQsS9CmPujYA(7RXjocM0QYSCseMecGbDCLh1eTLgvvmrO0MOTU2Af7NZTNE7ZZ6e3BIU7gH6MiN24Bt02nr3d8UUxt072eDF72eTdKjQl2wI0NL)8MOUHe3POjAxW17g()90LjAV3KWGMO91cYZeD)MO9dVYhGwRMOheAHVh8JBIEia)eAJzPc6Gpmd9Cpoil1W8c9m7KY50hYRf8Xe9iuWJj6a1Hn)nMOhLHrcDlaJyIES2Glmrh8gbp03a3O4bMm(ESKZnagOJsDJSWleaW9UsMYggkYXyRU8Bhqe9(QRcrWdaIkJm6qvc1xpYYJ1jaXF7TaaHtlXDVbkOPm7bgpoERFg1DAz8nyrbEWhdDdj5c18Si0mkzPulUIRPus1qDp2MQzUN4ASWjseo6jBWveW1LIkzN2Ua2(VewMswlvuYOsRvgnWBoPqj703xdvweEz43eJ6pzYqCxZUTg0vSOUgluTxBWyJtI)jACG5kASjv3LDGc5N7KHs6k8yJnE0qu)IiG8xJopgMNqC6Q8zbxDVbDfAjW6u5sYjivgnKB6ldZkhhFrPcYyFAWuBirugI4ad46sDx)0yrmMqAQdBpTJfaHJv9a6nexS2(Y5QiZxsklnCkah5cOROzGp2If0KyBq62xGCjXhHdWnmxrPssgBNeCdrixjEvWIg86LngHplmd6mC(ho84jYOXNtQS(h8Eax4weK9mxkGj0zHbxPwmzjOzOxnF5IfdkPLfS3A7GgmfpWvS7Q4nGhGaUMHlpXsE65mho4fV4mUh)WBogjFE7)wPfkQ3uSfiWYcv6BpSqbE4KV(Y)9xKETxbqgvKj6KmFBgPNcH7BcHPgIBMoWfzIEIAKrT6bJ9sA8NtxsJL0lkLtiJcWuxIUYgETxkKwjOUYowKgcHee7k6gA8KGnI6pkEFzYwwhQGm0muH6ya5nWUFo29xOB3yEenIKOjNU7k5U7UNdTinsNi16c21k5DVcCTSojecjpsTl7NL0ozOHXcEn7estRBATLUz2ZhdGMORhY8cnUqw4)KUpb(pTH1Pc)NLUJRW4v6IdAizNoaj0iu7I0skiilOjLnHOYSXKtVst3UKo9pCc85QqQ(fPl0wu(scB7y7eVpo6TwHY09h0Y7ux2BFRRdtdy2Eu7MguxfKv0eiBIlWNiKEfnb(IjSRUfRzpyLAl6hjD6(ntA9S(YIwJKzNoT6ojxlqcl3gZ(ARmEK1LYifJYIfJ1uxC9O20MLiBv6pFFYGylQpKOgMeVYHbIv1dupE9i3RFE64vQOKWyqiv8YAWKsOQBNzQcsho2uctexy1QBI1v3EY1P6Mjkc(cMOXwBLmtuutumYarCt0zQPkzI4AunYeLWw)XeL0enoPMmrtyIMeQlt0zHrTP2SAbVK18QnjJ)3Hj6onr3LjcQ1TTcy0lROGodeVcdepMKojYaVolUZvaj85mra058WR9FOj6cKcyIsrMhh0BtZq7MiEtugihzxQH1uXe1kG1eLhYuHBo4YAt7(wpWS(KwTbMMirvxThpcJaPIaAFYgm0O)OJE6j9m)iU9nshrJh9DsOX67(LjJpMTv1a2YApVEU0m(2MIEG0Q7P5OjWEViaE91bM8l9(BlMCXAolFRerY2wd2eRFlasc912ajFK2djPFUkSFzyYbduHBKPJp9iLhQJyYJ9otmzS0necxjoWaK4HhNKS9enhmxDcT9ITfRTCJZ)6wiCZH1gZsJT1Be02lrd7T2SH2mqOOnoeqGF)xSDqUEAfY5N15trMvtQghoyqVXcoGIc)qEZxPZ0H9(ofONCBCrDG1TlQVcEFbKmekrkmbdcUwUV24Azyil9WOxTqPqDTm1rt4juNbxW(QTnXdwV(FdY4YCSp5aLYYgwi6QKk0vqskKVLe6JA8ZeH5elZFZAVb4LZrZjmGcVEt08WWXZv)1DJZW61IHLT3(3qa)n6m5iy9d2kwpC0jsbEsLn1jfkLkHHISqQEDZW59EU50fhCIHN)CE7io397KOyTwKG5942Jhpd2VVa97MS7o96XBVCEgO3bhKSEMdr2DhVdr2DNZ0gFp1g1p3yJmEKRN1(z(RwBR90vZAtr)E81nw0hL9Dih3(TifV0AYNFvzfJunfEimf5MtUroFYWCB0eo011rJaf5T92y4ZjRWRDYdl5B4oU8hEEBGQW6FbZoeqvVJGAkZMJ8XoA9XjtTdCtzjYyXDPBFVfb)EpRt43uwmR1IQ(1Gz9qyJ0CKVWA(0TUAzNlO3jkv(I8LgR3oYC6TgCzQB7GlFQ6FOqwFz60V44lhirYXJ203zuZct8lCT67IyZFMsMOpo(YRqkFQXcfCu)rdhSJvKj6NQ5YgyKq(5w1340a2HvXQlWkKc0(x21PKAbJfDKXteAvLXARhPRhFBBJCXILCvLYEjOA3Bkr4iHIgm0QhkSxd521XI7py4rMAZuu1DKi4OXIfjvyYgHWnE8KxNIVrDvCeIJGewIXdeKWGsmssTesv9sZSYvin1424R4NE8a4AC6UFdwfF5xSwMXpaDXdfbUyQ73PxS2LASReiVkwu7CM3jVU9tznPAGtQXjv)9ADs1V8lwJAYe9Xs3SfVhRtw8aFosiQKDAgb28927zM5CNt9sHk0r7D9DBmbw9aKDz2jfHmh5lITLilmn(fWz2qwgB0lrU(81N3b90FFEcaUi2lNxWRX(484Di4A3d5BaWpX(6Ba3RHFI2ZGHc1nrFA4L9V0ev9MoM(DagABgnZaPfI6EWHMSI4jlD6ocs9DBmiT2gTBIEC83ISl7ST6o4WTejFwBpon94KdvaYMDRK31ysY5S2zE6ZQfHFQUQNyIYLkbCStYd6)UcvuGS0U8fBSyGH6CUsiZR2CDzTQJnMyTn2PXwkDA2cAu9SRvp5afLKNUX810IPyVh7pXD0WMSBI6)UVr3HDt0aSnwNOcpe5NJV69s3e9ET3gDt0jQVb6MONcFV3Pj6PXhZe9mWTVVdWnSjYpCvartuqteCxi6wHBIgP(EGx7KeXETn0nrJ26(FJUPS93Jn4LgE2jmuvv5OwLxFCwTmp0QKDrXFXz5ROBpF0J5S9RiyJ4WooL0nCW0U5x5WwStlUHxaf)BMG1Ye9QKaJ36KwkTvC)nqXPImJMpdVZ2rEO)napKiLhY)nTa15i18TRQISnYRLdcaQjoiF9J37tSf8hWJ)OdNHEmsOFK(TCl8Rcwf7VwO37Onb(1JTUN1yl4SRY2TUATnBS22BlwtDhTsUDJUe0BKqhZe1ZnB8Z2Bf)yI(kw4gLcrufgEMGdoW8De38fUfGBCUHeRxODlJ1VMTOS3xDTwglltr)igNrlHZxtYC55NyWK9uAOZCoFDuM)fVLYvqv47ehHj6RzI(nUPtp0zC0Z9B2EkH90E3x(rmufm6SMOk3rcv0BLqtmEs3Dev9LEhjQsUJOQJ(kTNDQMhVxpC0QQ6x76q8zI(6B(6CnucmrV(1XqOhE5k3OHJst7gWTkGmiqwtGSXG(oR2mjLhV)ODeiV0Tda5JVAGCaIZoqzH7ExKN8BFt2zQgakRrOIyI0E7ThtRkSqAaEeYB5HZPl6T4qb7i84l)37Em1zzhjwlBRS7T7E7UZ1w2fxYiB0Stw2RGwhLDV8T3YUxEnIAMgxbK3wleF5xCTLHN19PkCQjDhQIrNNP7V8T3YWDnFBLHC0LR6T1cpONTMcVKN1Fp(0M2tYE7PJcVx52BH3lUguNLFBTGRdkDz8mMq0bgmHCYWDuU9RCluUrwE6adhBYO4TEXAFhyjjhKfcgUiPBTAZpPRjjhbZk5Dzik4AefnD(PfKz5W(dTkKSqPk2fU2r3CWeUIel4PJnEYAzmUsXkLu0ufDrsTRMko5dbRTFKwMO(V3BARFSNKXI)w3kix1UFpt82S0X5U58PtDgpEKg39SdeC6jwN7317NfdFMO5QhbFMOkneQEVwJXk3h)nBk0)w3f77TPkw4p7MRyvRjYnrFJvrmK(TkIHn3(F9hYigMBWZMi)z7lre9t2rIHF)BHedp6nbVHFO3x7x3ND1oUKnol)BzcZ11o0t6TDsO6FipYtwiKsPiE6Oq9BDBHqDgOogxZ6Fig2pxFE8mKh8ZXo0VTsnn(cEC7PxYzJnnEdCrIjexjkNnRa5mfLSX3FS)E3a96spCpTtELj85MAG(1fh5m56O86nUvADUQUkV200pV3DZKDqBZ6SnH(OAhiRQD1090Z12pj0GeRzNCr2H(urLcMOVZ(d4XT3HWpu16ble(cDpiE8QSJCCxrukW4vVQ1P7f9WvHEC9xT(1Gj36sy6HWI1r0bnocy7u7cz41AZjscacwM2KzhkjtbMHp(EW7BjYXmluIuW)FZj6fwIDGJWf(KJMSXyZzgk8X(GgHDSb7bERDaqD)BUO15Q0(z9ZB4NLCoirqAmXBW6JyGMj5misZAqaatnogDw0I0HyDPCcCS(ZM2ZHg04xI(kgLEy))u4P4ihdaYaIM9QTowDvpC9Gmki7iciaV25hp8tw)UNmbfcslwdbd5FaO4GOhnsF9TrX3NyPlnl0r6n6jNjBiqBXQbiLlNGmx0qteIJEsjXud(M0Jfysq2TbOVEd6MGhSOISGEARV(qpUDtIX7b90h9xF0F7Nd(za30F9SKQGgbvteslWNpVqwdHCAkZkhtUyL0ucTRsuIKKfIZYz624XPj6dFtjiUh0kueVn7Sqj8ncPAXlPOpXWHkBmsNncAwlYEcFl7SqX7AEwOatk672kDRj6pggrEZg5uF9MpYijM7(VTooSbnr)3BKE0e9dA40TU25zzgqC))a4ep1EicKRzjR5oi5FqJUre3vzSHrcncJmC3mXU1Hkl(pAJw3FNvFOWAI(FI)pBDIVsrvxfnJfQ6VWe9x2z(11p2Ye9)QotQj6VQjgut0)Ba0yI()aVQ)VMO)6BkeLMO)gGF0e93citt0p0e9)ZCRBPbIUV9Qj6e1pB2t33OQdmveabBU1TAUvhmYT67kb(p1(y7UgCC1bR7pO5S7U5S3MpajAHAMaT7sDNR7Cx5HA6mN7C4(X)qAGK(Qe1uRZnoYzg3VZ2Un)FxJ22QpO4MR4Gxuw)0LKg4uT5GIRBDoVh13r7T7zUJN)Vl
+!WA:2!T3xF4TXX5D6rWYrcY2rK6dll7ydlBPkjBlraqWpuKTdaiOiKabbxaskjRkGfalWUIa7UA3fKe01jv0XjQPP9syUMNlP9UlhU7CtBtVMW6662lxsmRRZLV6nhBIZ2N(hnN6D5Cst7LtnPP9Yh39oZSl(IaquusoYoNFEm4UZoZSZmV)E)9(oZ8UJqt2DMp2dFX7FL08zMoRMIAqLckAh3HdhXC0ZH8P2DgfzdnLcfeYguuQqwnb5DR29O85fC9OUIvGVSGMR4sfkCP0kAzf0cyvlQBnqbP5NNxlRRekkfmKu1MBSC50fmqPv5HkXq9UPvsIabHkYVwgEzbx7Z1WAk6gPz1LOwzwrgAlv0eYlPiNOSQaxEnLsQvyzjU08cBCjj5CkAf5nGC4Cj2dy9cec5yf(sgIkAJPsESUZ0q)jNuENA8zOj0hNUbVMHZ05KKL0fDga(JHZfm0KYNxqtp6(0SU8dhWG825lPX7zzYV6QcfkiLvF3D3tGsqHsRshnwGME4S6oVKEP0cZaD14LYLtAULsg0F8ejJNWpxIQpkMMa8iU4XcfjYLlPleAoODfNvdP4K5lkO7SswH0qnq68AJeksSHNiYILKTAwoxkRK(5kjd9Mze8WxOGAx80RtWE(Okzf(e3I1WvOS5fu7k(5lbsaxdxQqbxtjkziSm7PSb7nViVSeBWSp82gEzbEDH4gGelVH4BbVRaYkYcRKf6)KCKKmMOPladQz1xGKvsReF4af5LKhgFiOa4dJ7b7g7b(72BoLf1fkKlMIKSr6GHIMie3EKYQ2Lf4IGQCfHmKEzidcAY8fMeExWB9jxkNgmYaTkEdEhxMxodiGhMKe5TNoEqUqHIwXqjZmS8VPy7WtjPSlT)8(o)8gNunrGb50ZWxqWrfqoWrHw62iNWYWGGJkKEKedYeOGcFwNlXEn0wl23fVFmQQscEdVVQQe(lWRv0fTX0ypb0vmeQMTeIAc8gU44LkunTre4lyiYsBRwPnkVmplL7U(uccTlbTzeCfrswqDxT5rg1Avm9RiWp4BfVr8THWVfCF4nlIDEVBgVf8TJVJnIVtN43kvLbVvN4UCI7gK)oXB3jEhoX7m6(W31hgKD3nE3aGhFp47f)2CIVp89JDHFa8EsHFqN4hcVx8(CI)5W7hFGpXTGpi(HXpYMXpkbg1muW7vgCG7f7dWdyh4(Fs8aoWdIpc(TdIs8rxkBp90BWzKh(0Zpj(XDGFcN43HdSFN4aoXbbzJlOZ54YgcZzustyknEvIsG62dgX)OXsmwGi(dEc)dnu4eHNmeRJ9kW79EiDMvavWKguzJAgJuvyxobr7gyjYlyaDZlvlpKhKAXQ5Fpd0dmOO2D1esQaAh8gkA75XFmoQ(U6wTK8XLmkrvHOJFnnYDNo5YWOHj4l3SFU1Eo0a(art6IsAAkAGOdH3IMvVeKxlMUGGCwsx1d07idhTEKphExPv1eauo9E4XNPcFbvr(yLkOlSGTQD3UPfzvIf1UacNmAcgcj1umOzf1au5uQhjmrFnhFgHZ4pB2XK1pZuc8t7NWzEMrfYkXFMeSwT(zyCrjP0qhYipptcZe4wY)Ha0khTb6ayc15ninqbXfQ92p6s8NixSqdRmvUPksXjakiTOGuErJPttZNGioW7zrIKltbED9ulrUusMAlj1cKB0btjIGuggen2jxXsGnlNAw5yN4P3h(2tfqJxcyLP1W(sRdpSGqGr9FSq4P3jwnvaG5pdKvNbi1fCXmCGPoJYP8Ood8saBugLlYlNYJHGmaTMfErLZbm1PsZUof(WP4MvkRH4l7KHHXJIJI35zTu9Oiu8ePz8ewQG02oX8tkkqQQwyJLrD7eOQRGI8e7EcAs6gsz0T1IFQMkBD4q8uegbc2Rxc2dFsgSdFkcbXP5cejuuaQDW9XLruiZ0dJVRnUWm8As8awCbj5GkftZBWndFHscO9OOUNh7X0YiYlNxqF37dFbk55cQAeTeJYy(9HFNqn4a)UwSi)CISE5f6Uhsbp6JHxGuee(zW8RFkLKnbvXPAbGleHEK3boTiodbCfyWJzeAsvTzmYzdUWcpjohaPMeNpf(CezowEFyfSkdjGppnjn6VLhY5fpsAqmPLSmI935qWRyj(SNRKUHq2r5NBd1UrsEdyNXUv3da2vG3K62RH5joxrWJYzfxsNyTJPfLQ(8mSc4QelpC6f4LnqlaSc(jq139oH(5LGH78GMNECLsAzeo49ElBG0VPOnqKcI4m0oV)JuvAGJJVWE6NkgEClXaJyQpkXKd8ZC5CvFRuhVQwuo(8qY4l4Gj8TkmPydsWuU9W(fQc8hOAHwIXFsrnTw()eh8I7cOzHUFsDr(SkZEslFlxKMg5NL3Bvw49Ux1TwxER5AO6Jun7jzEqwJ7pzwHmGBqfscuLzKiErGUeRsSDzjG)jsmM62Ojc(yQq8zkZue13a(HBVmRALMtilnXlScZbItXAQ31Y0Nte6s5kJ9vHrtrePbIow0qQpqhABSeshTuX0cA4DPbEXqYO1qc79ypKuHMgZCczGVFhKX8(95yrR6MyuAynP5DnEj(SepQCLird1KDlEfAAZcEjrSPUWuwxSs16H6H6ytKisyO9V16QblNMu3Bh6tu0d1FsUCfuu0Aq(A1eq1Exep)32kn2vzdPZaslG(r8IBBflJJJAzWeCvGYFvHidtQYAu2(jWzBo5swjmjREsz54xYIGLvowH2vfRrCiBQDzDXq1SnzxfwkOalt5nUSvA1MFfZG(T5hlSLLTEhwTjGBzL6BwcISHt4(a2g5XpnuU1nty6maRBYYuID31ZjQUvGHYVfzeLBsuTR0vjEQ1Ji8MvOZDIsUGa7ReYqXuyjrlkXcVwKwsl(AC18NKzGkgECI5hUueZrtGNSvofDsXMBBsYI4TCzBcnRbOfuaV(HzIPd2NWpnDMA1eT6fvumeJzvIuvOmKdlPPBiUKv5YuqsvKYZdgFv3ATUUfi7Y1sPktczy0NVfYOuK4yLUiXkYW4pWXjP7XhrRBaYpEDqSYu(wDQ2vncZAJOhDPGfdm1GJp08JfguiLjZErqCrABKiXthoA8WdfAjfnjWDbApQYiJXf(0JfnH)imj6Cws070PgTCczfV4rWVhe(9sm5GV4gW)seZloSSUGFFI4F5u43Vi(xbH)vPgiW)ZAVnHJZ4O3iyt4xe4IRNuNnrONPoJ4RaKbzGgQTH894JWK39rz5)1EVnW5JnHm4THm8(BmdV72yk44xCx4pec)pxDR7THx4E3l(dZMnZ)c8hb)rX)64FJlG)xIW)RGo2)A8hdGE)BX)7YJ)3tufDGFo8VPApRIDQHkSfweWFCK6bUcLQgVg(3d)BH)TX)o4pb(3fAe)(PWFse(tD34LY3cIXgRewI4kxCB4NVgpg(paQMxaH)dtHFr8Fe0J(JX)hfXFAkDd()KnhJ7bW327FdyH7b)zOml4pRi(ZHF6RMQ61(IeWZ1Anm(QQbscRBF5EPvtEHxwe)Ny7t3lJwB(N1S)145BNFXnLVFHRO)ZWaZFkqrHFf8NNYgH)pJWFHu4VOi(lvLIb)Lr4VYR97I)ZOSghZI1WTpQ5bQ)rEgWM3a)FHstiKFU0rgRp)r0hf)FveVc(ph)vXFn8Rwv3h)1BLw)jD4BDP1FWRgT(fax3vvMfCl5cD7UdQRx2wBLM51SYkJP1YdgMA7(BNUdTMBu)7JJiQD1PfQ(qDU02kE1uvpCNlWQjjUAvt()RREf0vFLA6GCXOqnIE4tLArQeGiPreTsMkP62jtqwt48LK0eO5M4LAk6c9un)PE9tbFeIcoO14HnNAYVd6Rj97WboDph4ad2)X7pt71VBAbcEH6A3)1029)DuJn9V56UxsxgaRPnuTT7R66bW4vSxtayqW)Uxdmg3GNeFy8TD7BO(zXpvp5gj2j8nyFJorTzXFp0zXpdG8ORQhDP7NwwzwzBK45xfESsTmTPdxDo(BUE5bX32VP9iS6oAGFO6kcE0hB56Fa48JTKJ6MBdSkPAVWS9cjhTr(8K2lnyoOjEgShnYY2pwjd6kbMwxe88CA8zdq8CLoK3crIvjTw9Wa54HPJCwpqjOzznjFoEZYNzgn6ONCOsrgAMGnlFOtS4BzZeqfmvOlLhD5Ls1iDX3UoPsxTWk49IwhMap9vJjW0WSIYmTUTbq71mjf(zu3omVXd5(qnodZA(4(9HY4PLLXthlJ3wwgVx5Yy3jyoBJFIJ0g7eIRYoXDB5GjzPCOIsHUwtwCAzn9Drpn1O11Av4FvvbjHBOwTMXcB2o6I6XJv90KSjkCE7RhVE60gP86G1Oty5UzF(yZpTjdrrIf78Iz8fBeFkT3quJ7e2rQUNtHZi4kaVgmzvn1D34(qrTd7Akj5SkZQExvZFzxtkijRB9GABu1MOBu1TJU5EJQw2QFeOuUC6REpR8fPOVJlfC4P9X1Q9S6bRiLrrMTOS37Tq6yoPevRKrrPamAihFwjWrLLTVLSvUITTNFoo3U71tFCU92Jx30F9q)1lNN(D7TxoVE7ThFRPXM(FYlpTGGQFYEByWrw0brkfjqB)eh5vxjFbLzhM4DLGCMYSL7GTEKKhSmqsFScwR4AQfijr3b)ysZjuOc52i0TvEhlrU2En(wmVDrOok1lBDYC4GMj7L6la5grAwJt3jxAljHOuMPLf01DqFczZr17I(IcWIOGlUd6Kp2ZEvxdZ3av3IdqM5q1PnSC4OrdXLmWyjsm2O2ZmGmZcWU4IqFNTrYRW(tsfRfN062mvx(zRqMWEbltzTb0jfarl(HTVJSxsoWcJVMOAEKkwunBjabob6o)eIk0rxkA445p5qfhz88Ie3eG)lW8kkfPA9lyJPy0AeEHFO62TtKS(udjPt2rNSPigdlpUj6(tr07akbModrryxmVbS0zAkLTVQuiAg2(jcMKUKWCQsSnEmHurYY(7R(jpc20QWmDseMecGbCCXh0eDl1RQyIqPmrBO9Af7MZTNE61ZAe3BI2C9qDtKtB8TjAlMOBhEx3Hj6onrV1DyI2kYe1fBxr61YNEtu3qIBt0eTD46Da))o7YeDxxNWGMOD1eYZeD3MODdVY7HwRMO7fAHVn8dBIUpa)e6QZuf0bVFg652DqwXH5foWStjNvFqVwWht0dqbpMO9ud28JmrpidJe6gagXe9qTaxyI271cEO3(VwXdmz8TBjNRdmqhL6gzHxiaG7yL0LmmuKhJTuZVrar0ZlUkebpaikp8idwouVhqwE0obi(X3aaeoTe39eiVMYS7zIy4n8BRUnlJVbliWd(yOBijNVQNfHMrjdLAXvmnLIQgQ702unZ9exJgoE8WrpwDUIaUUuqjZ02fW2)LWYuYAPcsgLBUYOrFZXekAN(UQRYIWld)gFe)jseI7Y2T1GUglQRrdv91gCSjibbfnyWCfDSPu3UD0c5N7yHs4k8OJor0qu)IiG8xIorgMNqC6Q8zeUJRvxHwcSovQOCCsLrJ7MEtZSYXXxqkVm2Ngm3gsyLHioWaUUuZ1pnwyJjKI6W2J7ybq4yvpGEdXfRTSC2YY8fLYqJPcWrUa6kAg4dVyEnj2EKULfixs8rypCdXvqQOKXwib4qeYvIxcSObVEzJH5ZaZGonN)Hcpr80A8zLkP)UVDWfUfbzpZLcygDwyWvQgywcAg6vYvQqHGsAza7T2oObZXdCf72kCn4biGRz4YJUKNdm((dEUZnJ7j2)6JrYN3(UrAHI6nfBbcSSqL6MdluGho5QTeGFVuTFvazurMOJX8Tz4dKpCVtkCQb5MPdCrMOhPkzuZEWyVEg)D01Zyj9cszfsRam1fPlRHx71bPzcQlU1fPXribXUIUHgpjIJO(JI3v6mL0HkinndLPogqEdS7NJD)z72nMhrdljAYP6UC2n39COfPH7ePwxWUwjV7vGRL1jXri5rQDz)Se2jdnmweSzNqkADtRTunYE(qa0eDLqMNT(fYc)309rXFN6wNk8FBQoUiJxSloOHKz6aKOJqTlsljVGSGMuM4IkZoMCQvA42L0P)HtGpBzs1ViDH2IYxuythEB4DXrV1kCMU7GwEN6YEVCDTFAuZEa1UPr2vEzfnbYo6c8jcPwrtGVqC7QBXQ2dwP6I(rsNU5ZKwpRVSO1izMPtPUnY1cKyZT(S3ELXdUMugPyuwmz0wDX1IAtlwFSvP)8TjdInP(qcDysqlhgiwv3tTG2JCV(zOJxjJsIPbHKXkPbtkHQUn(PYlT)XoLWKXewT6Myn1ThDnQUzIIGpRjA02RKzIIAIgJmqeZenEvvjtex9QrMO426pMOeMOji1KjAst0uqDzIojmQDQ1RwWZznVAtY4)TAI2Oj62mrqTUPvaJEzef0zG4vyG4rL0jHh4vy1DUiiHpTjcGoNbET)8MOZskGjkjzECqVnfdTBI4nrPHCKzP6wtftuZawtuoit5V(GlRoT7B8aZAtA1gyAIevD1A8imcKmcO9jBWqJ(JoYjMYZ8d723WDenEO3mHgRTdyMm(y2wwdylR996PsX4BBikcsPUZgJQa79Ia41xdyYp17SLyYfR6S8nsejBBnytS(1bij0xBbK8bAnKK(nRW(LHjhiqzUHNo20dxAWoIjp8BoXKJLQU45k(E6Neu84eK9NOXi7QtOTNTLyTLRF(x3aHBoS2CwA4TETG2EoAmW1In1MbcfTXHac8B)STcYDGMHC(zD(KKz1KS(Hdg0B0G9ROWpO3CL7mDypVzb6j3cxu7Fn7I6lG3vajdHIKctWGGRL7QfUwggYYby0RwOuOUwM6Oj8eQZGlyF1MM8ERv)VkzCzo23DGsjzdleDfsf6kijfYhuc9r1)TIWCIL5Vz13a8Y5O5egqHxVjAEy44PQ96U2zy9AXWY2E)RjG)v7m5iy992mwpC0jtcEsLj5XekMmUHISqYECZW59C650fhyYHM)0E7io39BMOyTwKG5942Jhpd0NVa95MS7o94XBpCE6VNbgGSEMds2DhVds2DNXBHVNAJ4NB0HNiYvYA)m)G2BTNUAwRl63JSMXI(OSVd64MVfP45AlF(LKvms2q4HWuKBm5658jdZTqtyFxrhncuG32BJHoTScV2X2VKVH64YF45naQcR9fmBFav9wdQPmBwYx8O1xOm1oW1LLiJf)LU996e87TTgHFNYIzTAi23gM19HnsXr(mR5t18QLD6GENSyPZXxC0E6iZP3QWLtDthC5Jw7BfY6ZtN(zhFHaXtmr0g(uJAuyIFMlxBxeB8lvYe9HWxyfs5toAOGJ4pA4GDSImr)Anw2adhYp3Q(mN63oUkwDbwHuGw)YUcLul4yrhEI4HwvzS26r66X3Y2i3yJLyvLYEjOA1BkE4iHIgm0QhkSxd5w1XI5py4Hp16POQBnEWrgBSijdt2ieUjIL4ku8RwxfhM4iiHLyIabjmOeJKulHuvVumRC5trnUnXk(PNraUMGU73GvXN)zRMz89qx8qrGlM6(DQfREPg7kbYRIf2oJ)M51T)uwtQg4KQFs1FRMNu9Z)SvPMmrFWunAX7H6KfpWNJ4IkzMMrGnFp9m(mN(0QNpu(oAVR3BIjWQfGSlZoUiK5iFvSnfAHPWpdo9vLLX69sKRxF96Dap91RNaGlI9W5f8ASxopEheU29G(6h8tS3E73DB8t0EgmuOUj6JbVS)nMOkx3X0VjWqBJOzginFu3dm4uLfpwXt0rqQVBIbPv3ODt0dJ)AKDzNTv3bhQPi5ZA7XPPhJCYcq2SBLCUgvsoR1oZtFw1i8t1vTeJxQyrGJDkEq)3vOccKL2LVq9fdmuN1vCzE1gRlRvDS(eRUXo13sPtZwqJQND5AjhOGK801NVgwmf79y)rU162KDtuFB(ADh2nr9Z2yDIk8GKFoYQ3lDt0B3EB0nrhT2gOBIEm8DSrt0JJpSj6jGBFh7HBitKF4QaIMOGMi4Uq0Tc3enCT9aV6XjI9ABOBIgP59)gDDz7VhDGZp0StAOQQYrTkV24SAAEOvi7II)cZYxw3E(Oh2zRxrW6XHDCkPx1rt76FLdBYoT4v9cO4F9eSwMOxKev8wh3sPSI7V(lCQiZO5ZW7SDKh6)aWdjs5H8FDlqDoyvF7QOiBJ8A6SaGAIdYxF476rUf87YJ)OdLMEusOFW(SCl8Zawf7RAS37Ofb(1dTMN1yt4SlX2TUQTnBS2wAjwtDRntUDTUe0xnHoMj6axVXpBPz8Jj6tBHBuYhrvyOzcoq)Z3rCZV3naCJZRkX6zB1Yy9hBlk75fB3Yyzzk6NX4mAkC(AqMlp)KdK4afhC8t7RJY8p5nuUcQcFN4imrFwt0N76o9qNXrp1NV1uc7S1UV8ZyOky0PTOk3rcvWB5qtorc3Dev9PEtjQsUJOQd9cTMDQQhVxjC0QQ6x6kq8zIE51FD2gLat0RCfme6HxU81A4O0WUbCJcidcK2cKngW3j1MjH8e9fTJa5LUzaiFKvdKdqC2bklC3BH8KV01zNPQdO0MqfXeP9gBpMwvyHuh8iK3sdLvx0BHbd2r4XV)p19yQZYosSw2sz3B092DBTx2ftYit0mtvYRGwhLDp)n3YUNVnrnt9RaYBOfIp)Z2Ez4jDF88hFk3HkB05z6(hCZTmC7Z3szihD5QEdTWd6zTv4L4K(pGpTP9KONd0rH3lCZTW7zBd1zP3ql46GsxApJkeT)bIlNiChLB)H3aLBKLNoWqJnvu8gox1VdSeKtXcbdxK0TwT5h11uKZHzLCUmefCnSIMo)0cYSCy)HwfswOyz7cx98BoyCxrgl4jgBIevZymLcLlQOPk6IKAxnuCYhcwl)iTmr9Dhx3w)ypjgl2RFRGCf7(9mXAXshp0wVUS2XJ7XJ0eUNT)Gtp5AC)UENSy4ZenxTi4ZevUUq17LQpw5(qVwdH(3AUyFR1vXc)7S(kwLQICt0xyvedPE9Iyy9T)x)LmIH5g4KXZDYEJhr)yDKy4REdKy4bVo4n899oA96(S9wXLC1ZY)6MWCnTd9KEBNeQ(h0J8u5dPumINoku)A3uiuNbQJj0S(xJHDZ1Rhpd6b)uSt(BRutHpRh3E6HC(ytJ3axKycXv8szYiqoGrjB89h8N6gOxt6H7SvYR0Hp9P6VpDXHhpBhLxV6nsRZv0v51MM(59UdMSdABwNTj0hv90zvTRgUNEi3(rGgKyv7KlYoXNkOK3e9n2DapU9oi((QulyHWNT7bWtuHDSJ7kIsEgV6LSoDVOhUk0ZS)k1Ugm5wtctpewSoIoOXraBNAxinVwlorsaqWY0Mm7qj5uGz4JSt8UwICMZcLij8)xFIEHLyh4iCHp2ijQp2CMHcFSpOryNHWEG3Ahau396lADUeTFw7Wh(jjheseKgt8gS2igOzsoeI0SgeaWu9JrNeTiDiwxkRahR)SU9COon(LOVIrON4)pg(uCKJbazarZE1whXUQ7VwqgfKDebeGx7mte(rRD3JgNcbPfRUGH8Rdkoi6zJ0lVjk((OlD(zHosprp2mzcbAlwnaPSzfK5IgAYqC0tkjMAWxHEgbtcYURc6RxLUj4blOilONY6Rp0JB3Ky8Eap9s)1h93(4GF63n9xplPkOrq1eH0c85YjKXqiRMYSYJjxOCkkH2LikrsYcXy5mvl840e9(UUee3dyfkI3KDwOe(AHuTW5v0NCOqLmgUZgbnRgzpHVHDwO4TTNfkWKI(Mnt3AI(FcJiVw9CQVsJNAKeZD)pwdh2GMO)x1tpAI(U1Duxx9mTmniU)FdCIhFNebYLTK1C7L8VQrxlI7km2WiHgMrgUdMy36GLf)xD1w3FJvFWWAI(7X)3QDQVIWxcnJfQ67zI((DMFDTJTmr)d1ysnr)Ggyqnr)JaOXe9pbVQ)pMOF41fIst0pc4hnr)yazAI(jMO)VMB4wQJO7Vy1eDI6NmZj6De1(pveabBUHnyUbhmYTA7kb(7yF8DxfoU6G1972y2D3y2BXhGeTqnsG2DXUZ2D2lEFnCMZDACF4FcnqsFrIAQ15gh5mJ7lVPBY)h3OnT6dkU5kmW5K1prrP(pEloO46wNZ7H8DOE6EMB9P))9d
 ```
