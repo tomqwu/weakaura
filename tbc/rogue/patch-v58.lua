@@ -151,26 +151,31 @@ local SQUARE_BRD = MEDIA .. "Square_White_Border.tga"
 
 -- ===== geometry =========================================================================
 local SILL_X, SILL_Y   = 0, -125      -- paladin parity: the strip top lands on paladin's
-local RAIL_LEN         = 200          -- TWO pixels is one percent. 300 was tried and reverted:
-                                      -- on a real screen a 316px rim spanned most of the width
-                                      -- and read as a UI panel rather than a readout. The
-                                      -- invariant is a WHOLE number of pixels per percent, not
-                                      -- any particular one, so this is a constant change and
-                                      -- markX() carries every mark with it.
+local RAIL_LEN         = 160          -- 1.6 PIXELS PER PERCENT. Every value this pack marks is
+                                      -- a multiple of five, and 1.6 x 5 = 8, so every mark still
+                                      -- lands on a whole pixel. The invariant was never the
+                                      -- number 100; it is that markX() is the only place a
+                                      -- coordinate is derived, so the length is one constant.
 local MAXPOWER         = 100          -- energy cap without Vigor
-local THREAT_H         = 8
-local BAR_H            = 22
-local LANE_THREAT_Y    = 31
-local LANE_HEALTH_Y    = 14
-local LANE_POWER_Y     = -10
-local PLATE_W, PLATE_H = 204, 74
-local RIM              = 6            -- how far the alarm sticks out past the plate, per side
+-- HEIGHT IS THE THING THAT WAS WRONG, NOT LENGTH. v58 scaled the whole strip uniformly, which
+-- kept the original 2.8:1 plate and simply made the same stubby block twice as big — and it
+-- read as a panel. A vitals readout wants to be LONG AND THIN: the fill's travel is the signal,
+-- its thickness is not. So the rails keep 1.6x the original length and go back to near the
+-- original thickness, taking the plate from 204x74 (15,096 px^2) to 164x45 (7,380) — less than
+-- half the area, while every bar stays 60% longer than the 100px version that read as too short.
+local THREAT_H         = 5            -- an early-warning ratio: thinnest lane, no number
+local BAR_H            = 13
+local LANE_THREAT_Y    = 18.5         -- stack, top down, 1px gaps: 5 | 13 | 13 | 8 = 42 content
+local LANE_HEALTH_Y    = 8.5
+local LANE_POWER_Y     = -5.5
+local PLATE_W, PLATE_H = 164, 45      -- 42 of content + 1.5px of margin top and bottom
+local RIM              = 4            -- a thinner strip wants a thinner alarm rim
 local ALARM_W, ALARM_H = PLATE_W + 2 * RIM, PLATE_H + 2 * RIM
 
 -- The combo lane. WIDTH IS FROZEN ON PURPOSE — see the "ONE PRICE" note in Part 1. These ten
 -- regions also draw on the target's nameplate, where a 96px row is right and a 264px row is
 -- absurd. Only the height follows the lane stack.
-local PIP_W, PIP_H, PIP_Y = 16, 12, -29
+local PIP_W, PIP_H, PIP_Y = 16, 8, -17
 local PIP_X = { -40, -20, 0, 20, 40 }
 
 -- The one formula. Rounded to 3dp because (0.35 - 0.5) * 300 is -45.00000000000001 in IEEE754
@@ -193,7 +198,7 @@ local MARK_DIM_W   = 4
 local MARK_LIT_W   = 8
 local NOTCH_W      = 2
 
-local LABEL_X, LABEL_SIZE = 64, 20    -- 82% along the rail, inside it
+local LABEL_X, LABEL_SIZE = 51, 12    -- 82% along the rail, inside it
 local THREAT_LABEL_SIZE   = 14        -- still text_visible = false; sized for parity
 
 -- Column moves, as ABSOLUTE targets. Local offsets are derived from the real parent chain
