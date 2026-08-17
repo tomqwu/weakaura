@@ -235,7 +235,20 @@ function F.subtext(fmt, size, point, numberSym)
     text_font = "Friz Quadrata TT", text_fontSize = size, text_fontType = "OUTLINE",
     text_visible = true, text_justify = "CENTER",
     text_selfPoint = "AUTO", text_anchorPoint = point,
+    -- BOTH SPELLINGS, DELIBERATELY. WeakAuras reads the offset as `text_anchorXOffset`:
+    --   SubRegionTypes/SubText.lua  region.text_anchorXOffset = data.text_anchorXOffset
+    --                               parent:AnchorSubRegion(text, "point", data.anchor_point,
+    --                                 selfPoint, (self.text_anchorXOffset or 0) + xo, ...)
+    -- and WeakAurasOptions/SubRegionOptions/SubText.lua writes that same key. But SubText.lua's
+    -- own default() still emits the bare `anchorXOffset`, and NO Modernize step bridges the two
+    -- — so a string that carries only the bare name has its offset SILENTLY IGNORED and every
+    -- number renders dead on its anchor point. That shipped: 21 non-zero offsets across the
+    -- packs did nothing, which is why rail numbers appeared centred instead of right-aligned.
+    -- Note this is NOT the `text_anchorPoint` case: that one IS renamed (Modernize.lua
+    -- internalVersion < 80, subtext.text_anchorPoint -> anchor_point), so the old name is
+    -- correct there. Here there is no migration, so write both and keep them equal.
     anchorXOffset = 0, anchorYOffset = 0,
+    text_anchorXOffset = 0, text_anchorYOffset = 0,
     text_shadowColor = { 0, 0, 0, 1 }, text_shadowXOffset = 0, text_shadowYOffset = 0,
     rotateText = "NONE", text_automaticWidth = "Auto", text_fixedWidth = 64,
     text_wordWrap = "WordWrap",
@@ -245,6 +258,16 @@ function F.subtext(fmt, size, point, numberSym)
     st["text_text_format_" .. numberSym .. "_decimal_precision"] = 0
     st["text_text_format_" .. numberSym .. "_round_type"] = "floor"
   end
+  return st
+end
+
+-- Move a subtext's number. ALWAYS use this rather than assigning the offset by hand: the
+-- offset lives under two keys and only `text_anchor*` is read, so setting one and not the
+-- other is a silent no-op that looks like "the offset didn't take" in game and looks correct
+-- in the decoded string. See the note in F.subtext.
+function F.subtextOffset(st, x, y)
+  st.anchorXOffset, st.anchorYOffset = x, y
+  st.text_anchorXOffset, st.text_anchorYOffset = x, y
   return st
 end
 

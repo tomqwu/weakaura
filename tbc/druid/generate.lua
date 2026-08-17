@@ -1,4 +1,4 @@
--- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v15).
+-- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v16).
 -- Run: lua5.1 generate.lua   (toolkit libs live in ../../tools/tbc-weakaura-creator/scripts/,
 -- fetch them once with that directory's setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (copy whole -> /wa -> Import).
@@ -910,8 +910,7 @@ end
 -- PCT_THREAT), never from a call site, so no two packs and no two numbers can drift apart.
 local function pct(sym, place, color)
   local st = F.subtext("%" .. sym .. "%%", place.size, "CENTER", sym)
-  st.anchorXOffset = place.x
-  st.anchorYOffset = place.y
+  F.subtextOffset(st, place.x, place.y)
   st.text_color = color
   if place.visible == false then st.text_visible = false end
   return st

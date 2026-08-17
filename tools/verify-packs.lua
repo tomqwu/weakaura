@@ -121,6 +121,33 @@ for _, p in ipairs(packs) do
         fail("%s: Crowd Controlled ships without a live-client acceptance warning", p.name)
       end
 
+      -- SUBTEXT OFFSETS MUST CARRY THE KEY WEAKAURAS ACTUALLY READS.
+      -- SubRegionTypes/SubText.lua anchors with `data.text_anchorXOffset` / `text_anchorYOffset`,
+      -- and WeakAurasOptions writes those same keys — but SubText.lua's own default() still emits
+      -- the bare `anchorXOffset` / `anchorYOffset`, and no Modernize step bridges them. A string
+      -- carrying only the bare name therefore has its offset silently dropped: the number renders
+      -- on its anchor point, the decoded string looks correct, and nothing fails. That shipped
+      -- once — 21 non-zero offsets across the packs were dead, which is why rail numbers sat
+      -- centred instead of right-aligned. Both spellings must be present and equal.
+      for _, aura in ipairs(all) do
+        for i, sub in ipairs(aura.subRegions or {}) do
+          if sub.type == "subtext" then
+            for _, axis in ipairs({ "X", "Y" }) do
+              local bare, live = sub["anchor" .. axis .. "Offset"], sub["text_anchor" .. axis .. "Offset"]
+              if (bare or 0) ~= 0 and live == nil then
+                fail("%s: %s sub.%d sets anchor%sOffset=%s but not text_anchor%sOffset — "
+                  .. "WeakAuras reads only the text_ key, so this offset does nothing",
+                  p.name, aura.id, i, axis, tostring(bare), axis)
+              elseif live ~= nil and (bare or 0) ~= (live or 0) then
+                fail("%s: %s sub.%d has anchor%sOffset=%s but text_anchor%sOffset=%s — "
+                  .. "the two spellings disagree, and the text_ one is what renders",
+                  p.name, aura.id, i, axis, tostring(bare), axis, tostring(live))
+              end
+            end
+          end
+        end
+      end
+
       local blocks, found = 0, false
       for block in md:gmatch("```\n(!WA:2![^\n]*)\n```") do
         blocks = blocks + 1

@@ -109,3 +109,32 @@ every other**: the bar still looks right, the press just misses.
   say so in the pack README rather than assuming the mark is always there.
 - Pair it with a `%p` subtext at **`decimal_precision = 1`**. At precision 0 every value inside a
   sub-second window floors to `"0"` and the number tells you nothing.
+
+## Subtext offsets: `text_anchorXOffset`, not `anchorXOffset`
+
+The single worst silent no-op found so far, because the decoded string looks right and nothing
+errors — the number just renders on its anchor point and every offset you set is discarded.
+
+- **WeakAuras anchors on `text_anchorXOffset` / `text_anchorYOffset`.**
+  `SubRegionTypes/SubText.lua`:
+  `region.text_anchorXOffset = data.text_anchorXOffset` … then
+  `parent:AnchorSubRegion(text, "point", data.anchor_point, selfPoint,
+  (self.text_anchorXOffset or 0) + xo, …)`. `WeakAurasOptions/SubRegionOptions/SubText.lua`
+  writes the same keys.
+- **`SubText.lua`'s own `default()` still emits the bare `anchorXOffset` / `anchorYOffset`, and
+  no `Modernize` step bridges them.** So a string carrying only the bare pair silently loses
+  every offset. This shipped here: 21 non-zero offsets across seven packs did nothing.
+- **Do not generalise this to the anchor POINT.** `text_anchorPoint` **is** migrated —
+  `Modernize.lua`, `internalVersion < 80`, `subtext = { text_anchorPoint = "anchor_point" }` —
+  so emitting the old name is correct *there*. Same subregion, two keys, opposite answers:
+  check each one against `Modernize.lua` rather than assuming a house rule.
+- **Write both spellings, equal**, via `F.subtextOffset(st, x, y)`. `verify-packs.lua` fails any
+  subtext that sets one without the other, or sets them to different values.
+- Sibling subregions do **not** share this trap: `subtexture` uses plain `xOffset` / `yOffset`
+  and `Texture.lua` reads exactly those, which is why breakpoint marks always worked while the
+  numbers beside them did not.
+
+**The general lesson:** a field name that is *plausible* and a field name that is *read* are
+different things, and the gap is invisible in a round-trip test — the string decodes to exactly
+what you wrote. The only proof is the addon's own source: grep for where the key is **read**,
+not where it is written.
