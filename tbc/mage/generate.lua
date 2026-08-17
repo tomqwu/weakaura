@@ -1,4 +1,4 @@
--- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v15.
+-- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v16.
 -- Run: lua5.1 tbc/mage/generate.lua   (toolkit libs live in tools/tbc-weakaura-creator/scripts/)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (internalVersion 45).
 --
@@ -324,10 +324,10 @@
 --     whole instrument is 3,774 px2 — 2.65x denser, and 2.7x shorter on the axis that is scarce.
 --   * ONE FIELD SEPARATES A RAIL FROM A RING, and it is the same field that took v8's rings to
 --     v9's globes and back again: `orientation`. Both are `progresstexture`. A ring is "CLOCKWISE"
---     on annulus art and encodes the value as ARC LENGTH; a rail is "HORIZONTAL_INVERSE" on a flat
+--     on annulus art and encodes the value as ARC LENGTH; a rail is "HORIZONTAL" on a flat
 --     white square and encodes it as a LENGTH that grows left to right. The name is the usual WA
 --     trap and it is the one field in this version that no committed string in this repo has ever
---     rendered: Private.orientation_with_circle_types reads HORIZONTAL_INVERSE = "Left to Right",
+--     rendered: Private.orientation_with_circle_types reads HORIZONTAL = "Left to Right",
 --     HORIZONTAL = "Right to Left" (transcribed verbatim in poc/diablo-globes/generate.lua), i.e.
 --     the OPPOSITE of the aurabar convention in references/gotchas.md. If a live client fills the
 --     rails from the right, the fix is this one token and nothing else moves.
@@ -713,7 +713,7 @@ end
 
 -- THE RAIL. Same region type as the v11 ring and the v9 globe, ONE field different —
 -- `orientation` — and that field decides which of the others are live. Notes on every trap:
---   orientation "HORIZONTAL_INVERSE" -> "Left to Right" in Private.orientation_with_circle_types
+--   orientation "HORIZONTAL" -> "Left to Right" in Private.orientation_with_circle_types
 --     (HORIZONTAL is "Right to Left", VERTICAL "Bottom to Top", VERTICAL_INVERSE "Top to
 --     Bottom"; CLOCKWISE / ANTICLOCKWISE are the two radial values the rings used). NOTE this
 --     is the OPPOSITE convention to an aurabar, where HORIZONTAL is the left-anchored one —
@@ -748,7 +748,7 @@ local function rail(id, w, h, x, y, color, triggers)
     width = w, height = h,
     selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
     xOffset = x, yOffset = y, frameStrata = 1, alpha = 1,
-    orientation = "HORIZONTAL_INVERSE", startAngle = 0, endAngle = 360,
+    orientation = "HORIZONTAL", startAngle = 0, endAngle = 360,
     inverse = false, mirror = false,
     compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
     foregroundTexture = RAIL_TEX, backgroundTexture = RAIL_TEX, sameTexture = true,
@@ -1877,8 +1877,8 @@ do
     local n = assert(nodes[want.id], "geometry proof: no such aura " .. want.id)
     assert(n.regionType == "progresstexture",
       ("rail canon: %s is a %s, not a progresstexture"):format(want.id, tostring(n.regionType)))
-    assert(n.orientation == "HORIZONTAL_INVERSE",
-      ("rail canon: %s fills %s, not HORIZONTAL_INVERSE (Left to Right)")
+    assert(n.orientation == "HORIZONTAL",
+      ("rail canon: %s fills %s, not HORIZONTAL (fill anchored LEFT, grows RIGHT)")
         :format(want.id, tostring(n.orientation)))
     assert(n.foregroundTexture == RAIL_TEX and n.backgroundTexture == RAIL_TEX
       and n.sameTexture == true,

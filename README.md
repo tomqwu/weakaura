@@ -23,13 +23,13 @@ use GitHub's copy button on the block to grab the whole string in one click.
 
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
-| Rogue — All Specs | Combat · Assassination · Subtlety | v55 | 58 | [string](tbc/rogue/README.md#import-string-v55) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v20 | 45 | [string](tbc/paladin/README.md#import-string-v20) · [raw](tbc/paladin/all-specs.txt) |
-| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v16 | 45 | [string](tbc/druid/README.md#import-string-v16) · [raw](tbc/druid/all-specs.txt) |
-| Warlock — All Specs | Affliction · Demonology · Destruction | v15 | 40 | [string](tbc/warlock/README.md#import-string-v15) · [raw](tbc/warlock/all-specs.txt) |
-| Hunter — BM & Survival | Beast Mastery · Survival | v16 | 49 | [string](tbc/hunter/README.md#import-string-v16) · [raw](tbc/hunter/all-specs.txt) |
-| Priest — All Specs | Shadow · Holy · Discipline | v15 | 41 | [string](tbc/priest/README.md#import-string-v15) · [raw](tbc/priest/all-specs.txt) |
-| Mage — Arcane & Frost | Arcane · Frost | v15 | 44 | [string](tbc/mage/README.md#import-string-v15) · [raw](tbc/mage/all-specs.txt) |
+| Rogue — All Specs | Combat · Assassination · Subtlety | v56 | 58 | [string](tbc/rogue/README.md#import-string-v56) · [raw](tbc/rogue/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v21 | 45 | [string](tbc/paladin/README.md#import-string-v21) · [raw](tbc/paladin/all-specs.txt) |
+| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v17 | 45 | [string](tbc/druid/README.md#import-string-v17) · [raw](tbc/druid/all-specs.txt) |
+| Warlock — All Specs | Affliction · Demonology · Destruction | v16 | 40 | [string](tbc/warlock/README.md#import-string-v16) · [raw](tbc/warlock/all-specs.txt) |
+| Hunter — BM & Survival | Beast Mastery · Survival | v17 | 49 | [string](tbc/hunter/README.md#import-string-v17) · [raw](tbc/hunter/all-specs.txt) |
+| Priest — All Specs | Shadow · Holy · Discipline | v16 | 41 | [string](tbc/priest/README.md#import-string-v16) · [raw](tbc/priest/all-specs.txt) |
+| Mage — Arcane & Frost | Arcane · Frost | v16 | 44 | [string](tbc/mage/README.md#import-string-v16) · [raw](tbc/mage/all-specs.txt) |
 
 Every pack is class-gated and auto-adapts across the **supported builds listed in the table**
 through Spell Known gates. The current product scope is primarily level-70 single-target
@@ -53,18 +53,28 @@ discrete resource) sitting at absolute **(0, −110)**, directly under your char
 | power | 100×11 | fill, exact % or raw value, with ability costs drawn as waterlines |
 | resource | 5×(16×6) | rogue combo pips / mage arcane stacks; omitted where a class has none |
 
-**Each rail is exactly 100px, so one pixel is one percent.** That is the lever the whole design
-turns on: every breakpoint becomes `x = value − 50` instead of the trigonometry a ring needs —
+**A rail is a whole number of pixels per percent.** That is the lever the whole design turns on:
+every breakpoint becomes arithmetic instead of the trigonometry a ring needs —
 the rogue's 35-energy mark moves from `(23.575, −17.128)` to `x = −15`. It also cuts the
 footprint from 10,000 px² to 3,774 (12,408 → 3,774 on the rogue, whose pip row was separate),
 deletes the 3D portrait — 1,936 px² carrying no decision — and puts every number on a dark bed
 instead of on a moving model.
 
-Two facts the build pins by assertion, because both are invisible in a screenshot when wrong:
+Rails fill **left to right** — `orientation = "HORIZONTAL"`. WeakAuras' own dropdown labels
+`HORIZONTAL_INVERSE` as "Left to Right", and that label is wrong: in
+`BaseRegions/LinearProgressTexture.lua`, `HORIZONTAL` maps the fill to texture-x `0 → progress`
+(anchored left) while `HORIZONTAL_INVERSE` maps it to `1-progress → 1` (anchored right). Every
+pack shipped inverted until this was checked in game.
+
+Three facts the build pins by assertion, because all three are invisible in a screenshot when wrong:
 `Square_White_Border.tga` is a **filled** square (64,516 of 65,536 pixels fully opaque), so the
 threat alarm must be *larger than the plate and drawn underneath it* or it washes red over every
 readout at exactly the moment you need to read them; and draw order is `controlledChildren`
-order at +4 frame levels per child, so the flat transmit list must stay depth-first to match.
+order at +4 frame levels per child, so the flat transmit list must stay depth-first to match; and
+the fill orientation, because an inverted rail still looks like a working bar.
+
+**Paladin runs the strip at double size** (204×62, 200×22 rails, 20pt numbers, at y −125) as of
+its v21 — the template the other six will follow.
 
 Every pack also carries a **PvP layer**: elements that exist only inside an
 arena or battleground (CC-on-you with the break decision, trinket availability, enemy trinket

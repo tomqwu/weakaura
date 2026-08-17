@@ -1,4 +1,4 @@
--- generate.lua — Warlock TBC All-Specs HUD (v15).
+-- generate.lua — Warlock TBC All-Specs HUD (v16).
 -- Run: lua5.1 generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import).
 --
@@ -441,8 +441,8 @@
 --     free in ALL SEVEN packs with dynamic groups projected six children deep.
 --     -21 (the design's first draft) also scans clean but is the character's
 --     WAIST, not under it, and leaves 0.5 px to two packs' buff rows.
---   * ORIENTATION IS "HORIZONTAL_INVERSE", which is WeakAuras for "Left to Right"
---     (Private.orientation_with_circle_types: HORIZONTAL_INVERSE = "Left to Right",
+--   * ORIENTATION IS "HORIZONTAL", which is WeakAuras for "Left to Right"
+--     (Private.orientation_with_circle_types: HORIZONTAL = "Left to Right",
 --     HORIZONTAL = "Right to Left"). This is the linear fill path, the same one
 --     the v9/v10 globes used with "VERTICAL"; startAngle/endAngle go inert,
 --     compress/slanted/slantMode go live, and crop_x/crop_y 0.41 stops being the
@@ -791,8 +791,8 @@ local top = F.group(TOP, 0, TOP_Y, nil)
 -- pixel, one percent, no scaling in either direction. Same WeakAuras region type
 -- as the rings, one different field:
 --
---   orientation = "HORIZONTAL_INVERSE"  -- Private.orientation_with_circle_types:
---     HORIZONTAL_INVERSE = "Left to Right",  HORIZONTAL        = "Right to Left",
+--   orientation = "HORIZONTAL"  -- Private.orientation_with_circle_types:
+--     HORIZONTAL = "Left to Right",  HORIZONTAL        = "Right to Left",
 --     VERTICAL           = "Bottom to Top",  VERTICAL_INVERSE  = "Top to Bottom",
 --     CLOCKWISE / ANTICLOCKWISE = the two RADIAL values (v11-v13 used CLOCKWISE)
 --
@@ -800,7 +800,7 @@ local top = F.group(TOP, 0, TOP_Y, nil)
 -- aurabar's VERTICAL does (gotchas.md) — and note the two region types disagree:
 -- on an AURABAR, HORIZONTAL is anchored left and grows right; on a
 -- PROGRESSTEXTURE, HORIZONTAL is "Right to Left" and the left-to-right value is
--- HORIZONTAL_INVERSE. Getting it backwards gives a rail that empties from the
+-- HORIZONTAL. Getting it backwards gives a rail that empties from the
 -- left, which looks deliberate and is wrong. This is the ONE field in the redesign
 -- that no committed string in this repo has rendered — v9/v10 shipped the sibling
 -- linear value VERTICAL in poc/diablo-globes — so it is the one thing to eyeball
@@ -946,7 +946,7 @@ local function rail(id, h, y, color, trigs)
     selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
     xOffset = 0, yOffset = y, frameStrata = 1, alpha = 1,
     -- LINEAR fill, left to right. The name is inverted; see the section note.
-    orientation = "HORIZONTAL_INVERSE",
+    orientation = "HORIZONTAL",
     -- RADIAL-only and inert on this path; emitted because they are in the
     -- region's default table.
     startAngle = 0, endAngle = 360,
@@ -1783,7 +1783,7 @@ W.verify(transmit, encoded)
 --     exactly 1 px; and the plate's margins exactly 1 px above / 2 px below.
 --     Asserted from decoded widths and heights, so "102 x 31" is a measurement
 --     rather than a comment.
---  3. RAIL CANON. progresstexture on the LINEAR path (HORIZONTAL_INVERSE, which
+--  3. RAIL CANON. progresstexture on the LINEAR path (HORIZONTAL, which
 --     is WeakAuras for "Left to Right"), 100 px long — the length at which one
 --     pixel is one percent — and explicitly NOT square, because square is what
 --     every progresstexture in this repo was until v14 and a copied ring is the
@@ -2084,7 +2084,7 @@ local RAILS = {
 for _, r in ipairs(RAILS) do
   local n = assert(nodes[r.id])
   assert(n.regionType == "progresstexture", r.id .. ": not a progresstexture")
-  assert(n.orientation == "HORIZONTAL_INVERSE",
+  assert(n.orientation == "HORIZONTAL",
     r.id .. ": not on the LINEAR left-to-right fill path (HORIZONTAL is Right to Left)")
   assert(n.width == C.railLen,
     ("%s is %s px long, and one pixel is one percent only at %d")

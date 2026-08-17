@@ -1,4 +1,4 @@
--- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v16).
+-- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v17).
 -- Run: lua5.1 tbc/hunter/generate.lua   (toolkit libs must be fetched once:
 --      tools/tbc-weakaura-creator/scripts/setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game.
@@ -314,7 +314,7 @@
 --     The 20% aspect mark moves from (27.71, 9.0) — an angle on a circumference — to a plain
 --     x = -30, and it is a full-height waterline instead of a 6px square beside an arc.
 --   * ORIENTATION IS THE ONE FIELD THIS REPO HAS NEVER RENDERED. On a progresstexture the
---     LINEAR left-to-right value is "HORIZONTAL_INVERSE"; plain "HORIZONTAL" is Right to Left
+--     LINEAR left-to-right value is "HORIZONTAL"; plain "HORIZONTAL" is Right to Left
 --     (Private.orientation_with_circle_types, transcribed in poc/diablo-globes/generate.lua).
 --     It is the exact inverse of the aurabar convention in gotchas.md, which is why the rails
 --     are asserted on the literal string below and why the README says to eyeball one drop of
@@ -644,13 +644,13 @@ end
 -- THE RAIL. A progresstexture on the LINEAR fill path — the same region type the rings were,
 -- with ONE different field, and that field silently changes which of the others are live.
 -- Field notes on the ones that are traps:
---   orientation "HORIZONTAL_INVERSE" -> WeakAuras' own label for this value is "Left to Right".
+--   orientation "HORIZONTAL" -> WeakAuras' own label for this value is "Left to Right".
 --     Plain "HORIZONTAL" on a progresstexture is "Right to Left", which is the EXACT INVERSE of
 --     the aurabar convention in references/gotchas.md ("HORIZONTAL = anchored left, grows
 --     right"). Both names come from Private.orientation_with_circle_types, transcribed verbatim
 --     in poc/diablo-globes/generate.lua; the sibling value VERTICAL from that same table is
 --     live in a shipped poc string, but no committed string in THIS repo has yet rendered
---     HORIZONTAL_INVERSE. It is the one field in the design that a live client has to confirm,
+--     HORIZONTAL. It is the one field in the design that a live client has to confirm,
 --     and the check is 30 seconds long: drop to half mana and the EMPTY half must be on the
 --     RIGHT. If it is reversed, the fix is this one token.
 --   startAngle 0 / endAngle 360 -> INERT on the linear path (they only matter on the circular
@@ -680,7 +680,7 @@ local function rail(id, lane, color, triggers)
     width = RAIL_LEN, height = lane.h,
     selfPoint = "CENTER", anchorPoint = "CENTER", anchorFrameType = "SCREEN",
     xOffset = 0, yOffset = lane.y, frameStrata = 1, alpha = 1,
-    orientation = "HORIZONTAL_INVERSE", startAngle = 0, endAngle = 360,
+    orientation = "HORIZONTAL", startAngle = 0, endAngle = 360,
     inverse = false, mirror = false,
     compress = false, slanted = false, slant = 0, slantFirst = false, slantMode = "INSIDE",
     foregroundTexture = RAIL_TEX, backgroundTexture = RAIL_TEX, sameTexture = true,
@@ -1962,7 +1962,7 @@ end
 -- line of this file:
 --   1. It is a progresstexture on the LINEAR path. A ring and a rail differ by ONE field
 --      (orientation), and that field silently changes which of the others are live, so it is
---      asserted on the literal string rather than trusted. HORIZONTAL_INVERSE is "Left to
+--      asserted on the literal string rather than trusted. HORIZONTAL is "Left to
 --      Right"; plain HORIZONTAL on this region type fills RIGHT TO LEFT, which is the exact
 --      inverse of the aurabar convention and would silently mirror every reading.
 --   2. Its subregion list is exactly what the conditions and the design expect, in order.
@@ -1979,7 +1979,7 @@ local SUBS = {
 for _, r in ipairs(SUBS) do
   local region, lane, subs, label = r[1], r[2], r[3], r[4]
   assert(region.regionType == "progresstexture", label .. " is not a progresstexture")
-  assert(region.orientation == "HORIZONTAL_INVERSE",
+  assert(region.orientation == "HORIZONTAL",
     label .. " is not filling left to right (" .. tostring(region.orientation) .. ")")
   assert(region.crop_x == 0.41 and region.crop_y == 0.41,
     label .. " lost the default texcoord scale")
