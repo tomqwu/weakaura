@@ -1,15 +1,24 @@
--- generate.lua — Rogue TBC All-Specs HUD (v57).
+-- generate.lua — Rogue TBC All-Specs HUD (v58).
 -- Reproducible lineage build: start from the committed v41 snapshot, then replay
--- the reviewed v42 through v54 Lua migrations in order. The snapshot lives
+-- the reviewed v42 through v58 Lua migrations in order. The snapshot lives
 -- inside this script so the class still ships exactly one importable all-specs.txt.
 --
--- v54 replaces the 100x100 concentric ring cluster with THE SILL: a 102x37 instrument
--- strip of four stacked 100px rails — threat, health, energy, combo — parked under your
--- character at absolute (0, -110), where ONE PIXEL IS ONE PERCENT. The five combo pips
--- move in from their own 172x14 row. No aura is added or removed; every region in the
--- strip is a v53 aura that changed job, so all 58 uids carry across untouched.
+-- v54 replaced the 100x100 concentric ring cluster with THE SILL: an instrument strip of
+-- four stacked rails — threat, health, energy, combo — parked under your character, where
+-- the rail length divides evenly into 100 so a breakpoint is arithmetic instead of
+-- trigonometry. v58 takes it to paladin v22's law: RAIL_LEN 300, THREE PIXELS PER PERCENT,
+-- a 304x74 plate under a 316x86 alarm rim at absolute (0,-125), with 22px bars and 20pt
+-- numbers. The tracked-buff row moves ABOVE the strip to make the room; the proc and PvP
+-- columns move right. No aura is added or removed; all 58 uids carry across untouched.
 --
--- The >=80% threat alarm is a 108x43 quad drawn FIRST, under the plate: Square_White_Border
+-- v58 also fixes what v57 got wrong. v57 anchored the ten combo regions to the target's
+-- nameplate and fed them a third trigger on unit "target" — but WeakAuras.GetUnitNameplate
+-- is gated on Private.multiUnitUnits.nameplate, which holds nameplate1..nameplate40 and
+-- nothing else, so "target" resolved to nil and GetAnchorFrame's `return parent` fallback
+-- put the pips back in the strip, every time. v58 makes trigger 3 a multi-unit NAMEPLATE
+-- trigger filtered by unitisunit = "target", which is the only token family that resolves.
+--
+-- The >=80% threat alarm is a 316x86 quad drawn FIRST, under the plate: Square_White_Border
 -- is FILLED art, so the only way one region can read as an edge is to be bigger than what
 -- covers it. The canon below asserts both the size and the draw index, because dropping
 -- either turns the alarm back into an ADD red wash over every readout.
@@ -43,7 +52,7 @@ local ok, result = pcall(function()
   for _, patch in ipairs({
     "patch-v42.lua", "patch-v43.lua", "patch-v44.lua", "patch-v45.lua", "patch-v46.lua",
     "patch-v47.lua", "patch-v48.lua", "patch-v49.lua", "patch-v50.lua", "patch-v51.lua",
-    "patch-v52.lua", "patch-v53.lua", "patch-v54.lua", "patch-v57.lua",
+    "patch-v52.lua", "patch-v53.lua", "patch-v54.lua", "patch-v57.lua", "patch-v58.lua",
   }) do
     arg[0] = dir .. "/" .. patch
     dofile(arg[0])
@@ -74,21 +83,40 @@ local ok, result = pcall(function()
   local RING_TEX   = MEDIA .. "Ring_20px.tga"
   local SQUARE     = MEDIA .. "Square_White.tga"
   local SQUARE_BRD = MEDIA .. "Square_White_Border.tga"
-  local SILL_X, SILL_Y   = 0, -110
-  local RAIL_LEN         = 100          -- one pixel is one percent
-  local PLATE_W, PLATE_H = 102, 37
-  local RIM              = 3            -- the alarm sticks out this far past the plate
+  -- v58 REWRITES THESE, it does not drop them. The numbers below are the v58 geometry,
+  -- measured (see patch-v58.lua) and then asserted here against the finished string.
+  local SILL_X, SILL_Y   = 0, -125      -- paladin parity: strip top lands on paladin's
+  local RAIL_LEN         = 300          -- THREE pixels is one percent
+  local PLATE_W, PLATE_H = 304, 74
+  local RIM              = 6            -- the alarm sticks out this far past the plate
   local ALARM_W, ALARM_H = PLATE_W + 2 * RIM, PLATE_H + 2 * RIM
   local GROUP  = "Rogue - Player Sill"
   local PLATE  = "Rogue - Sill Plate"
   local ALARM  = "Rogue - Alarm Frame"
   local RAILS  = {
-    { id = "Rogue - Threat Rail", h = 4,  y = 15.5, subs = 2 },
-    { id = "Rogue - Health Rail", h = 11, y = 7,    subs = 4 },
-    { id = "Rogue - Energy Rail", h = 11, y = -5,   subs = 8 },
+    { id = "Rogue - Threat Rail", h = 8,  y = 31,  subs = 2 },
+    { id = "Rogue - Health Rail", h = 22, y = 14,  subs = 4 },
+    { id = "Rogue - Energy Rail", h = 22, y = -10, subs = 8 },
   }
-  local PIP_W, PIP_H, PIP_Y = 16, 6, -14.5
+  -- THE PIP LANE IS FROZEN AT 16px WIDE ON PURPOSE. These ten regions are also the ones that
+  -- draw on the target's nameplate (see the nameplate canon at the bottom), and they carry ONE
+  -- pair of offsets for both surfaces. A 96px row is right on a nameplate; a 264px row is not.
+  -- The pip lane is a 0..5 counter, not a percentage gauge, so it has no reason to scale with
+  -- RAIL_LEN. Only the height follows the lane stack.
+  local PIP_W, PIP_H, PIP_Y = 16, 12, -29
   local PIP_X = { -40, -20, 0, 20, 40 }
+  -- The columns that had to move so a 316px rim fits, and the two that did NOT. Measured
+  -- minima at this rim width are Procs x >= 174 and PvP x >= 228, both at zero clearance;
+  -- Rogue - Alerts never enters the strip band at any rail length because its box only exists
+  -- above y -44, and Rogue - Cooldowns clears by 22px. Asserted so a later reader cannot
+  -- "tidy" the alert column sideways on the assumption that paladin's move was required here.
+  local COLUMNS = {
+    { id = "Rogue - Buffs",     x = 0,    y = -60 },
+    { id = "Rogue - Procs",     x = 330,  y = -116 },
+    { id = "Rogue - PvP",       x = 250,  y = -44 },
+    { id = "Rogue - Alerts",    x = -150, y = -44 },
+    { id = "Rogue - Cooldowns", x = 0,    y = -206 },
+  }
 
   local nodes = { [transmit.d.id] = transmit.d }
   for _, aura in ipairs(transmit.c) do nodes[aura.id] = aura end
@@ -121,12 +149,19 @@ local ok, result = pcall(function()
     return x, y
   end
 
-  -- 1) the strip is where it says it is, by arithmetic on the real parent chain
+  -- 1) the strip, and every column around it, is where it says it is, by arithmetic on the
+  --    real parent chain
   do
     local x, y = absolute(GROUP)
     assert(x == SILL_X and y == SILL_Y,
       ("rail canon: the sill resolves to (%s,%s), not (%d,%d)")
         :format(tostring(x), tostring(y), SILL_X, SILL_Y))
+    for _, col in ipairs(COLUMNS) do
+      local cx, cy = absolute(col.id)
+      assert(cx == col.x and cy == col.y,
+        ("rail canon: %s resolves to (%s,%s), not (%d,%d)")
+          :format(col.id, tostring(cx), tostring(cy), col.x, col.y))
+    end
   end
 
   -- 2) the rails: linear, 100px long, square art, never square-shaped
@@ -292,6 +327,67 @@ local ok, result = pcall(function()
       .. "closest %.2fpx (%s)")
       :format(PLATE_W, PLATE_H, ALARM_W, ALARM_H, popX, SILL_X, SILL_Y, sx1, sx2, sy1, sy2,
         scanned, DEPTH, closest, tostring(closestId)))
+  end
+
+  -- 6b) THE LANE STACK. The four lanes never overlap, and the whole stack sits inside the
+  --     plate with at least a 1px margin. This is the assertion that turns "the rails got
+  --     three times longer" into a proof that they also still fit vertically.
+  do
+    local stack = {}
+    for _, want in ipairs(RAILS) do stack[#stack + 1] = { want.id, want.h, want.y } end
+    stack[#stack + 1] = { "combo lane", PIP_H, PIP_Y }
+    for i = 1, #stack - 1 do
+      local a, b = stack[i], stack[i + 1]
+      local gap = (a[3] - a[2] / 2) - (b[3] + b[2] / 2)
+      assert(gap >= 1, ("rail canon: %s and %s are %gpx apart"):format(a[1], b[1], gap))
+    end
+    local top    = RAILS[1].y + RAILS[1].h / 2
+    local bottom = PIP_Y - PIP_H / 2
+    assert(top <= PLATE_H / 2 - 1 and bottom >= -PLATE_H / 2 + 1,
+      ("rail canon: the lane stack (%+.1f..%+.1f) does not fit inside a %dpx plate")
+        :format(top, bottom, PLATE_H))
+  end
+
+  -- 6c) THE NAMEPLATE CANON. The ten combo regions draw on the target's nameplate, and the
+  --     ONLY thing that makes that work is the unit token their state provider reports.
+  --     WeakAuras.GetUnitNameplate (AuraEnvironment.lua:160) is gated on
+  --     Private.multiUnitUnits.nameplate, which Types.lua:4351-4355 fills with
+  --     nameplate1..nameplate40 and nothing else. "target" is not in it — v57 shipped
+  --     "target" and the pips silently rendered in the strip for a whole version. So all
+  --     four facts below are canon:
+  --       * unit = "nameplate"          -- the only family that resolves
+  --       * unitisunit = "target"       -- filtered to the one plate that is your target
+  --       * activeTriggerMode = 3       -- region.state, and therefore state.unit, comes
+  --                                        from that trigger (WeakAuras.lua:4964)
+  --       * the show rule excludes it   -- so with no plate the aura still shows, takes
+  --                                        CreateFallbackState (no state.unit), and
+  --                                        GetAnchorFrame's `return parent` puts it back in
+  --                                        the Sill lane. Drop this and a player with
+  --                                        nameplates off has no combo readout at all.
+  do
+    local SHOW_RULE = "function(t) return t[1] and t[2] end"
+    for i = 1, 5 do
+      for _, id in ipairs({ ("Rogue - Combo Socket %d"):format(i),
+                            ("Rogue - Combo Point %d"):format(i) }) do
+        local a = nodes[id]
+        assert(a.anchorFrameType == "NAMEPLATE",
+          "nameplate canon: " .. id .. " is not nameplate-anchored")
+        assert(a.selfPoint == "CENTER" and a.anchorPoint == "CENTER" and a.parent == GROUP,
+          "nameplate canon: " .. id .. " lost the anchoring its no-plate fallback depends on")
+        assert(#a.triggers == 3 and a.triggers.activeTriggerMode == 3,
+          "nameplate canon: " .. id .. " no longer takes its state from trigger 3")
+        local t3 = a.triggers[3].trigger
+        assert(t3.event == "Unit Characteristics" and t3.unit == "nameplate",
+          ("nameplate canon: %s trigger 3 is on %q; only nameplate1..40 resolve")
+            :format(id, tostring(t3.unit)))
+        assert(t3.use_unitisunit == true and t3.unitisunit == "target",
+          "nameplate canon: " .. id .. " is not filtered to the target's plate")
+        assert(a.triggers.disjunctive == "custom"
+          and a.triggers.customTriggerLogic == SHOW_RULE,
+          "nameplate canon: " .. id .. " lets the nameplate trigger gate visibility, so a "
+          .. "player with nameplates off would have no combo readout")
+      end
+    end
   end
 
   -- 7) nothing anywhere in the pack is still a ring

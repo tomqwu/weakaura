@@ -23,7 +23,7 @@ use GitHub's copy button on the block to grab the whole string in one click.
 
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
-| Rogue — All Specs | Combat · Assassination · Subtlety | v57 | 58 | [string](tbc/rogue/README.md#import-string-v57) · [raw](tbc/rogue/all-specs.txt) |
+| Rogue — All Specs | Combat · Assassination · Subtlety | v58 | 58 | [string](tbc/rogue/README.md#import-string-v58) · [raw](tbc/rogue/all-specs.txt) |
 | Paladin — All Specs | Holy · Protection · Retribution | v22 | 45 | [string](tbc/paladin/README.md#import-string-v22) · [raw](tbc/paladin/all-specs.txt) |
 | Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v17 | 45 | [string](tbc/druid/README.md#import-string-v17) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v16 | 40 | [string](tbc/warlock/README.md#import-string-v16) · [raw](tbc/warlock/all-specs.txt) |
@@ -51,12 +51,12 @@ discrete resource) sitting at absolute **(0, −110)**, directly under your char
 | threat | 100×4 | green → orange at 70 → red on aggro; **absent** when you are on no threat table |
 | health | 100×11 | fill, exact % inside the rail, colour flips inside your defensive window |
 | power | 100×11 | fill, exact % or raw value, with ability costs drawn as waterlines |
-| resource | 5×(16×6) | rogue combo pips / mage arcane stacks; omitted where a class has none |
+| resource | 5×(16×12) | rogue combo pips — since v58 on the **target’s nameplate**, falling back to the strip when no plate exists; mage arcane stacks; omitted where a class has none |
 
 **A rail is a whole number of pixels per percent.** That is the lever the whole design turns on:
 every breakpoint becomes arithmetic instead of the trigonometry a ring needs —
-the rogue's 35-energy mark moves from `(23.575, −17.128)` to `x = −15`. It also cuts the
-footprint from 10,000 px² to 3,774 (12,408 → 3,774 on the rogue, whose pip row was separate),
+the rogue's 35-energy mark moves from `(23.575, −17.128)` to `x = −45` on its 300px rail. It cut the footprint from 10,000 px² to 3,774 at the original 100px length — paladin and rogue have
+since traded some of that back for legibility, at 304×62 and 304×74 —
 deletes the 3D portrait — 1,936 px² carrying no decision — and puts every number on a dark bed
 instead of on a moving model.
 
@@ -89,11 +89,11 @@ acceptance note instead of presenting static serialization as an in-game test.
 
 ## Packs
 
-- **tbc/rogue/all-specs.txt** — full HUD, v54 of a 54-iteration build: since **v54 the Sill**
+- **tbc/rogue/all-specs.txt** — full HUD, v58 of a 58-iteration build: since **v54 the Sill**
   (see the shared geometry above), the widest version of it at **102×37**, because the rogue is
   the one pack whose strip carries a fourth lane. The **five combo pips move into the strip**,
-  16×6 on their own row 1px under the energy rail, so "do I have the points" and "can I afford
-  the finisher" collapse into a single fixation instead of two reads 233px apart. Energy stays a
+  16×12, and since **v58 they ride the target’s nameplate** — combo points are a property of the
+  target — falling back to their strip lane whenever no nameplate exists. Energy stays a
   **raw number, not a percent** — 35 and 40 are absolute costs — and its two breakpoints are
   waterlines the fill crosses at `x −15` and `x −10`, dim where the breakpoint is and lit the
   moment you can afford Eviscerate or Sinister Strike. The alarm rim is 108×43. 58 auras in, 58
