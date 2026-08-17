@@ -23,7 +23,7 @@ use GitHub's copy button on the block to grab the whole string in one click.
 
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
-| Rogue — All Specs | Combat · Assassination · Subtlety | v56 | 58 | [string](tbc/rogue/README.md#import-string-v56) · [raw](tbc/rogue/all-specs.txt) |
+| Rogue — All Specs | Combat · Assassination · Subtlety | v57 | 58 | [string](tbc/rogue/README.md#import-string-v57) · [raw](tbc/rogue/all-specs.txt) |
 | Paladin — All Specs | Holy · Protection · Retribution | v22 | 45 | [string](tbc/paladin/README.md#import-string-v22) · [raw](tbc/paladin/all-specs.txt) |
 | Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v17 | 45 | [string](tbc/druid/README.md#import-string-v17) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v16 | 40 | [string](tbc/warlock/README.md#import-string-v16) · [raw](tbc/warlock/all-specs.txt) |
