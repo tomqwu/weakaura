@@ -1,4 +1,4 @@
--- generate.lua — Rogue TBC All-Specs HUD (v58).
+-- generate.lua — Rogue TBC All-Specs HUD (v59).
 -- Reproducible lineage build: start from the committed v41 snapshot, then replay
 -- the reviewed v42 through v58 Lua migrations in order. The snapshot lives
 -- inside this script so the class still ships exactly one importable all-specs.txt.
@@ -6,7 +6,7 @@
 -- v54 replaced the 100x100 concentric ring cluster with THE SILL: an instrument strip of
 -- four stacked rails — threat, health, energy, combo — parked under your character, where
 -- the rail length divides evenly into 100 so a breakpoint is arithmetic instead of
--- trigonometry. v58 takes it to paladin v22's law: RAIL_LEN 300, THREE PIXELS PER PERCENT,
+-- trigonometry. v58 takes it to RAIL_LEN 200, TWO PIXELS PER PERCENT,
 -- a 304x74 plate under a 316x86 alarm rim at absolute (0,-125), with 22px bars and 20pt
 -- numbers. The tracked-buff row moves ABOVE the strip to make the room; the proc and PvP
 -- columns move right. No aura is added or removed; all 58 uids carry across untouched.
@@ -86,8 +86,8 @@ local ok, result = pcall(function()
   -- v58 REWRITES THESE, it does not drop them. The numbers below are the v58 geometry,
   -- measured (see patch-v58.lua) and then asserted here against the finished string.
   local SILL_X, SILL_Y   = 0, -125      -- paladin parity: strip top lands on paladin's
-  local RAIL_LEN         = 300          -- THREE pixels is one percent
-  local PLATE_W, PLATE_H = 304, 74
+  local RAIL_LEN         = 200          -- TWO pixels is one percent (300 was too wide in play)
+  local PLATE_W, PLATE_H = 204, 74
   local RIM              = 6            -- the alarm sticks out this far past the plate
   local ALARM_W, ALARM_H = PLATE_W + 2 * RIM, PLATE_H + 2 * RIM
   local GROUP  = "Rogue - Player Sill"

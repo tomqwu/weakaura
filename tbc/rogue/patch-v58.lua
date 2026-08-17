@@ -151,14 +151,19 @@ local SQUARE_BRD = MEDIA .. "Square_White_Border.tga"
 
 -- ===== geometry =========================================================================
 local SILL_X, SILL_Y   = 0, -125      -- paladin parity: the strip top lands on paladin's
-local RAIL_LEN         = 300          -- THREE pixels is one percent
+local RAIL_LEN         = 200          -- TWO pixels is one percent. 300 was tried and reverted:
+                                      -- on a real screen a 316px rim spanned most of the width
+                                      -- and read as a UI panel rather than a readout. The
+                                      -- invariant is a WHOLE number of pixels per percent, not
+                                      -- any particular one, so this is a constant change and
+                                      -- markX() carries every mark with it.
 local MAXPOWER         = 100          -- energy cap without Vigor
 local THREAT_H         = 8
 local BAR_H            = 22
 local LANE_THREAT_Y    = 31
 local LANE_HEALTH_Y    = 14
 local LANE_POWER_Y     = -10
-local PLATE_W, PLATE_H = 304, 74
+local PLATE_W, PLATE_H = 204, 74
 local RIM              = 6            -- how far the alarm sticks out past the plate, per side
 local ALARM_W, ALARM_H = PLATE_W + 2 * RIM, PLATE_H + 2 * RIM
 
@@ -188,7 +193,7 @@ local MARK_DIM_W   = 4
 local MARK_LIT_W   = 8
 local NOTCH_W      = 2
 
-local LABEL_X, LABEL_SIZE = 96, 20    -- 82% along the rail, inside it
+local LABEL_X, LABEL_SIZE = 64, 20    -- 82% along the rail, inside it
 local THREAT_LABEL_SIZE   = 14        -- still text_visible = false; sized for parity
 
 -- Column moves, as ABSOLUTE targets. Local offsets are derived from the real parent chain
