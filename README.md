@@ -23,7 +23,7 @@ use GitHub's copy button on the block to grab the whole string in one click.
 
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
-| Rogue — All Specs | Combat · Assassination · Subtlety | v58 | 58 | [string](tbc/rogue/README.md#import-string-v58) · [raw](tbc/rogue/all-specs.txt) |
+| Rogue — All Specs | Combat · Assassination · Subtlety | v59 | 58 | [string](tbc/rogue/README.md#import-string-v59) · [raw](tbc/rogue/all-specs.txt) |
 | Paladin — All Specs | Holy · Protection · Retribution | v22 | 45 | [string](tbc/paladin/README.md#import-string-v22) · [raw](tbc/paladin/all-specs.txt) |
 | Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v17 | 45 | [string](tbc/druid/README.md#import-string-v17) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v16 | 40 | [string](tbc/warlock/README.md#import-string-v16) · [raw](tbc/warlock/all-specs.txt) |
@@ -55,7 +55,7 @@ discrete resource) sitting at absolute **(0, −110)**, directly under your char
 
 **A rail is a whole number of pixels per percent.** That is the lever the whole design turns on:
 every breakpoint becomes arithmetic instead of the trigonometry a ring needs —
-the rogue's 35-energy mark moves from `(23.575, −17.128)` to `x = −45` on its 300px rail. It cut the footprint from 10,000 px² to 3,774 at the original 100px length — paladin and rogue have
+the rogue's 35-energy mark moves from `(23.575, −17.128)` to `x = −30` on its 200px rail. It cut the footprint from 10,000 px² to 3,774 at the original 100px length — paladin and rogue have
 since traded some of that back for legibility, at 304×62 and 304×74 —
 deletes the 3D portrait — 1,936 px² carrying no decision — and puts every number on a dark bed
 instead of on a moving model.
@@ -89,7 +89,7 @@ acceptance note instead of presenting static serialization as an in-game test.
 
 ## Packs
 
-- **tbc/rogue/all-specs.txt** — full HUD, v58 of a 58-iteration build: since **v54 the Sill**
+- **tbc/rogue/all-specs.txt** — full HUD, v59 of a 59-iteration build: since **v54 the Sill**
   (see the shared geometry above), the widest version of it at **102×37**, because the rogue is
   the one pack whose strip carries a fourth lane. The **five combo pips move into the strip**,
   16×12, and since **v58 they ride the target’s nameplate** — combo points are a property of the
