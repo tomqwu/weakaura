@@ -1,5 +1,16 @@
 -- patch-v57.lua — the combo pips move onto the TARGET'S NAMEPLATE.
 --
+-- !! CORRECTED BY patch-v58.lua. THIS STEP SHIPPED BROKEN. !!
+-- Everything below is right except one field: `unit = "target"` on trigger 3. WeakAuras'
+-- GetUnitNameplate (AuraEnvironment.lua:160) is gated on Private.multiUnitUnits.nameplate,
+-- which Types.lua:4351-4355 fills with nameplate1..nameplate40 and NOTHING else — so "target"
+-- resolves to nil, GetAnchorFrame falls through to `return parent`, and the pips rendered in
+-- the Sill for the whole of v57. v58 changes trigger 3 to unit = "nameplate" with
+-- use_unitisunit / unitisunit = "target", and swaps disjunctive "all" for a custom rule that
+-- keeps the sockets visible with no target. This step is kept in the replay because the anchor
+-- field, the third-trigger slot and activeTriggerMode = 3 are all still what v58 builds on;
+-- only two field values are wrong, and layering the correction keeps the lineage honest.
+--
 -- Replayed by generate.lua after patch-v56. Mutates `byId` in place; consumes no W.uid().
 --
 -- ============================================================================================
