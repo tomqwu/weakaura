@@ -1,4 +1,4 @@
--- generate.lua — "Paladin TBC - All Specs" (v19)
+-- generate.lua — "Paladin TBC - All Specs" (v20)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code)
 -- except the rail region tables, which wa_factory has no builder for.
@@ -1021,8 +1021,7 @@ end
 -- v15 and are what carry the digits across the fill edge that passes under them at ~82%.
 local function pct(sym, size, xOffset, color)
   local st = F.subtext("%" .. sym .. "%%", size, "CENTER", sym)
-  st.anchorXOffset = xOffset
-  st.anchorYOffset = 0
+  F.subtextOffset(st, xOffset, 0)
   st.text_color = color
   return st
 end

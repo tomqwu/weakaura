@@ -23,13 +23,13 @@ use GitHub's copy button on the block to grab the whole string in one click.
 
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
-| Rogue — All Specs | Combat · Assassination · Subtlety | v54 | 58 | [string](tbc/rogue/README.md#import-string-v54) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v19 | 45 | [string](tbc/paladin/README.md#import-string-v19) · [raw](tbc/paladin/all-specs.txt) |
-| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v15 | 45 | [string](tbc/druid/README.md#import-string-v15) · [raw](tbc/druid/all-specs.txt) |
-| Warlock — All Specs | Affliction · Demonology · Destruction | v14 | 40 | [string](tbc/warlock/README.md#import-string-v14) · [raw](tbc/warlock/all-specs.txt) |
-| Hunter — BM & Survival | Beast Mastery · Survival | v15 | 49 | [string](tbc/hunter/README.md#import-string-v15) · [raw](tbc/hunter/all-specs.txt) |
-| Priest — All Specs | Shadow · Holy · Discipline | v14 | 41 | [string](tbc/priest/README.md#import-string-v14) · [raw](tbc/priest/all-specs.txt) |
-| Mage — Arcane & Frost | Arcane · Frost | v14 | 44 | [string](tbc/mage/README.md#import-string-v14) · [raw](tbc/mage/all-specs.txt) |
+| Rogue — All Specs | Combat · Assassination · Subtlety | v55 | 58 | [string](tbc/rogue/README.md#import-string-v55) · [raw](tbc/rogue/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v20 | 45 | [string](tbc/paladin/README.md#import-string-v20) · [raw](tbc/paladin/all-specs.txt) |
+| Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v16 | 45 | [string](tbc/druid/README.md#import-string-v16) · [raw](tbc/druid/all-specs.txt) |
+| Warlock — All Specs | Affliction · Demonology · Destruction | v15 | 40 | [string](tbc/warlock/README.md#import-string-v15) · [raw](tbc/warlock/all-specs.txt) |
+| Hunter — BM & Survival | Beast Mastery · Survival | v16 | 49 | [string](tbc/hunter/README.md#import-string-v16) · [raw](tbc/hunter/all-specs.txt) |
+| Priest — All Specs | Shadow · Holy · Discipline | v15 | 41 | [string](tbc/priest/README.md#import-string-v15) · [raw](tbc/priest/all-specs.txt) |
+| Mage — Arcane & Frost | Arcane · Frost | v15 | 44 | [string](tbc/mage/README.md#import-string-v15) · [raw](tbc/mage/all-specs.txt) |
 
 Every pack is class-gated and auto-adapts across the **supported builds listed in the table**
 through Spell Known gates. The current product scope is primarily level-70 single-target

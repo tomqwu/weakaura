@@ -346,7 +346,10 @@ threat.subRegions[2] = waterline(markX(NOTCH_THREAT), 2, LANE.threat.h, { 1, 1, 
 -- turn "estimate a fraction" into "count quarters" for 33px of ink and zero footprint.
 do
   local label = health.subRegions[1]
+  -- BOTH SPELLINGS. WeakAuras anchors on text_anchor*Offset (SubText.lua); the bare
+  -- anchor*Offset is what its default() writes and nothing reads, with no Modernize bridge.
   label.anchorXOffset, label.anchorYOffset = LABEL_X, 0
+  label.text_anchorXOffset, label.text_anchorYOffset = LABEL_X, 0
   label.text_fontSize = LABEL_SIZE
   for i, x in ipairs(RULER) do
     health.subRegions[1 + i] = waterline(x, 1, LANE.health.h, { 1, 1, 1, 0.18 }, true)
@@ -359,7 +362,10 @@ end
 -- and push every mark down one slot).
 do
   local label = power.subRegions[1]
+  -- BOTH SPELLINGS. WeakAuras anchors on text_anchor*Offset (SubText.lua); the bare
+  -- anchor*Offset is what its default() writes and nothing reads, with no Modernize bridge.
   label.anchorXOffset, label.anchorYOffset = LABEL_X, 0
+  label.text_anchorXOffset, label.text_anchorYOffset = LABEL_X, 0
   label.text_fontSize = LABEL_SIZE
   local MARKS = {
     [2] = { v = EVISCERATE, w = 2 },   -- dim: where the line is
@@ -575,7 +581,8 @@ do
   for _, id in ipairs({ HEALTH, POWER }) do
     local label = newById[id].subRegions[1]
     assert(label.type == "subtext", id .. " lost its number")
-    assert(label.anchorXOffset == LABEL_X and label.anchorYOffset == 0,
+    assert(label.text_anchorXOffset == LABEL_X and label.text_anchorYOffset == 0
+      and label.anchorXOffset == LABEL_X and label.anchorYOffset == 0,
       id .. ": the number is not at the rail's right-hand end")
     assert(label.text_fontSize == LABEL_SIZE, id .. ": the number is not " .. LABEL_SIZE .. "pt")
     assert(label.text_anchorPoint == "CENTER", id .. ": the number is not centre-anchored")
@@ -883,8 +890,14 @@ do
   -- Subregion-level: every key of every surviving subregion except the ones this patch moves.
   local SUB_LICENCE = {
     [THREAT] = { [1] = { text_visible = true } },
-    [HEALTH] = { [1] = { anchorXOffset = true, anchorYOffset = true, text_fontSize = true } },
-    [POWER]  = { [1] = { anchorXOffset = true, anchorYOffset = true, text_fontSize = true },
+    -- v54.1: text_anchor*Offset joins the licence. It is the key WeakAuras actually anchors
+    -- on (SubText.lua); the bare anchor*Offset this patch already moved is written by WA's
+    -- own default() and read by nothing, with no Modernize step bridging them — so the
+    -- number had been rendering dead on its anchor point the whole time.
+    [HEALTH] = { [1] = { anchorXOffset = true, anchorYOffset = true, text_fontSize = true,
+                         text_anchorXOffset = true, text_anchorYOffset = true } },
+    [POWER]  = { [1] = { anchorXOffset = true, anchorYOffset = true, text_fontSize = true,
+                         text_anchorXOffset = true, text_anchorYOffset = true },
                  [2] = { xOffset = true, yOffset = true, width = true, height = true },
                  [3] = { xOffset = true, yOffset = true, width = true, height = true },
                  [4] = { xOffset = true, yOffset = true, width = true, height = true },

@@ -1,4 +1,4 @@
--- generate.lua — Priest TBC All-Specs HUD (v14).
+-- generate.lua — Priest TBC All-Specs HUD (v15).
 -- Run: lua5.1 tbc/priest/generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import -> paste).
 --

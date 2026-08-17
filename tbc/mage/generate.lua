@@ -1,4 +1,4 @@
--- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v14.
+-- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v15.
 -- Run: lua5.1 tbc/mage/generate.lua   (toolkit libs live in tools/tbc-weakaura-creator/scripts/)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (internalVersion 45).
 --
@@ -797,7 +797,7 @@ end
 -- Each number still appears and disappears with the rail that owns it.
 local function pct(sym, size, xOffset, color)
   local st = F.subtext("%" .. sym .. "%%", size, "CENTER", sym)
-  st.anchorXOffset = xOffset
+  F.subtextOffset(st, xOffset, st.anchorYOffset or 0)
   st.text_color = color
   return st
 end
@@ -929,7 +929,7 @@ mpRail.conditions = {
 local threatRail = reg(rail("Mage - Threat Rail", RAIL_LEN, H_THREAT, 0, Y_THREAT, COL.threat,
   { F.threatTrigger() }))
 local threatPct = pct("threatpct", PCT_THREAT_SIZE, 0, COL.thText)
-threatPct.anchorYOffset = PCT_THREAT_Y
+F.subtextOffset(threatPct, threatPct.anchorXOffset or 0, PCT_THREAT_Y)
 threatPct.text_visible = false     -- switched off, index preserved — see the note above
 threatRail.subRegions = {
   threatPct,

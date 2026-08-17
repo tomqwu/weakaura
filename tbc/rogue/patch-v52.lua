@@ -179,7 +179,11 @@ end
 threat.parent, flash.parent = PLAYER_GROUP, PLAYER_GROUP
 threat.width, threat.height = THREAT_RING, THREAT_RING
 flash.width,  flash.height  = THREAT_RING, THREAT_RING
+-- BOTH SPELLINGS. WeakAuras anchors a subtext on text_anchorYOffset (SubText.lua); the bare
+-- anchorYOffset is what WA's own default() writes and nothing reads, and no Modernize step
+-- bridges them, so setting only the bare key moves nothing at all.
 threat.subRegions[1].anchorYOffset = PCT_THREAT_Y
+threat.subRegions[1].text_anchorYOffset = PCT_THREAT_Y
 
 -- Sibling order is layering: FixGroupChildrenOrder adds +4 frame levels per child, so EARLIER
 -- = further behind. Threat leads (it is the outermost band and must never draw over an inner
@@ -343,7 +347,8 @@ do
   local st = r.subRegions[1]
   assert(#r.subRegions == 1 and st.type == "subtext", "the threat label was disturbed")
   assert(st.text_fontSize == PCT_THREAT_SIZE and st.text_anchorPoint == "CENTER"
-    and st.anchorXOffset == 0 and st.anchorYOffset == PCT_THREAT_Y,
+    and st.anchorXOffset == 0 and st.anchorYOffset == PCT_THREAT_Y
+    and st.text_anchorXOffset == 0 and st.text_anchorYOffset == PCT_THREAT_Y,
     "the threat percentage is not the 10pt CENTER label at +58")
   assert(PCT_THREAT_Y > THREAT_RING / 2, "the threat percentage sits inside the new outer ring")
   for key in pairs(was) do
@@ -353,7 +358,7 @@ do
   end
   for key in pairs(r) do assert(was[key] ~= nil, "threat gained field " .. key) end
   for key, v in pairs(was.subRegions[1]) do
-    if key ~= "anchorYOffset" then
+    if key ~= "anchorYOffset" and key ~= "text_anchorYOffset" then
       assert(iseq(v, st[key]), "the threat label changed " .. key)
     end
   end

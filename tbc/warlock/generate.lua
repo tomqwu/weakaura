@@ -1,4 +1,4 @@
--- generate.lua — Warlock TBC All-Specs HUD (v14).
+-- generate.lua — Warlock TBC All-Specs HUD (v15).
 -- Run: lua5.1 generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import).
 --
@@ -1000,8 +1000,7 @@ end
 -- rounded integer rather than 63.428571%.
 local function pct(sym, size, x, y, color)
   local st = F.subtext("%" .. sym .. "%%", size, "CENTER", sym)
-  st.anchorXOffset = x
-  st.anchorYOffset = y
+  F.subtextOffset(st, x, y)
   st.text_color = color
   return st
 end
