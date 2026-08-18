@@ -179,6 +179,14 @@ end
 -- lockouts, which no aura trigger can ever see. No combat gate: the opener Sap lands
 -- out of combat.
 local ccme = newAura(F.icon("Rogue - CC ON ME", CLASS, 40, 40, 0, 0, nil), "RgPvPccOnMe")
+  -- FALLBACK ART ONLY. iconSource stays -1, so the LIVE icon still wins: Icon.lua
+  -- UpdateIcon() reads state.icon first and only falls through to displayIcon when the
+  -- state has none. That happens in the /wa editor, where CreateFallbackState can only
+  -- supply an icon if the prototype has a static GetNameAndIcon/iconFunc — and Crowd
+  -- Controlled derives its icon from the live data.spellID, so it has none. Without this
+  -- line the aura renders as INV_Misc_QuestionMark in the editor and looks broken.
+  -- Paladin has shipped exactly this pattern since v5; these are its proven paths.
+ccme.displayIcon = "Interface\\Icons\\spell_nature_polymorph"
 ccme.triggers = F.triggers({ { type = "unit", event = "Crowd Controlled" } })
 ccme.cooldown = false            -- %p subtext carries the timer, no swipe
 ccme.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })   -- red default = trinket food
@@ -248,6 +256,14 @@ local IMMUNE = {
   19574, 34471,         -- Bestial Wrath (pet) / The Beast Within (hunter): CC-immune
 }
 local immune = newAura(F.icon("Rogue - TARGET IMMUNE", CLASS, 40, 40, 0, 0, nil), "RgPvPimmune")
+  -- FALLBACK ART ONLY. iconSource stays -1, so the LIVE icon still wins: Icon.lua
+  -- UpdateIcon() reads state.icon first and only falls through to displayIcon when the
+  -- state has none. That happens in the /wa editor, where CreateFallbackState can only
+  -- supply an icon if the prototype has a static GetNameAndIcon/iconFunc — and Crowd
+  -- Controlled derives its icon from the live data.spellID, so it has none. Without this
+  -- line the aura renders as INV_Misc_QuestionMark in the editor and looks broken.
+  -- Paladin has shipped exactly this pattern since v5; these are its proven paths.
+immune.displayIcon = "Interface\\Icons\\spell_holy_divineintervention"
 immune.triggers = F.triggers({
   F.auraTrigger("target", true, IMMUNE),   -- any caster: it is the TARGET's state that matters
   hostileTarget(),
@@ -278,6 +294,8 @@ local PVP_TRINKETS = { 37864, 37865, 18857, 18849 }
 local trinketTrigs = {}
 for i, id in ipairs(PVP_TRINKETS) do trinketTrigs[i] = itemTrigger(id, "showOnCooldown") end
 local trink = newAura(F.icon("Rogue - Trinket DOWN", CLASS, 32, 32, 0, 0, nil), "RgPvPtrink1")
+  -- fallback art: iconSource stays -1 so the live icon wins; see the CC ON ME note.
+trink.displayIcon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
 trink.triggers = F.triggers(trinketTrigs, { disjunctive = "any" })   -- whichever one you wear
 trink.cooldownTextDisabled = false   -- swipe numbers; no %p subtext (OmniCC would double it)
 trink.desaturate = true
@@ -305,6 +323,8 @@ wotf.load.spellknown = 7744
 -- 5 min Insignia comes back later than the bar says, which errs toward holding CC.
 -- Arena-only: arena1..5 do not exist in a battleground.
 local etrink = newAura(F.icon("Rogue - Enemy Trinket", CLASS, 32, 32, 0, 0, nil), "RgPvPetrink")
+  -- fallback art: iconSource stays -1 so the live icon wins; see the CC ON ME note.
+etrink.displayIcon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
 etrink.triggers = F.triggers({
   { type = "event", event = "Spell Cast Succeeded", unit = "arena", use_unit = true,
     use_spellId = true, spellId = { "42292" },   -- "PvP Trinket", cast by both families

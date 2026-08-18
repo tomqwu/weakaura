@@ -1,4 +1,4 @@
--- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v17.
+-- tbc/mage/generate.lua — Mage "Arcane & Frost" HUD v18.
 -- Run: lua5.1 tbc/mage/generate.lua   (toolkit libs live in tools/tbc-weakaura-creator/scripts/)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (internalVersion 45).
 --
@@ -1542,6 +1542,14 @@ adopt(top, gPvP)
 -- state variable even without use_controlType, and the comparison is against the raw API key
 -- ("STUN"), never a localised label.
 local ccme = reg(F.icon("Mage - CC ON ME", CLASS, 44, 44, 0, 0, nil))
+  -- FALLBACK ART ONLY. iconSource stays -1, so the LIVE icon still wins: Icon.lua
+  -- UpdateIcon() reads state.icon first and only falls through to displayIcon when the
+  -- state has none. That happens in the /wa editor, where CreateFallbackState can only
+  -- supply an icon if the prototype has a static GetNameAndIcon/iconFunc — and Crowd
+  -- Controlled derives its icon from the live data.spellID, so it has none. Without this
+  -- line the aura renders as INV_Misc_QuestionMark in the editor and looks broken.
+  -- Paladin has shipped exactly this pattern since v5; these are its proven paths.
+ccme.displayIcon = "Interface\\Icons\\spell_nature_polymorph"
 ccme.triggers = F.triggers({ { type = "unit", event = "Crowd Controlled" } })
 ccme.cooldown = false
 ccme.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })   -- red default = "trinket food"
@@ -1599,6 +1607,14 @@ adopt(gAlerts, csnow)
 -- no mage decision, and a prompt that fires when nothing is decidable is noise.
 local IMMUNE = { 45438, 642, 1020, 31224, 23920, 19574, 34471 }
 local immune = reg(F.icon("Mage - TARGET IMMUNE", CLASS, 44, 44, 0, 0, nil))
+  -- FALLBACK ART ONLY. iconSource stays -1, so the LIVE icon still wins: Icon.lua
+  -- UpdateIcon() reads state.icon first and only falls through to displayIcon when the
+  -- state has none. That happens in the /wa editor, where CreateFallbackState can only
+  -- supply an icon if the prototype has a static GetNameAndIcon/iconFunc — and Crowd
+  -- Controlled derives its icon from the live data.spellID, so it has none. Without this
+  -- line the aura renders as INV_Misc_QuestionMark in the editor and looks broken.
+  -- Paladin has shipped exactly this pattern since v5; these are its proven paths.
+immune.displayIcon = "Interface\\Icons\\spell_holy_divineintervention"
 immune.triggers = F.triggers({
   F.auraTrigger("target", true, IMMUNE),   -- any caster: it is the target's state that matters
   { type = "unit", event = "Unit Characteristics", unit = "target", use_unit = true,
@@ -1629,6 +1645,8 @@ for i, id in ipairs(PVP_TRINKETS) do
     { use_genericShowOn = true, genericShowOn = "showOnCooldown" })
 end
 local trink = reg(F.icon("Mage - Trinket DOWN", CLASS, 32, 32, 0, 0, nil))
+  -- fallback art: iconSource stays -1 so the live icon wins; see the CC ON ME note.
+trink.displayIcon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
 trink.triggers = F.triggers(trinketTrigs, { disjunctive = "any" })   -- whichever one you wear
 trink.cooldownTextDisabled = false   -- swipe numbers; no %p subtext (OmniCC would double it)
 trink.desaturate = true
@@ -1653,6 +1671,8 @@ adopt(gPvP, wotf)
 -- INFERENCE, not a read: no 2.5.x API exposes another player's cooldowns, so the timer
 -- starts when the trinket cast is SEEN. Arena-only — arena1..5 do not exist in a BG.
 local etrink = reg(F.icon("Mage - Enemy Trinket", CLASS, 32, 32, 0, 0, nil))
+  -- fallback art: iconSource stays -1 so the live icon wins; see the CC ON ME note.
+etrink.displayIcon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
 etrink.triggers = F.triggers({
   { type = "event", event = "Spell Cast Succeeded", unit = "arena", use_unit = true,
     use_spellId = true, spellId = { "42292" },   -- "PvP Trinket", cast by both medallions

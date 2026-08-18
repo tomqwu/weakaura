@@ -1,4 +1,4 @@
--- generate.lua — Warlock TBC All-Specs HUD (v17).
+-- generate.lua — Warlock TBC All-Specs HUD (v18).
 -- Run: lua5.1 generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import).
 --
@@ -1635,6 +1635,14 @@ end
 -- -> never the trinket) and the countdown answers "ride it or spend it".
 -- No combat gate: the opener Sap lands out of combat.
 local ccme = alertIcon("Warlock - CC ON ME", RED, true)
+  -- FALLBACK ART ONLY. iconSource stays -1, so the LIVE icon still wins: Icon.lua
+  -- UpdateIcon() reads state.icon first and only falls through to displayIcon when the
+  -- state has none. That happens in the /wa editor, where CreateFallbackState can only
+  -- supply an icon if the prototype has a static GetNameAndIcon/iconFunc — and Crowd
+  -- Controlled derives its icon from the live data.spellID, so it has none. Without this
+  -- line the aura renders as INV_Misc_QuestionMark in the editor and looks broken.
+  -- Paladin has shipped exactly this pattern since v5; these are its proven paths.
+ccme.displayIcon = "Interface\\Icons\\spell_nature_polymorph"
 ccme.width, ccme.height = 44, 44
 ccme.triggers = F.triggers({ gTrig{ type = "unit", event = "Crowd Controlled" } })
 -- v5: the glow colour now CARRIES the category, because under a 3 s stun a
@@ -1679,6 +1687,14 @@ ccme.load = F.load(CLASS, PVP)
 -- Stop the burst: casting into Divine Shield / Ice Block / Cloak of Shadows
 -- burns your whole DoT investment for nothing. Any caster, all ranks.
 local immune = alertIcon("Warlock - TARGET IMMUNE", RED, true)
+  -- FALLBACK ART ONLY. iconSource stays -1, so the LIVE icon still wins: Icon.lua
+  -- UpdateIcon() reads state.icon first and only falls through to displayIcon when the
+  -- state has none. That happens in the /wa editor, where CreateFallbackState can only
+  -- supply an icon if the prototype has a static GetNameAndIcon/iconFunc — and Crowd
+  -- Controlled derives its icon from the live data.spellID, so it has none. Without this
+  -- line the aura renders as INV_Misc_QuestionMark in the editor and looks broken.
+  -- Paladin has shipped exactly this pattern since v5; these are its proven paths.
+immune.displayIcon = "Interface\\Icons\\spell_holy_divineintervention"
 immune.width, immune.height = 44, 44
 immune.triggers = F.triggers({ F.auraTrigger("target", true, PVP_IDS.immunities) })
 immune.load = F.load(CLASS, PVP)
