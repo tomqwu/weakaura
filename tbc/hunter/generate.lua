@@ -1,4 +1,4 @@
--- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v18).
+-- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v19).
 -- Run: lua5.1 tbc/hunter/generate.lua   (toolkit libs must be fetched once:
 --      tools/tbc-weakaura-creator/scripts/setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game.
@@ -1534,6 +1534,14 @@ adopt(top, gPvP)
 --     effect, and %p is the answer to "ride it or trinket it". No combat gate: the
 --     opener lands before you are in combat.
 local ccMe = reg(F.icon("Hunter - CC ON ME", CLASS, 40, 40, 0, 0, nil))
+  -- FALLBACK ART ONLY. iconSource stays -1, so the LIVE icon still wins: Icon.lua
+  -- UpdateIcon() reads state.icon first and only falls through to displayIcon when the
+  -- state has none. That happens in the /wa editor, where CreateFallbackState can only
+  -- supply an icon if the prototype has a static GetNameAndIcon/iconFunc — and Crowd
+  -- Controlled derives its icon from the live data.spellID, so it has none. Without this
+  -- line the aura renders as INV_Misc_QuestionMark in the editor and looks broken.
+  -- Paladin has shipped exactly this pattern since v5; these are its proven paths.
+ccMe.displayIcon = "Interface\\Icons\\spell_nature_polymorph"
 ccMe.triggers = F.triggers({ trig{ type = "unit", event = "Crowd Controlled" } })
 ccMe.cooldown = false
 ccMe.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })   -- red default = "trinket food"
@@ -1626,6 +1634,14 @@ adopt(gAlerts, silence)
 --     Beast Within means the trap and Scatter will not land either. iconSource -1
 --     shows WHICH immunity, which is what decides swap vs wait-out.
 local immune = reg(F.icon("Hunter - TARGET IMMUNE", CLASS, 40, 40, 0, 0, nil))
+  -- FALLBACK ART ONLY. iconSource stays -1, so the LIVE icon still wins: Icon.lua
+  -- UpdateIcon() reads state.icon first and only falls through to displayIcon when the
+  -- state has none. That happens in the /wa editor, where CreateFallbackState can only
+  -- supply an icon if the prototype has a static GetNameAndIcon/iconFunc — and Crowd
+  -- Controlled derives its icon from the live data.spellID, so it has none. Without this
+  -- line the aura renders as INV_Misc_QuestionMark in the editor and looks broken.
+  -- Paladin has shipped exactly this pattern since v5; these are its proven paths.
+immune.displayIcon = "Interface\\Icons\\spell_holy_divineintervention"
 immune.triggers = F.triggers({ F.auraTrigger("target", true, IMMUNE) })
 immune.cooldown = false
 immune.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
@@ -1641,6 +1657,8 @@ adopt(gAlerts, immune)
 --     because itemName has no multiEntry; only one of them can ever be equipped, and
 --     iconSource -1 means the icon is the trinket you actually own.
 local trinket = reg(F.icon("Hunter - Trinket DOWN", CLASS, 32, 32, 0, 0, nil))
+  -- fallback art: iconSource stays -1 so the live icon wins; see the CC ON ME note.
+trinket.displayIcon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
 local trinketTrigs = {}
 for i, id in ipairs(TRINKETS) do trinketTrigs[i] = itemCD(id, "showOnCooldown") end
 trinket.triggers = F.triggers(trinketTrigs, { disjunctive = "any" })
@@ -1669,6 +1687,8 @@ adopt(gPvP, wotf)
 --     flash changes nothing, "their break is gone for 90 more seconds" is the go.
 --     Arena-only, because unit = "arena" is meaningless in a battleground.
 local enemyTrinket = reg(F.icon("Hunter - Enemy Trinket", CLASS, 32, 32, 0, 0, nil))
+  -- fallback art: iconSource stays -1 so the live icon wins; see the CC ON ME note.
+enemyTrinket.displayIcon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
 enemyTrinket.triggers = F.triggers({
   castSucceeded("arena", { PVPTRINK }, "120"),
 })
@@ -1683,6 +1703,13 @@ adopt(gPvP, enemyTrinket)
 --     Inference again, with the trap's own 1-minute lifetime supplied: it cannot see
 --     the trap being sprung or broken, so it is a maximum, not a fact.
 local trapArmed = reg(F.icon("Hunter - Trap Armed", CLASS, 36, 36, 0, 0, nil))
+  -- Fallback art. Spell Cast Succeeded carries no icon of its own, so without this the prompt
+  -- renders as INV_Misc_QuestionMark. There is no trap texture path this repo can VERIFY, and
+  -- guessing one is how paladin ended up shipping Horde-only art it cannot check. So it borrows
+  -- the crowd-control motif every pack already proves — which is honest here rather than merely
+  -- convenient: an armed trap IS a crowd-control effect, and this is the same icon the CC
+  -- prompts use.
+trapArmed.displayIcon = "Interface\\Icons\\spell_nature_polymorph"
 trapArmed.triggers = F.triggers({ castSucceeded("player", FRZTRAP, "60") })
 trapArmed.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
 trapArmed.zoom = 0.3

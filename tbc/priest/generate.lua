@@ -1,4 +1,4 @@
--- generate.lua — Priest TBC All-Specs HUD (v17).
+-- generate.lua — Priest TBC All-Specs HUD (v18).
 -- Run: lua5.1 tbc/priest/generate.lua   (works from any cwd; paths resolve from this file)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (/wa -> Import -> paste).
 --
@@ -1445,6 +1445,14 @@ adopt(top, gPvP)
 -- The five loss-of-control types with no condition (NONE, CHARM, DISARM, PACIFY,
 -- POSSESS) fall back to the base colour below, i.e. red "trinket food" — correct.
 local ccOnMe = reg(F.icon("Priest - CC ON ME", CLASS, 44, 44, 0, 0, nil))
+  -- FALLBACK ART ONLY. iconSource stays -1, so the LIVE icon still wins: Icon.lua
+  -- UpdateIcon() reads state.icon first and only falls through to displayIcon when the
+  -- state has none. That happens in the /wa editor, where CreateFallbackState can only
+  -- supply an icon if the prototype has a static GetNameAndIcon/iconFunc — and Crowd
+  -- Controlled derives its icon from the live data.spellID, so it has none. Without this
+  -- line the aura renders as INV_Misc_QuestionMark in the editor and looks broken.
+  -- Paladin has shipped exactly this pattern since v5; these are its proven paths.
+ccOnMe.displayIcon = "Interface\\Icons\\spell_nature_polymorph"
 ccOnMe.triggers = F.triggers({
   gTrigger{ type = "unit", event = "Crowd Controlled" },
 })
@@ -1538,6 +1546,8 @@ adopt(gAlerts, silence)
 -- Priest-usable ids, both factions (wowhead.com/tbc): 18862/18851 Insignia
 -- (5 min), 30349/30346 Medallion (2 min), 37864/37865 the 2.4 epic Medallion.
 local trinket = reg(F.icon("Priest - Trinket DOWN", CLASS, 32, 32, 0, 0, nil))
+  -- fallback art: iconSource stays -1 so the live icon wins; see the CC ON ME note.
+trinket.displayIcon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
 local trinketTrigs = {}
 for i, itemId in ipairs({ 18862, 18851, 30349, 30346, 37864, 37865 }) do
   trinketTrigs[i] = gTrigger{
@@ -1573,6 +1583,8 @@ adopt(gPvP, wotf)
 -- wears at 70 — an opponent still on the 5-minute vanilla insignia will show a
 -- clock that ends early.
 local etrinket = reg(F.icon("Priest - Enemy Trinket", CLASS, 32, 32, 0, 0, nil))
+  -- fallback art: iconSource stays -1 so the live icon wins; see the CC ON ME note.
+etrinket.displayIcon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
 etrinket.triggers = F.triggers({
   gTrigger{ type = "event", event = "Spell Cast Succeeded",
             unit = "arena", use_unit = true,

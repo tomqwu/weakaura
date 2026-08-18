@@ -1,4 +1,4 @@
--- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v18).
+-- generate.lua — Druid TBC Bear / Restoration / Balance HUD (v19).
 -- Run: lua5.1 generate.lua   (toolkit libs live in ../../tools/tbc-weakaura-creator/scripts/,
 -- fetch them once with that directory's setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game (copy whole -> /wa -> Import).
@@ -1585,6 +1585,8 @@ end
 -- F.subglow(true, colour) sets glow = true AND useGlowColor = true, which is exactly what the
 -- call below does.
 local ccOnMe = alertIcon("Druid - CC on Me", pvpGate())
+  -- fallback art: iconSource stays -1 so the live CC icon wins; see the rogue CC ON ME note.
+ccOnMe.displayIcon = "Interface\\Icons\\spell_nature_polymorph"
 ccOnMe.triggers = F.triggers({ rawTrigger{ type = "unit", event = "Crowd Controlled" } })
 ccOnMe.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })  -- red base = "trinket food":
 ccOnMe.subRegions[2] = F.subtext("%p", 14, "INNER_BOTTOM")    -- the fallback the five
@@ -1642,6 +1644,8 @@ local function trinketCD(itemId)
                      use_genericShowOn = true, genericShowOn = "showOnCooldown" }
 end
 local myTrinket = pvpIcon("Druid - PvP Trinket Down", 32, pvpGate())
+  -- fallback art: iconSource stays -1 so the live icon wins; see the CC ON ME note.
+myTrinket.displayIcon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
 local trinketTriggers = {}
 for i, itemId in ipairs(PVP_TRINKETS) do trinketTriggers[i] = trinketCD(itemId) end
 myTrinket.triggers = F.triggers(trinketTriggers, { disjunctive = "any" })
@@ -1654,6 +1658,8 @@ myTrinket.desaturate = true   -- reads as "unavailable" without needing the numb
 -- level-70 arena player carries; a low-level BG opponent on a 5-minute Insignia would show
 -- "ready" early. Arena-gated because unit = "arena" makes no sense in a battleground.
 local enemyTrinket = pvpIcon("Druid - Enemy Trinket", 36, arenaGate())
+  -- fallback art: iconSource stays -1 so the live icon wins; see the CC ON ME note.
+enemyTrinket.displayIcon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
 enemyTrinket.triggers = F.triggers({
   rawTrigger{ type = "event", event = "Spell Cast Succeeded",
               unit = "arena", use_unit = true,
