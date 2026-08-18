@@ -1,7 +1,17 @@
--- generate.lua — Rogue TBC All-Specs HUD (v60).
+-- generate.lua — Rogue TBC All-Specs HUD (v61).
 -- Reproducible lineage build: start from the committed v41 snapshot, then replay
--- the reviewed v42 through v58 Lua migrations in order. The snapshot lives
+-- the reviewed v42 through v61 Lua migrations in order. The snapshot lives
 -- inside this script so the class still ships exactly one importable all-specs.txt.
+--
+-- v61 adds THE LANE: a new top-level dynamic group, "Rogue - Rotation", at absolute
+-- (-150,-96) with useLimit = true and limit = 1. Eight ranked prompts share ONE 48px slot and
+-- the engine draws the highest-priority one that is currently true, so the pack finally
+-- answers "press this now" for a rotational button instead of only "you cannot press this".
+-- The existing SnD MISSING alert is renamed and moved in as rank 1, keeping its uid; the
+-- alert column drops to six children and is purely reactive/defensive again. The LANE CANON
+-- at the bottom of this script asserts the group's one-slot geometry AND the exact order of
+-- controlledChildren, because that array IS the rotation and the options UI lets a user drag
+-- it around with no other visible change.
 --
 -- v54 replaced the 100x100 concentric ring cluster with THE SILL: an instrument strip of
 -- four stacked rails — threat, health, energy, combo — parked under your character, where
@@ -53,6 +63,7 @@ local ok, result = pcall(function()
     "patch-v42.lua", "patch-v43.lua", "patch-v44.lua", "patch-v45.lua", "patch-v46.lua",
     "patch-v47.lua", "patch-v48.lua", "patch-v49.lua", "patch-v50.lua", "patch-v51.lua",
     "patch-v52.lua", "patch-v53.lua", "patch-v54.lua", "patch-v57.lua", "patch-v58.lua",
+    "patch-v61.lua",
   }) do
     arg[0] = dir .. "/" .. patch
     dofile(arg[0])
@@ -112,10 +123,11 @@ local ok, result = pcall(function()
   -- "tidy" the alert column sideways on the assumption that paladin's move was required here.
   local COLUMNS = {
     { id = "Rogue - Buffs",     x = 0,    y = -60 },
-    { id = "Rogue - Procs",     x = 330,  y = -116 },
+    { id = "Rogue - Procs",     x = 110,  y = -116 },   -- v61: two-weapon limit lets it come home
     { id = "Rogue - PvP",       x = 250,  y = -44 },
     { id = "Rogue - Alerts",    x = -150, y = -44 },
     { id = "Rogue - Cooldowns", x = 0,    y = -206 },
+    { id = "Rogue - Rotation",  x = -150, y = -96 },
   }
 
   local nodes = { [transmit.d.id] = transmit.d }
@@ -388,6 +400,141 @@ local ok, result = pcall(function()
           .. "player with nameplates off would have no combo readout")
       end
     end
+  end
+
+  -- 6d) THE LANE CANON. v61's rotation prompt is ONE 48px slot that shows the highest-priority
+  --     thing you are not doing, and every property below is load-bearing:
+  --       * useLimit/limit == 1   the whole design. Drop it and a 3-deep lane reaches y -204
+  --                               and lands in the cooldown row. It is also what licenses the
+  --                               constant clearance box asserted at the end of this block.
+  --       * sort == "none"        sorters.none composes SortAscending({"dataIndex"}) and
+  --                               dataIndex IS the index in controlledChildren
+  --                               (DynamicGroup.lua:281-286, :1180, :1214). Any other sort and
+  --                               the priority list is decided by duration or name.
+  --       * THE ARRAY IS THE ROTATION. The options UI lets a user drag group children around,
+  --                               silently re-ranking the rotation with no other visible
+  --                               change. This is the assertion that catches that, and a
+  --                               careless table.insert in a future patch.
+  --       * no animations, no actions  the group hides over-limit children AFTER Expand() has
+  --                               already run their start actions (RegionPrototype.lua:1154,
+  --                               DynamicGroup.lua:1520-1522), so a sound on rank 6 would fire
+  --                               while rank 1 is on screen.
+  --       * power thresholds as TABLES  the Power prototype's `power` arg is multiEntry
+  --                               (Prototypes.lua:3979-3991) and ConstructTest only emits a
+  --                               test for a non-empty table (GenericTrigger.lua:296-298); a
+  --                               scalar degrades the trigger to "the unit exists".
+  --       * showOnMissing never with useRem  CanHaveMatchCheck returns false for showOnMissing
+  --                               (BuffTrigger2.lua:212-224) and gates useRem at :3113, so the
+  --                               pairing is dropped with no error.
+  do
+    local LANE = "Rogue - Rotation"
+    local RANKS = {
+      "Rogue Now - SLICE AND DICE",
+      "Rogue Now - RUPTURE",
+      "Rogue Now - COLD BLOOD (Mutilate)",
+      "Rogue Now - COLD BLOOD",
+      "Rogue Now - EVISCERATE (Mutilate)",
+      "Rogue Now - EVISCERATE",
+      "Rogue Now - ENERGY CAP (Mutilate)",
+      "Rogue Now - ENERGY CAP (Hemo)",
+      "Rogue Now - ENERGY CAP",
+    }
+    local LANE_SIZE, MUTILATE = 48, 1329
+    local COLD_BLOOD, HEMORRHAGE = 14177, 16511
+    local g = assert(nodes[LANE], "lane canon: " .. LANE .. " is missing")
+    assert(g.regionType == "dynamicgroup", "lane canon: the lane is not a dynamic group")
+    assert(g.useLimit == true and g.limit == 1,
+      "lane canon: the lane is not limited to one slot, so it is a second alert column")
+    assert(g.sort == "none",
+      "lane canon: the lane sorts by " .. tostring(g.sort) .. ", so rank order is not priority")
+    assert(g.grow == "DOWN" and g.selfPoint == "TOP",
+      "lane canon: the lane no longer grows down from its own top edge")
+    assert(g.animate == false, "lane canon: the lane animates its slot")
+    assert(g.parent == transmit.d.id, "lane canon: the lane is not a top-level column")
+    assert(#g.controlledChildren == #RANKS,
+      ("lane canon: the lane holds %d ranks, expected %d")
+        :format(#g.controlledChildren, #RANKS))
+    for i, id in ipairs(RANKS) do
+      assert(g.controlledChildren[i] == id,
+        ("lane canon: rank %d is %q, expected %q -- the array IS the rotation")
+          :format(i, tostring(g.controlledChildren[i]), id))
+    end
+
+    for _, id in ipairs(RANKS) do
+      local a = assert(nodes[id], "lane canon: missing " .. id)
+      assert(a.parent == LANE, "lane canon: " .. id .. " is not in the lane")
+      assert(a.width == LANE_SIZE and a.height == LANE_SIZE,
+        ("lane canon: %s is %sx%s, expected %dx%d — the every-GCD surface must outrank the "
+          .. "40px alert column"):format(id, tostring(a.width), tostring(a.height),
+          LANE_SIZE, LANE_SIZE))
+      assert(a.xOffset == 0 and a.yOffset == 0,
+        "lane canon: " .. id .. " carries an offset a dynamic group would ignore anyway")
+      assert(a.load and a.load.use_combat == true, "lane canon: " .. id .. " is not combat-gated")
+      for slot, anim in pairs(a.animation or {}) do
+        assert(anim.type == "none",
+          ("lane canon: %s has a %s animation on %s; the slot is occupied most of a fight")
+            :format(id, tostring(anim.type), tostring(slot)))
+      end
+      assert(next(a.actions.start) == nil and next(a.actions.finish) == nil,
+        "lane canon: " .. id .. " carries an action, which fires even while the lane hides it")
+      for i, wrapped in ipairs(a.triggers) do
+        local tr = wrapped.trigger
+        if tr.event == "Power" and tr.use_power then
+          assert(type(tr.power) == "table" and #tr.power > 0
+            and type(tr.power_operator) == "table" and #tr.power_operator > 0,
+            ("lane canon: %s trigger %d ships a scalar power threshold"):format(id, i))
+        end
+        assert(not (tr.matchesShowOn == "showOnMissing" and tr.useRem),
+          ("lane canon: %s trigger %d pairs showOnMissing with useRem"):format(id, i))
+      end
+      if (a.iconSource or 0) > 0 then
+        local src = a.triggers[a.iconSource]
+        assert(src and src.trigger.type == "spell",
+          ("lane canon: %s iconSource %s does not index a spell trigger")
+            :format(id, tostring(a.iconSource)))
+      end
+      -- spellknown and not_spellknown are INDEPENDENT load args, so "knows X but is not a
+      -- Mutilate rogue" is one legal gate — five sibling packs already ship that shape. What is
+      -- forbidden is gating positively and negatively on the SAME id (never loads), or a
+      -- positive gate on an id outside this lane's vocabulary.
+      local POS_OK = { [MUTILATE] = true, [COLD_BLOOD] = true, [HEMORRHAGE] = true }
+      local pos = a.load.use_spellknown and a.load.spellknown or nil
+      local neg = a.load.use_not_spellknown and a.load.not_spellknown or nil
+      assert(not (pos and neg and pos == neg),
+        "lane canon: " .. id .. " gates positively and negatively on the same id")
+      assert(not pos or POS_OK[pos],
+        "lane canon: " .. id .. " has an unrecognised positive gate " .. tostring(pos))
+      assert(not neg or neg == MUTILATE,
+        "lane canon: " .. id .. " has an unrecognised negative gate " .. tostring(neg))
+    end
+
+    -- THE ONE-SLOT BOX, and the clearance it buys. Constant only because limit == 1.
+    local lx, ly = absolute(LANE)
+    local x1, x2 = lx - LANE_SIZE / 2, lx + LANE_SIZE / 2
+    local y1, y2 = ly - LANE_SIZE, ly              -- grow DOWN from selfPoint TOP
+    assert(x1 == -174 and x2 == -126 and y1 == -144 and y2 == -96,
+      ("lane canon: the slot is x %g..%g y %g..%g, expected x -174..-126 y -144..-96")
+        :format(x1, x2, y1, y2))
+    local alerts = nodes["Rogue - Alerts"]
+    local _, ay = absolute("Rogue - Alerts")
+    assert(alerts.grow == "UP" and ay - y2 == 52,
+      ("lane canon: only %gpx between the lane and the alert column"):format(ay - y2))
+    assert(x2 < -ALARM_W / 2 and -ALARM_W / 2 - x2 == 40,
+      ("lane canon: only %gpx between the lane and the alarm rim"):format(-ALARM_W / 2 - x2))
+    assert(-PLATE_W / 2 - x2 == 44,
+      ("lane canon: only %gpx between the lane and the sill plate"):format(-PLATE_W / 2 - x2))
+    local cds = nodes["Rogue - Cooldowns"]
+    local _, cy = absolute("Rogue - Cooldowns")
+    local tallest = 0
+    for _, cid in ipairs(cds.controlledChildren) do
+      tallest = math.max(tallest, nodes[cid].height or 0)
+    end
+    assert(y1 - (cy + tallest / 2) == 46,
+      ("lane canon: only %gpx between the lane and the cooldown row")
+        :format(y1 - (cy + tallest / 2)))
+    print(("lane: %d ranks in ONE slot at (%g,%g) -> x %g..%g y %g..%g; clearances "
+      .. "52px up to the alerts, 40px right to the alarm rim, 46px down to the cooldown row")
+      :format(#RANKS, lx, ly, x1, x2, y1, y2))
   end
 
   -- 7) nothing anywhere in the pack is still a ring
