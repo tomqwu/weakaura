@@ -23,7 +23,7 @@ use GitHub's copy button on the block to grab the whole string in one click.
 
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
-| Rogue — All Specs | Combat · Assassination · Subtlety | v61 | 67 | [string](tbc/rogue/README.md#import-string-v61) · [raw](tbc/rogue/all-specs.txt) |
+| Rogue — All Specs | Combat · Assassination · Subtlety | v62 | 67 | [string](tbc/rogue/README.md#import-string-v62) · [raw](tbc/rogue/all-specs.txt) |
 | Paladin — All Specs | Holy · Protection · Retribution | v23 | 45 | [string](tbc/paladin/README.md#import-string-v23) · [raw](tbc/paladin/all-specs.txt) |
 | Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v18 | 45 | [string](tbc/druid/README.md#import-string-v18) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v17 | 40 | [string](tbc/warlock/README.md#import-string-v17) · [raw](tbc/warlock/all-specs.txt) |
@@ -92,7 +92,7 @@ acceptance note instead of presenting static serialization as an in-game test.
 
 ## Packs
 
-- **tbc/rogue/all-specs.txt** — full HUD, v61 of a 61-iteration build: since **v54 the Sill**
+- **tbc/rogue/all-specs.txt** — full HUD, v62 of a 62-iteration build: since **v54 the Sill**
   (see the shared geometry above), at **164×45** because the rogue is one of the two packs whose
   strip carries a fourth lane. The **five combo pips** are 16×8 and since **v58 they ride the
   target’s nameplate** — combo points are a property of the target — falling back to their strip
@@ -103,8 +103,9 @@ acceptance note instead of presenting static serialization as an in-game test.
   scale/brightness pop on gain, plus a
   spec-adaptive cooldown row
   (16 spells, talent-gated, tooltips + keybind labels), a **one-slot rotation lane** at the top of the left column showing only the top unmet
-  priority (SnD about to expire → Rupture → Cold Blood → Eviscerate → energy capping, each
-  spec-gated on ability), animated alert flow (Riposte window, Feint-at-70%-threat,
+  priority (SnD about to expire → Rupture → Cold Blood → Eviscerate → your builder, each
+  spec-gated on ability, the bottom rank always filling the slot so the lane is a next-button
+  readout rather than an alert), animated alert flow (Riposte window, Feint-at-70%-threat,
   Evasion-below-50%-HP), weapon enchant proc tracker
   with clones, out-of-combat fade, plus the arena/BG-only PvP layer (CC-on-me with the
   break decision, Kick prompt and lockout bar, target immunity, trinket availability,

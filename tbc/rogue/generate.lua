@@ -1,4 +1,4 @@
--- generate.lua — Rogue TBC All-Specs HUD (v61).
+-- generate.lua — Rogue TBC All-Specs HUD (v62).
 -- Reproducible lineage build: start from the committed v41 snapshot, then replay
 -- the reviewed v42 through v61 Lua migrations in order. The snapshot lives
 -- inside this script so the class still ships exactly one importable all-specs.txt.
@@ -435,9 +435,9 @@ local ok, result = pcall(function()
       "Rogue Now - COLD BLOOD",
       "Rogue Now - EVISCERATE (Mutilate)",
       "Rogue Now - EVISCERATE",
-      "Rogue Now - ENERGY CAP (Mutilate)",
-      "Rogue Now - ENERGY CAP (Hemo)",
-      "Rogue Now - ENERGY CAP",
+      "Rogue Now - BUILDER (Mutilate)",
+      "Rogue Now - BUILDER (Hemo)",
+      "Rogue Now - BUILDER",
     }
     local LANE_SIZE, MUTILATE = 48, 1329
     local COLD_BLOOD, HEMORRHAGE = 14177, 16511
