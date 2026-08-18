@@ -1,4 +1,4 @@
--- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v19).
+-- generate.lua — Hunter TBC HUD, Beast Mastery & Survival (v20).
 -- Run: lua5.1 tbc/hunter/generate.lua   (toolkit libs must be fetched once:
 --      tools/tbc-weakaura-creator/scripts/setup.sh)
 -- Produces all-specs.txt: a "!WA:2!" string importable in game.
@@ -1412,7 +1412,13 @@ local mdPrompt = reg(F.icon("Hunter - Misdirection Prompt", CLASS, 40, 40, 0, 0,
 mdPrompt.triggers = F.triggers({
   threatTrigger(70), F.cdTrigger(MISDIR, "Misdirection", "showOnReady"),
 })
-mdPrompt.iconSource = 2
+  -- v20: iconSource = N reads states[N], which is not reliably populated for a non-active
+  -- trigger — it produced a BLANK slot for paladin RE-SEAL and question marks for the rogue
+  -- lane. -1 reads state.icon of the trigger activeTriggerMode names, which resolves reliably
+  -- and still comes from the client. Visibility is unchanged: these auras use disjunctive
+  -- "all", and which trigger owns state does not decide what is shown.
+mdPrompt.iconSource = -1
+mdPrompt.triggers.activeTriggerMode = 2
 mdPrompt.cooldown = false
 mdPrompt.subRegions[1] = F.subglow(true, { 1, 0.82, 0.1, 1 })
 mdPrompt.zoom = 0.3
@@ -1432,7 +1438,13 @@ local mendPet = reg(F.icon("Hunter - Mend Pet", CLASS, 40, 40, 0, 0, nil))
 mendPet.triggers = F.triggers({
   petHealth("<", 40), petHealth(">", 0), F.cdTrigger(MENDPET, "Mend Pet", "showOnReady"),
 })
-mendPet.iconSource = 3
+  -- v20: iconSource = N reads states[N], which is not reliably populated for a non-active
+  -- trigger — it produced a BLANK slot for paladin RE-SEAL and question marks for the rogue
+  -- lane. -1 reads state.icon of the trigger activeTriggerMode names, which resolves reliably
+  -- and still comes from the client. Visibility is unchanged: these auras use disjunctive
+  -- "all", and which trigger owns state does not decide what is shown.
+mendPet.iconSource = -1
+mendPet.triggers.activeTriggerMode = 3
 mendPet.cooldown = false
 mendPet.subRegions[1] = F.subglow(true, { 0.4, 1, 0.4, 1 })
 mendPet.zoom = 0.3
@@ -1448,7 +1460,13 @@ local revivePet = reg(F.icon("Hunter - Revive Pet", CLASS, 40, 40, 0, 0, nil))
 revivePet.triggers = F.triggers({
   petHealth("<=", 0), F.cdTrigger(REVIVE, "Revive Pet", "showOnReady"),
 })
-revivePet.iconSource = 2
+  -- v20: iconSource = N reads states[N], which is not reliably populated for a non-active
+  -- trigger — it produced a BLANK slot for paladin RE-SEAL and question marks for the rogue
+  -- lane. -1 reads state.icon of the trigger activeTriggerMode names, which resolves reliably
+  -- and still comes from the client. Visibility is unchanged: these auras use disjunctive
+  -- "all", and which trigger owns state does not decide what is shown.
+revivePet.iconSource = -1
+revivePet.triggers.activeTriggerMode = 2
 revivePet.cooldown = false
 revivePet.subRegions[1] = F.subglow(true, { 1, 0.15, 0.15, 1 })
 revivePet.zoom = 0.3
@@ -1619,7 +1637,13 @@ silence.triggers = F.triggers({
         use_spellName = true, spellName = SILENCE, realSpellName = "Silencing Shot",
         use_exact_spellName = true, use_ignoreoverride = true },
 })
-silence.iconSource = 2
+  -- v20: iconSource = N reads states[N], which is not reliably populated for a non-active
+  -- trigger — it produced a BLANK slot for paladin RE-SEAL and question marks for the rogue
+  -- lane. -1 reads state.icon of the trigger activeTriggerMode names, which resolves reliably
+  -- and still comes from the client. Visibility is unchanged: these auras use disjunctive
+  -- "all", and which trigger owns state does not decide what is shown.
+silence.iconSource = -1
+silence.triggers.activeTriggerMode = 2
 silence.cooldown = false
 silence.subRegions[1] = F.subglow(true, { 1, 0.85, 0.2, 1 })
 silence.subRegions[2] = F.subtext("%p", 12, "INNER_BOTTOM")
