@@ -246,6 +246,22 @@ local function laneIcon(id, uid, glow)
   return a
 end
 
+-- v64. THE PLAYER SUPPLIED THESE IDS THREE TIMES; THEY ARE NOW WHAT THE BUILD USES.
+-- 26861 Sinister Strike and 26865 Eviscerate are the high ranks a level-70 rogue actually has
+-- on their bars. Earlier versions used the rank-1 ids 1752 / 2098 on the reasoning that ranks
+-- share a cooldown and share their art, so rank 1 resolves for a levelling rogue too. That
+-- reasoning is still true, and it is no longer the deciding argument: the player is at 70, the
+-- prompts were not showing the art they expected, and the scope of this pack is level-70 play
+-- (see the root README). Where a rank-1 id is genuinely load-bearing it is KEPT — the
+-- spellknown gates below still use rank 1, because IsSpellKnownForLoad name-dances through
+-- ranks and a gate must resolve for a rogue who has not learned the high rank yet.
+--
+-- WHAT THIS COSTS, STATED PLAINLY: a rogue below the level for rank 9 / rank 10 has no such
+-- spell, so these two triggers will not resolve for them and the lane falls through to the next
+-- rank that does. That is a real regression for levelling and a deliberate trade for correct
+-- art at 70.
+local SINISTER   = 26861   -- Sinister Strike, high rank (player-supplied)
+local EVISCERATE = 26865   -- Eviscerate, high rank (player-supplied)
 local HEMORRHAGE = 16511   -- Hemorrhage rank 1; the Subtlety builder
 local COLD_BLOOD = 14177   -- Assassination tier 5; not itself a spec gate, see below
 
@@ -398,7 +414,7 @@ local function eviscerate(id, uid, cp)
     comboAtLeast(cp),                                 -- 1
     hostileTarget(),                                  -- 2
     energyFeeder(),                                   -- 3
-    F.cdTrigger(2098, "Eviscerate", "showAlways"),    -- 4: ICON SOURCE ONLY
+    F.cdTrigger(EVISCERATE, "Eviscerate", "showAlways"),    -- 4: ICON SOURCE ONLY
   }, { disjunctive = "custom",
        customTriggerLogic = "function(t) return t[1] and t[2] end" })
   ev.iconSource = 4
@@ -467,7 +483,7 @@ local enM = mutilateOnly(builder("Rogue Now - BUILDER (Mutilate)", "RgNowEnCpMu"
 local enH = hemoOnly(builder("Rogue Now - BUILDER (Hemo)", "RgNowEnCpHm",
   HEMORRHAGE, "Hemorrhage"))
 local enN = notMutilate(builder("Rogue Now - BUILDER", "RgNowEnergy",
-  1752, "Sinister Strike"))
+  SINISTER, "Sinister Strike"))
 
 -- THE ARRAY IS THE ROTATION. WeakAuras' options UI lets a user drag group children around,
 -- silently re-ranking this priority list with no other visible change. generate.lua's LANE

@@ -23,7 +23,7 @@ use GitHub's copy button on the block to grab the whole string in one click.
 
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
-| Rogue — All Specs | Combat · Assassination · Subtlety | v63 | 67 | [string](tbc/rogue/README.md#import-string-v63) · [raw](tbc/rogue/all-specs.txt) |
+| Rogue — All Specs | Combat · Assassination · Subtlety | v64 | 67 | [string](tbc/rogue/README.md#import-string-v64) · [raw](tbc/rogue/all-specs.txt) |
 | Paladin — All Specs | Holy · Protection · Retribution | v23 | 45 | [string](tbc/paladin/README.md#import-string-v23) · [raw](tbc/paladin/all-specs.txt) |
 | Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v18 | 45 | [string](tbc/druid/README.md#import-string-v18) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v17 | 40 | [string](tbc/warlock/README.md#import-string-v17) · [raw](tbc/warlock/all-specs.txt) |
@@ -92,7 +92,7 @@ acceptance note instead of presenting static serialization as an in-game test.
 
 ## Packs
 
-- **tbc/rogue/all-specs.txt** — full HUD, v63 of a 63-iteration build: since **v54 the Sill**
+- **tbc/rogue/all-specs.txt** — full HUD, v64 of a 64-iteration build: since **v54 the Sill**
   (see the shared geometry above), at **164×45** because the rogue is one of the two packs whose
   strip carries a fourth lane. The **five combo pips** are 16×8 and since **v58 they ride the
   target’s nameplate** — combo points are a property of the target — falling back to their strip
