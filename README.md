@@ -24,7 +24,7 @@ use GitHub's copy button on the block to grab the whole string in one click.
 | Pack | Specs | Version | Auras | Copy |
 |---|---|---|---|---|
 | Rogue — All Specs | Combat · Assassination · Subtlety | v66 | 67 | [string](tbc/rogue/README.md#import-string-v66) · [raw](tbc/rogue/all-specs.txt) |
-| Paladin — All Specs | Holy · Protection · Retribution | v23 | 45 | [string](tbc/paladin/README.md#import-string-v23) · [raw](tbc/paladin/all-specs.txt) |
+| Paladin — All Specs | Holy · Protection · Retribution | v24 | 46 | [string](tbc/paladin/README.md#import-string-v24) · [raw](tbc/paladin/all-specs.txt) |
 | Druid — Bear, Resto & Balance | Feral tank · Restoration · Balance | v19 | 45 | [string](tbc/druid/README.md#import-string-v19) · [raw](tbc/druid/all-specs.txt) |
 | Warlock — All Specs | Affliction · Demonology · Destruction | v18 | 40 | [string](tbc/warlock/README.md#import-string-v18) · [raw](tbc/warlock/all-specs.txt) |
 | Hunter — BM & Survival | Beast Mastery · Survival | v19 | 49 | [string](tbc/hunter/README.md#import-string-v19) · [raw](tbc/hunter/all-specs.txt) |
@@ -139,7 +139,9 @@ acceptance note instead of presenting static serialization as an in-game test.
   does that one job with a swing-timer library and a live latency monitor no WA string can
   reproduce. `Twist NOW` and `RE-SEAL` stay — their seal-state half is independent of swing
   timing — but they do still read WA's Swing Timer trigger, so they inherit its accuracy. 45
-  auras. Plus a 14-icon cooldown
+  auras. Since **v24 Judgement and Crusader Strike live in a one-slot rotation lane** on the left —
+  the rogue lane pattern, showing only the top pressable priority, clearing at the press —
+  leaving a 12-icon cooldown
   row that shows only what is
   unavailable (rotational buttons stay visible and glow when ready); Holy / Protection /
   Retribution adapt via Holy Shock, Holy Shield and Crusader Strike gates, and the row is
