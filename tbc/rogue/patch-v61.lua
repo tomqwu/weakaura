@@ -584,6 +584,71 @@ do
 end
 
 -- ===== encode + verify ======================================================================
+-- ===== v63: THE LANE'S ICONS WERE QUESTION MARKS ==========================================
+-- Reported in game: the lane renders, but its icon is Interface\Icons\INV_Misc_QuestionMark.
+--
+-- Icon.lua UpdateIcon() resolves in three ways:
+--     iconSource == -1  -> self.state.icon          (the ACTIVE trigger's state)
+--     iconSource ==  0  -> self.displayIcon         (a literal path)
+--     iconSource ==  N  -> self.states[N].icon      (trigger N's state)
+--   ... then: iconPath = iconPath or self.displayIcon or "…\INV_Misc_QuestionMark"
+--
+-- Every lane rank except SLICE AND DICE used the third form, pointing at a spell trigger that
+-- is deliberately EXCLUDED from customTriggerLogic so it cannot gate visibility. An excluded
+-- trigger does not reliably populate states[N], so iconPath came back nil, displayIcon was nil
+-- too, and the fallback is the question mark. It failed silently and looked like a missing
+-- feature rather than a broken icon.
+--
+-- THE FIX USES THE FORM THIS PACK ALREADY PROVES. `Rogue CD - Kick` has shipped correct spell
+-- art since v3 with iconSource = -1 and no displayIcon at all: -1 reads state.icon, and state
+-- is whichever trigger activeTriggerMode names. So each rank now NAMES its spell trigger as the
+-- state provider and switches to -1. Nothing about visibility changes — customTriggerLogic is
+-- untouched — and no icon path is hard-coded, so the art comes from the client and is correct
+-- on every locale and at every rank.
+--
+-- Why not displayIcon: a literal path is a guess unless it can be verified, and this repo has
+-- already shipped one unverifiable texture string (paladin's Horde-only twist icon). The
+-- client knows the art; ask it.
+do
+  -- Index the FINISHED table: this step runs after the lane and its ranks were created, and
+  -- `byId` above was built from the string as it arrived, before any of them existed.
+  local nowById = { [T.d.id] = T.d }
+  for _, a in ipairs(T.c) do nowById[a.id] = a end
+  local byId = nowById
+  local lane = assert(byId[LANE], "v63: the lane is missing")
+  local fixed = 0
+  for _, id in ipairs(lane.controlledChildren) do
+    local a = assert(byId[id], "v63: lane child " .. id .. " is missing")
+    local src = a.iconSource
+    if src and src > 0 then
+      local t = assert(a.triggers[src], "v63: " .. id .. " iconSource points at no trigger")
+      assert(t.trigger.type == "spell",
+        "v63: " .. id .. " iconSource trigger is not a spell trigger, so it carries no art")
+      a.triggers.activeTriggerMode = src
+      a.iconSource = -1
+      fixed = fixed + 1
+    end
+  end
+  assert(fixed == 8, "v63: expected 8 ranks on the trigger-sourced icon, fixed " .. fixed)
+
+  -- proof: nothing may be left on the form that produced the question mark
+  for _, id in ipairs(lane.controlledChildren) do
+    local a = byId[id]
+    assert(a.iconSource == -1 or (a.iconSource == 0 and a.displayIcon),
+      ("v63 proof: %s resolves its icon by neither state (-1) nor a literal path (0 + "
+        .. "displayIcon), so it falls through to INV_Misc_QuestionMark"):format(id))
+    if a.iconSource == -1 then
+      local mode = a.triggers.activeTriggerMode
+      assert(type(mode) == "number" and mode >= 1 and mode <= #a.triggers,
+        ("v63 proof: %s uses state-sourced art but activeTriggerMode is %s")
+          :format(id, tostring(mode)))
+      assert(a.triggers[mode].trigger.type == "spell",
+        ("v63 proof: %s names trigger %d as its state provider, but that trigger carries no "
+          .. "spell art"):format(id, mode))
+    end
+  end
+end
+
 local encoded = W.encode(T)
 W.verify(T, encoded)
 local cont = W.uidContinuityStrings(encoded, previous)
