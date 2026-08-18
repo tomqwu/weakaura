@@ -1,4 +1,4 @@
--- generate.lua — "Paladin TBC - All Specs" (v24)
+-- generate.lua — "Paladin TBC - All Specs" (v25)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code)
 -- except the rail region tables, which wa_factory has no builder for.
@@ -2125,7 +2125,19 @@ W.uid()   -- was: Paladin - Target Portrait (deleted in v14)
 -- every existing call site, including the three burners above. Built here, the other 45 auras
 -- keep byte-identical uids and the pack imports as an Update.
 local reseal = reg(F.icon("Paladin - RE-SEAL", CLASS, 40, 40, 0, 0, gAlerts.id))
-reseal.iconSource = 2                      -- Seal of Command's own icon, resolved by the client
+-- v25 — THIS WAS THE BLANK SLOT IN THE ALERT COLUMN. iconSource = 2 reads states[2].icon, and
+-- states[N] for a trigger that is not the ACTIVE one is not reliably populated in the /wa
+-- preview — the same form that gave the rogue lane its question marks (rogue v63). RE-SEAL was
+-- the only alert in this pack still on it. The fix is the one that cured the lane: name the
+-- art-bearing trigger as the state provider and read state.icon (-1). Trigger 2 is the
+-- showOnMissing Seal of Command trigger; naming it as activeTriggerMode does NOT change what is
+-- shown, because visibility is decided by customTriggerLogic, not by which trigger owns state.
+-- And a literal fallback goes on as a floor, exactly as the CC prompts carry one: this pack's
+-- own Twist NOW already proves ability_paladin_sealofblood renders, and the two prompts are
+-- halves of the same cycle, so sharing the art is honest rather than a guess.
+reseal.iconSource = -1
+reseal.triggers_activeTriggerMode_pending = 2   -- applied below, after F.triggers builds the table
+reseal.displayIcon = "Interface\\Icons\\ability_paladin_sealofblood"
 reseal.cooldown = false
 -- v18 — same GCD awareness as Twist NOW, and for the same reason; see its note. Trigger 4 is
 -- the Global Cooldown trigger, kept out of the visibility test by the custom logic line so the
@@ -2140,6 +2152,8 @@ reseal.triggers = F.triggers({
   disjunctive = "custom",
   customTriggerLogic = "function(t) return t[1] and t[2] and t[3] end",
 })
+reseal.triggers.activeTriggerMode = reseal.triggers_activeTriggerMode_pending
+reseal.triggers_activeTriggerMode_pending = nil
 reseal.subRegions[1] = F.subglow(false, { 1, 0.82, 0.1, 1 })
 reseal.conditions = {
   F.condition(1, "expirationTime", "<=", TWIST_WINDOW, "sub.1.glow", true),
@@ -2500,10 +2514,24 @@ do
     assert(#rs.triggers[3].trigger.auraspellids == #TWIST_SEALS,
       "twist canon: RE-SEAL's third trigger no longer watches exactly the twist seals, so it "
       .. "can now fire alongside Seal MISSING instead of being mutually exclusive with it")
-    assert(rs.iconSource == 2,
-      "twist canon: RE-SEAL's iconSource is " .. tostring(rs.iconSource) .. "; it must stay 2 "
-      .. "so the icon resolves from the Seal of Command trigger. Hard-coding a texture path "
-      .. "here is how Twist NOW ended up showing Horde art to Alliance paladins")
+    -- v25 REVERSES THE v17 RULE HERE, and the v17 reasoning is worth keeping to see why. It said
+    -- "must stay 2 so the icon resolves from the trigger; hard-coding a path is how Twist NOW
+    -- ended up Horde-only". The goal was right — resolve from the client — but iconSource = N
+    -- turned out to be the WRONG form for it: it reads states[N], which is not reliably
+    -- populated for a non-active trigger, and this aura rendered as a BLANK slot in the alert
+    -- column. The form that reliably resolves from the client is -1 (state.icon) with
+    -- activeTriggerMode naming the art-bearing trigger — the rogue v63 finding. The literal is
+    -- a FLOOR under that, not a replacement for it, and it is the same art the pack's own Twist
+    -- NOW already proves renders.
+    assert(rs.iconSource == -1,
+      "twist canon: RE-SEAL's iconSource is " .. tostring(rs.iconSource)
+      .. "; it must be -1 (state.icon), the form that resolves reliably")
+    assert(rs.triggers.activeTriggerMode == 2 and rs.triggers[2].trigger.type == "aura2",
+      "twist canon: RE-SEAL must name its Seal of Command trigger as the state provider, or "
+      .. "state.icon carries no art")
+    assert(rs.displayIcon and rs.displayIcon == tw.displayIcon,
+      "twist canon: RE-SEAL must carry the same fallback art as Twist NOW; the two are halves "
+      .. "of one cycle and a blank slot is what this replaced")
   end
 
   -- 2c) THE NUMBERS. Each percentage prints INSIDE its own rail at x = NUM_X, y 0. The threat
