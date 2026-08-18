@@ -1,4 +1,4 @@
--- generate.lua — "Paladin TBC - All Specs" (v23)
+-- generate.lua — "Paladin TBC - All Specs" (v24)
 -- Holy / Protection / Retribution HUD in one import; spec pieces auto-load via
 -- Spell Known gates. Built entirely with the wa_factory builders (zero custom code)
 -- except the rail region tables, which wa_factory has no builder for.
@@ -2150,6 +2150,77 @@ gate(reseal, SWING_GATE)
 polish(reseal)
 adopt(gAlerts, reseal)
 
+-- ===== v24: JUDGEMENT AND CRUSADER STRIKE MOVE TO THE LEFT ==================================
+-- The player: "审判和十字军打击应该是在左边的，下面一排主要是长CD技能" — Judgement and Crusader
+-- Strike belong on the left; the bottom row should be long cooldowns. They are right on both
+-- counts: a 10s and a 6s rotational button were sitting in a row of 1-to-60-minute cooldowns,
+-- glowing nearly all fight (which is the row's own v4 note against Holy Judgement, applied to
+-- everyone), while the "what do I press" surface this repo builds is the LEFT side.
+--
+-- THE LANE IS THE ROGUE v61/v66 PATTERN: a one-slot dynamic group above nothing else in its
+-- column, limit = 1 so it draws only the TOP PRIORITY that is actually pressable, with the
+-- alert column's own entry/leave treatment. Judgement outranks Crusader Strike because it is
+-- off the GCD and drives the seal cycle: when both are ready you press Judgement first, and
+-- the slot says exactly that.
+--
+-- PRESSABLE, NOT MERELY OFF COOLDOWN — the v66 rogue semantics the player asked for by name
+-- ("when i pressed the spell, it should fade out, if it qualify again, show again"). Action
+-- Usable is IsUsableSpell(spellName) and ready, so mana is included, and the GCD blinks the
+-- prompt off at the press; the 6s/10s cooldown keeps it away until the next real decision.
+--
+-- THE TWO ICONS ARE THE EXISTING ROW AURAS, MOVED — not new regions. They were created in the
+-- CDS loop above (draws 20-30 of the uid stream) and are re-parented, renamed, resized and
+-- re-triggered here, all of which is uid-free. Removing them from the CDS table instead would
+-- shift every later uid draw and import half the pack as duplicates. Only the lane GROUP is
+-- new: ONE W.uid() draw, consumed after every existing call site.
+local gLane = reg(F.dynGroup("Paladin - Rotation", -150, 44, TOP, "DOWN", "TOP", 6))
+gLane.animate = false                 -- the slot must not slide between ranks mid-fight
+gLane.useLimit, gLane.limit = true, 1 -- ONE icon, ever: the top unmet priority
+adopt(top, gLane)
+
+local function usableTrigger(spellId)
+  return {
+    type = "spell", event = "Action Usable", use_spellName = true, spellName = spellId,
+    use_ignoreoverride = true, ignoreoverride = true,
+    names = {}, spellIds = {}, subeventPrefix = "SPELL", subeventSuffix = "_CAST_START",
+    debuffType = "HELPFUL",
+  }
+end
+
+local function intoLane(oldId, newId, rank1, label)
+  local a = assert(byId[oldId], "v24: " .. oldId .. " is missing")
+  for i, cid in ipairs(gCds.controlledChildren) do
+    if cid == oldId then table.remove(gCds.controlledChildren, i); break end
+  end
+  byId[oldId] = nil
+  a.id = newId
+  byId[newId] = a
+  a.width, a.height, a.xOffset, a.yOffset = 40, 40, 0, 0
+  a.cooldown = false                  -- the icon exists only while pressable; no swipe to show
+  a.triggers = F.triggers({
+    usableTrigger(rank1),             -- 1: visibility — clears at the press, returns when real
+    targetHostileTrigger(),           -- 2: visibility — no prompt without an enemy
+    F.cdTrigger(rank1, label, "showAlways"),  -- 3: ICON SOURCE ONLY, kept out of the logic
+  }, { disjunctive = "custom",
+       customTriggerLogic = "function(t) return t[1] and t[2] end" })
+  a.triggers.activeTriggerMode = 3    -- iconSource -1 reads THIS trigger's state: real art,
+  a.iconSource = -1                   -- every locale, every rank (the v63 rogue lesson)
+  a.conditions = {}                   -- the old onCooldown/inCombat conditions indexed the old
+                                      -- trigger list; visibility now says everything they said
+  a.subRegions[1] = F.subglow(true, GOLD)
+  a.load.use_combat = true
+  a.animation.start  = F.animPreset("slidebottom", "0.3", "easeOut")
+  a.animation.finish = F.animCustom("1", { y = 150, alpha = 0, scale = 0.4 }, "easeOut")
+  adopt(gLane, a)
+  return a
+end
+
+-- Rank order IS the priority. Spec gates ride along unchanged: Judgement keeps its
+-- not-deep-Holy gate (a Holy paladin judges on the debuff clock, not the cooldown clock —
+-- the v4 note), Crusader Strike keeps its Ret gate. A Holy paladin's lane is simply empty.
+intoLane("Paladin CD - Judgement",       "Paladin Now - JUDGEMENT",       20271, "Judgement")
+intoLane("Paladin CD - Crusader Strike", "Paladin Now - CRUSADER STRIKE", 35395, "Crusader Strike")
+
 -- Re-parent the regions into the Sill, BACK TO FRONT. Children draw in controlledChildren
 -- order and later ones draw on top, so this list IS the z-order:
 --   ALARM FIRST   — the 172x44 rim. It is the same FILLED art as the plate, so it cannot trace
@@ -2783,8 +2854,58 @@ do
       box.id, box.depth = id, #(g.controlledChildren or {})
       return box
     end
+    -- ===== v24 LANE CANON. The lane must be the alert column's twin: same x, same size, same
+    -- entry and leave, asserted AGAINST A REFERENCE ALERT rather than against literals so the
+    -- two can never drift apart (the rogue v66 lesson, applied on arrival rather than later).
+    do
+      local lane = assert(nodes["Paladin - Rotation"], "lane canon: the lane is missing")
+      local lx, ly = absolute("Paladin - Rotation")
+      local ax2 = absolute("Paladin - Alerts")
+      assert(lx == -150 and ly == -96,
+        ("lane canon: the lane is at (%g,%g), expected (-150,-96)"):format(lx, ly))
+      assert(lx == ax2, "lane canon: the lane and the alert column no longer share an x")
+      assert(lane.useLimit == true and lane.limit == 1,
+        "lane canon: the lane is not a one-slot group; it would become a second alert column")
+      assert(lane.sort == "none", "lane canon: rank order is no longer priority order")
+      assert(lane.grow == "DOWN" and lane.selfPoint == "TOP" and lane.animate == false,
+        "lane canon: the lane's growth or slot animation changed")
+      local RANKS = { "Paladin Now - JUDGEMENT", "Paladin Now - CRUSADER STRIKE" }
+      assert(#lane.controlledChildren == #RANKS, "lane canon: rank count changed")
+      local ref = assert(nodes["Paladin - HAMMER NOW"], "lane canon: the reference alert is missing")
+      for i, id in ipairs(RANKS) do
+        assert(lane.controlledChildren[i] == id,
+          ("lane canon: rank %d is %q, expected %q — the array IS the priority")
+            :format(i, tostring(lane.controlledChildren[i]), id))
+        local a = assert(nodes[id], "lane canon: missing " .. id)
+        assert(a.width == ref.width and a.height == ref.height and a.zoom == ref.zoom,
+          "lane canon: " .. id .. " does not match the alert column's size")
+        for _, slot in ipairs({ "start", "finish" }) do
+          for k, v in pairs(ref.animation[slot]) do
+            assert(a.animation[slot][k] == v,
+              ("lane canon: %s animation.%s.%s is %s; the alert column has %s")
+                :format(id, slot, k, tostring(a.animation[slot][k]), tostring(v)))
+          end
+        end
+        assert(a.iconSource == -1 and a.triggers.activeTriggerMode == 3
+          and a.triggers[3].trigger.type == "spell",
+          "lane canon: " .. id .. " does not resolve its art from its spell trigger (v63 lesson)")
+        assert(a.triggers.customTriggerLogic == "function(t) return t[1] and t[2] end",
+          "lane canon: " .. id .. " visibility logic changed; the icon-source trigger must stay out")
+        assert(a.triggers[1].trigger.event == "Action Usable",
+          "lane canon: " .. id .. " no longer clears at the press")
+        assert(a.load.use_combat == true, "lane canon: " .. id .. " is not combat-gated")
+      end
+      -- the row really did shed them: nothing in the cooldown row is a sub-15s rotational now
+      for _, cid in ipairs(nodes["Paladin - Cooldowns"].controlledChildren) do
+        assert(cid ~= "Paladin CD - Judgement" and cid ~= "Paladin CD - Crusader Strike"
+          and cid ~= "Paladin Now - JUDGEMENT" and cid ~= "Paladin Now - CRUSADER STRIKE",
+          "lane canon: a lane rank is still in the cooldown row")
+      end
+    end
+
     local cols = {
       dynBox("Paladin - Alerts"), dynBox("Paladin - PvP"), dynBox("Paladin - Cooldowns"),
+      dynBox("Paladin - Rotation"),   -- v24: the one-slot lane joins the all-pairs set
       staticBox("Paladin - Buffs"),
     }
     -- The strip's own envelope joins the all-pairs set, so the columns are measured against it
@@ -2812,7 +2933,11 @@ do
       ("geometry proof: %d pair(s) of flanking stacks overlap each other at %d deep; one would "
         .. "render behind the other"):format(pairOverlaps, DEPTH))
     print(("column all-pairs scan: %d boxes (%s), %d pairs, %d overlaps; tightest %.1fpx (%s)")
-      :format(#cols, table.concat({ "Alerts", "PvP", "Cooldowns", "Buffs", "Sill" }, "/"),
+      :format(#cols, (function()
+          local names = {}
+          for _, c in ipairs(cols) do names[#names + 1] = c.id:gsub("^Paladin %- ", ""):gsub(" %(.*$", "") end
+          return table.concat(names, "/")
+        end)(),
         #cols * (#cols - 1) / 2, pairOverlaps, tightest, tightestPair))
   end
 
