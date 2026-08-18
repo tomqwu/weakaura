@@ -1,4 +1,4 @@
--- generate.lua — Rogue TBC All-Specs HUD (v63).
+-- generate.lua — Rogue TBC All-Specs HUD (v64).
 -- Reproducible lineage build: start from the committed v41 snapshot, then replay
 -- the reviewed v42 through v61 Lua migrations in order. The snapshot lives
 -- inside this script so the class still ships exactly one importable all-specs.txt.
