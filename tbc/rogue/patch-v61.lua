@@ -235,8 +235,21 @@ end
 
 -- Lane children are 48x48 — the alert column is 40x40, and this is the every-GCD surface, so
 -- it must outrank the alert column visually (usability test 3).
+local function usableTrigger(spellId)
+  return {
+    type = "spell", event = "Action Usable", use_spellName = true, spellName = spellId,
+    use_ignoreoverride = true, ignoreoverride = true,
+    names = {}, spellIds = {}, debuffType = "HELPFUL",
+    subeventPrefix = "SPELL", subeventSuffix = "_CAST_START",
+  }
+end
+
 local function laneIcon(id, uid, glow)
-  local a = newAura(F.icon(id, CLASS, 48, 48, 0, 0, LANE), uid)
+  -- v66: 40x40, matching the alert column directly above it. The lane shipped at 48 to outrank
+  -- the alerts by size, but the two stacks share the left edge and a 20% difference reads as a
+  -- mistake rather than as emphasis. Rank is already carried by position — the lane sits at the
+  -- top of the column — so the size difference only cost consistency.
+  local a = newAura(F.icon(id, CLASS, 40, 40, 0, 0, LANE), uid)
   a.zoom, a.cooldown, a.iconSource = 0.3, false, 0
   a.subRegions[1] = F.subglow(true, glow)        -- the icon prototype ships a subglow at [1]
   table.insert(a.subRegions, F.subborder())
@@ -321,7 +334,7 @@ assert(snd.iconSource == 0 and snd.displayIcon == "Interface\\Icons\\ability_rog
   "v61: " .. SND_OLD .. " no longer draws its own displayIcon")
 
 snd.id, snd.parent = SND_NEW, LANE
-snd.width, snd.height, snd.xOffset, snd.yOffset = 48, 48, 0, 0
+snd.width, snd.height, snd.xOffset, snd.yOffset = 40, 40, 0, 0   -- v66: match the alerts
 snd.cooldown = false
 snd.triggers = F.triggers({
   sndRem("<", 3),   -- 1: under three seconds left — three GCDs of warning
@@ -415,10 +428,15 @@ local function eviscerate(id, uid, cp)
     hostileTarget(),                                  -- 2
     energyFeeder(),                                   -- 3
     F.cdTrigger(EVISCERATE, "Eviscerate", "showAlways"),    -- 4: ICON SOURCE ONLY
+    usableTrigger(EVISCERATE),                        -- 5: v66 — and it must be PRESSABLE
   }, { disjunctive = "custom",
-       customTriggerLogic = "function(t) return t[1] and t[2] end" })
+       customTriggerLogic = "function(t) return t[1] and t[2] and t[5] end" })
   ev.iconSource = 4
-  ev.conditions = { F.condition(3, "power", "<", "35", "desaturate", true) }
+  -- v66: the desaturate condition is gone because it can no longer fire — the aura is only
+  -- shown while Action Usable says the button is live, so there is no "earned but unaffordable"
+  -- state left to grey out. That state now simply shows the BUILDER instead, which is the
+  -- honest answer: if you cannot afford the finisher, the next press is a builder.
+  ev.conditions = {}
   return ev
 end
 local evM = mutilateOnly(eviscerate("Rogue Now - EVISCERATE (Mutilate)", "RgNowEvisMu", 4))
@@ -453,14 +471,6 @@ local evN = notMutilate(eviscerate("Rogue Now - EVISCERATE", "RgNowEviscr", 5))
 -- across ranks and every rank shares its art, but a max-rank id is not in a levelling rogue's
 -- spellbook — references/gotchas.md: a name lookup that fails silently tracks spell 0. 1752 and
 -- 2098 resolve for everyone, including at 70.
-local function usableTrigger(spellId)
-  return {
-    type = "spell", event = "Action Usable", use_spellName = true, spellName = spellId,
-    use_ignoreoverride = true, ignoreoverride = true,
-    names = {}, spellIds = {}, debuffType = "HELPFUL",
-    subeventPrefix = "SPELL", subeventSuffix = "_CAST_START",
-  }
-end
 
 local function builder(id, uid, spellId, spellName)
   local b = laneIcon(id, uid, { 1, 0.9, 0.45, 1 })
@@ -470,10 +480,18 @@ local function builder(id, uid, spellId, spellName)
     F.cdTrigger(spellId, spellName, "showAlways"),    -- 3: ICON SOURCE ONLY
     energyAtLeast(85),                                -- 4: drives the wasting-regen glow
   }, { disjunctive = "custom",
-       customTriggerLogic = "function(t) return t[1] end" })
+       -- v66: THE PROMPT MUST CLEAR WHEN YOU PRESS IT. Trigger 2 (Action Usable) joins the
+       -- visibility test instead of merely greying the icon. Action Usable is
+       --     IsUsableSpell(spellName) and ((startTime == 0 and not paused) or charges > 0)
+       -- and GetSpellCooldown reports the GLOBAL cooldown for an instant, so the moment you
+       -- press the builder the trigger goes false and the slot empties. It comes back on its
+       -- own the instant the GCD ends and the energy is there again. A prompt that stays lit
+       -- through its own cast is not telling you anything.
+       customTriggerLogic = "function(t) return t[1] and t[2] end" })
   b.iconSource = 3
+  -- The desaturate condition is gone: it can no longer fire, because the icon is only shown
+  -- while the button is live. The glow stays — at 85+ energy you are a tick from wasting regen.
   b.conditions = {
-    F.condition(2, "show", "==", 0, "desaturate", true),
     F.condition(4, "show", "==", 1, "sub.1.glow", true),
   }
   return b
@@ -600,6 +618,63 @@ do
 end
 
 -- ===== encode + verify ======================================================================
+-- ===== v66: THE LANE ADOPTS THE ALERT COLUMN'S TREATMENT ==================================
+-- The player named the reference directly: 还击 (Riposte) "works the best, all left side should
+-- work like it in terms of position, effect, size etc."
+--
+-- They are right, and the two stacks had drifted apart. The alert column has shipped the same
+-- treatment since v3 — 40x40, a `slidebottom` entry, and a leave that slides UP 150px while
+-- shrinking to 0.4 and fading over a full second. The rotation lane arrived at v61 with none of
+-- it: 48px, no animation at all, appearing and vanishing between frames.
+--
+-- SO THE VALUES ARE COPIED FROM RIPOSTE, NOT RETYPED. An earlier draft of this step invented a
+-- leave animation and applied it to BOTH stacks — which silently replaced the exact effect the
+-- player says works best. Deriving from the reference makes that class of mistake impossible:
+-- if Riposte ever changes, the lane follows, and the alert column is not touched at all.
+do
+  local nowById = { [T.d.id] = T.d }
+  for _, a in ipairs(T.c) do nowById[a.id] = a end
+
+  local ref = assert(nowById["Rogue - Riposte"], "v66: the reference aura is missing")
+  assert(ref.width == 40 and ref.height == 40, "v66: the reference is not 40px")
+  assert(ref.animation.start.type == "preset" and ref.animation.start.preset == "slidebottom",
+    "v66: the reference no longer slides in from the bottom")
+  assert(ref.animation.finish.type == "custom", "v66: the reference has no custom leave")
+
+  local function copy(t)
+    if type(t) ~= "table" then return t end
+    local r = {}
+    for k, v in pairs(t) do r[k] = copy(v) end
+    return r
+  end
+
+  local lane = assert(nowById[LANE], "v66: the lane is missing")
+  local n = 0
+  for _, cid in ipairs(lane.controlledChildren) do
+    local a = nowById[cid]
+    a.animation.start  = copy(ref.animation.start)
+    a.animation.finish = copy(ref.animation.finish)
+    n = n + 1
+  end
+
+  -- proof: the lane now matches the reference, and the alert column was NOT touched
+  for _, cid in ipairs(lane.controlledChildren) do
+    local a = nowById[cid]
+    assert(a.width == ref.width and a.height == ref.height,
+      ("v66 proof: %s is %sx%s, the reference is %sx%s")
+        :format(cid, tostring(a.width), tostring(a.height), tostring(ref.width), tostring(ref.height)))
+    assert(a.zoom == ref.zoom, "v66 proof: " .. cid .. " does not share the reference's zoom")
+    for _, slot in ipairs({ "start", "finish" }) do
+      local got, want = a.animation[slot], ref.animation[slot]
+      for k, v in pairs(want) do
+        assert(got[k] == v, ("v66 proof: %s animation.%s.%s is %s, reference has %s")
+          :format(cid, slot, k, tostring(got[k]), tostring(v)))
+      end
+    end
+  end
+  print(("v66: %d lane ranks adopt Riposte's size and animation; alert column untouched"):format(n))
+end
+
 -- ===== v63: THE LANE'S ICONS WERE QUESTION MARKS ==========================================
 -- Reported in game: the lane renders, but its icon is Interface\Icons\INV_Misc_QuestionMark.
 --
@@ -709,12 +784,24 @@ end
 
 for rank, want in ipairs(RANKS) do
   local a = assert(newById[want.id], "v61: rank " .. rank .. " missing from the string")
-  assert(a.parent == LANE and a.width == 48 and a.height == 48
+  assert(a.parent == LANE and a.width == 40 and a.height == 40
     and a.xOffset == 0 and a.yOffset == 0,
-    "v61: " .. a.id .. " is not a 48px lane child at the group's own point")
+    "v61: " .. a.id .. " is not a 40px lane child at the group's own point")
   assert(a.load.use_combat == true, "v61: " .. a.id .. " is not combat-gated")
+  -- v66 REPLACES THE ORIGINAL RULE. v61 forbade every animation on a lane rank, reasoning that
+  -- an entry animation delays a 0.4s decision by its own duration. That reasoning was sound in
+  -- the abstract and wrong in practice: the alert column has shipped a 0.3s `slidebottom` entry
+  -- since v3, the player singled it out as the thing that works best, and a prompt that simply
+  -- blinks into existence is harder to notice at the edge of vision than one that moves. So the
+  -- rule is now that a lane rank must animate EXACTLY as the reference does, which is a
+  -- stricter constraint than "none" and a more useful one.
   for slot, anim in pairs(a.animation) do
-    assert(anim.type == "none", ("v61: %s has a %s animation on %s"):format(a.id, anim.type, slot))
+    if slot == "main" then
+      assert(anim.type == "none", "v61: " .. a.id .. " has a looping main animation")
+    else
+      assert(anim.type == "preset" or anim.type == "custom" or anim.type == "none",
+        ("v61: %s has an unrecognised %s animation on %s"):format(a.id, anim.type, slot))
+    end
   end
   assert(next(a.actions.start) == nil and next(a.actions.finish) == nil,
     "v61: " .. a.id .. " carries an action; Expand() runs it even while the lane hides it")

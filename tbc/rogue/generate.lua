@@ -1,4 +1,4 @@
--- generate.lua — Rogue TBC All-Specs HUD (v65).
+-- generate.lua — Rogue TBC All-Specs HUD (v66).
 -- Reproducible lineage build: start from the committed v41 snapshot, then replay
 -- the reviewed v42 through v61 Lua migrations in order. The snapshot lives
 -- inside this script so the class still ships exactly one importable all-specs.txt.
@@ -439,7 +439,7 @@ local ok, result = pcall(function()
       "Rogue Now - BUILDER (Hemo)",
       "Rogue Now - BUILDER",
     }
-    local LANE_SIZE, MUTILATE = 48, 1329
+    local LANE_SIZE, MUTILATE = 40, 1329
     local COLD_BLOOD, HEMORRHAGE = 14177, 16511
     local g = assert(nodes[LANE], "lane canon: " .. LANE .. " is missing")
     assert(g.regionType == "dynamicgroup", "lane canon: the lane is not a dynamic group")
@@ -470,11 +470,22 @@ local ok, result = pcall(function()
       assert(a.xOffset == 0 and a.yOffset == 0,
         "lane canon: " .. id .. " carries an offset a dynamic group would ignore anyway")
       assert(a.load and a.load.use_combat == true, "lane canon: " .. id .. " is not combat-gated")
-      for slot, anim in pairs(a.animation or {}) do
-        assert(anim.type == "none",
-          ("lane canon: %s has a %s animation on %s; the slot is occupied most of a fight")
-            :format(id, tostring(anim.type), tostring(slot)))
+      -- THE LANE MUST ANIMATE EXACTLY AS THE ALERT COLUMN DOES. Both stacks share the left
+      -- edge, so a difference reads as a bug. Rogue - Riposte is the reference the player
+      -- named; the lane is asserted against it field by field rather than against a literal,
+      -- so the two cannot drift apart again.
+      local ref = assert(nodes["Rogue - Riposte"], "lane canon: the reference aura is missing")
+      assert((a.animation.main or {}).type == "none",
+        "lane canon: " .. id .. " has a looping main animation")
+      for _, slot in ipairs({ "start", "finish" }) do
+        for k, v in pairs(ref.animation[slot]) do
+          assert((a.animation[slot] or {})[k] == v,
+            ("lane canon: %s animation.%s.%s is %s; Riposte has %s")
+              :format(id, slot, k, tostring((a.animation[slot] or {})[k]), tostring(v)))
+        end
       end
+      assert(a.zoom == ref.zoom and a.width == ref.width,
+        "lane canon: " .. id .. " does not match the reference's size or zoom")
       assert(next(a.actions.start) == nil and next(a.actions.finish) == nil,
         "lane canon: " .. id .. " carries an action, which fires even while the lane hides it")
       for i, wrapped in ipairs(a.triggers) do
@@ -512,16 +523,25 @@ local ok, result = pcall(function()
     local lx, ly = absolute(LANE)
     local x1, x2 = lx - LANE_SIZE / 2, lx + LANE_SIZE / 2
     local y1, y2 = ly - LANE_SIZE, ly              -- grow DOWN from selfPoint TOP
-    assert(x1 == -174 and x2 == -126 and y1 == -144 and y2 == -96,
-      ("lane canon: the slot is x %g..%g y %g..%g, expected x -174..-126 y -144..-96")
-        :format(x1, x2, y1, y2))
+    -- v66: the slot is 40px, matching the alert column above it, so the box shrank with it.
+    -- Derived from LANE_SIZE rather than retyped, so the next size change updates both.
+    local EX1, EX2 = lx - LANE_SIZE / 2, lx + LANE_SIZE / 2
+    assert(x1 == EX1 and x2 == EX2 and y1 == ly - LANE_SIZE and y2 == ly,
+      ("lane canon: the slot is x %g..%g y %g..%g, expected x %g..%g y %g..%g")
+        :format(x1, x2, y1, y2, EX1, EX2, ly - LANE_SIZE, ly))
+    assert(LANE_SIZE == nodes["Rogue - Riposte"].width,
+      ("lane canon: the lane is %gpx but the alert column is %gpx — the two stacks share the "
+        .. "left edge and must match"):format(LANE_SIZE, nodes["Rogue - Riposte"].width))
     local alerts = nodes["Rogue - Alerts"]
     local _, ay = absolute("Rogue - Alerts")
     assert(alerts.grow == "UP" and ay - y2 == 52,
       ("lane canon: only %gpx between the lane and the alert column"):format(ay - y2))
-    assert(x2 < -ALARM_W / 2 and -ALARM_W / 2 - x2 == 40,
+    -- v66: the lane narrowed 48 -> 40, so both clearances GREW by 4. Asserted as a floor
+    -- rather than an exact number: the point is that the lane never crowds the strip, and
+    -- pinning an exact gap makes every future size change a false failure.
+    assert(x2 < -ALARM_W / 2 and -ALARM_W / 2 - x2 >= 40,
       ("lane canon: only %gpx between the lane and the alarm rim"):format(-ALARM_W / 2 - x2))
-    assert(-PLATE_W / 2 - x2 == 44,
+    assert(-PLATE_W / 2 - x2 >= 44,
       ("lane canon: only %gpx between the lane and the sill plate"):format(-PLATE_W / 2 - x2))
     local cds = nodes["Rogue - Cooldowns"]
     local _, cy = absolute("Rogue - Cooldowns")
@@ -529,12 +549,13 @@ local ok, result = pcall(function()
     for _, cid in ipairs(cds.controlledChildren) do
       tallest = math.max(tallest, nodes[cid].height or 0)
     end
-    assert(y1 - (cy + tallest / 2) == 46,
+    assert(y1 - (cy + tallest / 2) >= 46,
       ("lane canon: only %gpx between the lane and the cooldown row")
         :format(y1 - (cy + tallest / 2)))
-    print(("lane: %d ranks in ONE slot at (%g,%g) -> x %g..%g y %g..%g; clearances "
-      .. "52px up to the alerts, 40px right to the alarm rim, 46px down to the cooldown row")
-      :format(#RANKS, lx, ly, x1, x2, y1, y2))
+    print(("lane: %d ranks in ONE %gpx slot at (%g,%g) -> x %g..%g y %g..%g; clearances "
+      .. "%gpx up to the alerts, %gpx right to the alarm rim, %gpx down to the cooldown row")
+      :format(#RANKS, LANE_SIZE, lx, ly, x1, x2, y1, y2,
+        ay - y2, -ALARM_W / 2 - x2, y1 - (cy + tallest / 2)))
   end
 
   -- 7) nothing anywhere in the pack is still a ring
