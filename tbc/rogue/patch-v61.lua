@@ -408,42 +408,66 @@ end
 local evM = mutilateOnly(eviscerate("Rogue Now - EVISCERATE (Mutilate)", "RgNowEvisMu", 4))
 local evN = notMutilate(eviscerate("Rogue Now - EVISCERATE", "RgNowEviscr", 5))
 
--- ===== ranks 7 & 8: ENERGY CAP — the honest 影袭 answer =====================================
--- TWO THRESHOLDS. Energy regenerates 20 per 2s tick, so waste begins above 80. At 85 a Combat
--- or Subtlety rogue's next tick overflows and they can already afford their builder. But
--- Assassination pools to 80-100 before a 60-energy Mutilate, so 85 would fire during CORRECT
--- play; at 95 a Mutilate rogue is one tick from hard cap and can afford Mutilate — honest for
--- both. Never grey: by construction you can afford your builder.
+-- ===== ranks 7-9: THE BUILDER — the lane always answers "what do I press" ==================
+-- v62. The player asked twice to see 影袭 (Sinister Strike, 1752 -> 26861 at rank 9) highlighted
+-- when it is usable. v61 refused, on the grounds that a builder prompt is lit most of a fight
+-- and an always-on alert teaches you to ignore the column it lives in.
 --
--- The side effect that recovers the cut "build for SnD" prompt for free: at 0 CP with Slice
--- and Dice missing and 100 energy, ranks 1-6 are all false and rank 8 shows Sinister Strike.
+-- THAT OBJECTION WAS RIGHT ABOUT AN ALERT AND WRONG ABOUT THIS LANE. The lane runs limit = 1:
+-- it draws exactly ONE icon, ever. A bottom rank does not add a competing light — it fills the
+-- slot in the moments nothing more urgent is true, which turns the lane from "an alert that
+-- sometimes fires" into "the next button", always. The old rank-9 ENERGY CAP already proved the
+-- point: it existed only to catch that same idle case, but it required energy >= 85, so a
+-- Combat rogue spending normally essentially never saw it. That is exactly the report.
 --
--- The glow is the energy rail's own number colour {1, 0.9, 0.45, 1}.
-local function energyCap(id, uid, at, spellId, spellName)
-  local en = laneIcon(id, uid, { 1, 0.9, 0.45, 1 })
-  en.triggers = F.triggers({
-    energyAtLeast(at),                                -- 1
-    hostileTarget(),                                  -- 2
-    F.cdTrigger(spellId, spellName, "showAlways"),    -- 3: ICON SOURCE ONLY
-  }, { disjunctive = "custom",
-       customTriggerLogic = "function(t) return t[1] and t[2] end" })
-  en.iconSource = 3
-  en.conditions = {}
-  return en
+-- SO THE ENERGY THRESHOLD IS GONE AND "USABLE" IS ASKED OF THE GAME. Action Usable evaluates
+-- (Prototypes.lua, ["Action Usable"] init):
+--     local ready = (startTime == 0 and not paused) or charges > 0
+--     local active = Private.ExecEnv.IsUsableSpell(spellName or "") and ready
+-- IsUsableSpell accounts for the REAL cost, so Improved Sinister Strike's 45 -> 40 needs no
+-- constant here and cannot drift when the player respecs. It drives the LOOK, not the
+-- visibility: the icon is always in the slot while you have a hostile target, and it is
+-- desaturated until the game says you can press it. Grey means wait, colour means press — the
+-- same idiom paladin uses for a locked GCD and Hammer of Wrath uses for range.
+--
+-- The energy-cap meaning is preserved as a GLOW rather than a rank: at 85+ you are one tick
+-- from wasting regen, and the icon lights up instead of a separate prompt appearing.
+--
+-- RANK-1 IDS, DELIBERATELY, EVEN THOUGH THE PLAYER GAVE 26861 / 26865. Cooldowns are shared
+-- across ranks and every rank shares its art, but a max-rank id is not in a levelling rogue's
+-- spellbook — references/gotchas.md: a name lookup that fails silently tracks spell 0. 1752 and
+-- 2098 resolve for everyone, including at 70.
+local function usableTrigger(spellId)
+  return {
+    type = "spell", event = "Action Usable", use_spellName = true, spellName = spellId,
+    use_ignoreoverride = true, ignoreoverride = true,
+    names = {}, spellIds = {}, debuffType = "HELPFUL",
+    subeventPrefix = "SPELL", subeventSuffix = "_CAST_START",
+  }
 end
-local enM = mutilateOnly(energyCap("Rogue Now - ENERGY CAP (Mutilate)", "RgNowEnCpMu",
-  95, MUTILATE, "Mutilate"))
--- v61.1: A SUBTLETY ROGUE'S BUILDER IS HEMORRHAGE, NOT SINISTER STRIKE. The first draft gated
--- the energy-cap prompt on `not Mutilate` alone, so a 0/0/61 rogue was shown the Sinister Strike
--- icon as their builder — a wrong-spec prompt, and precisely the second reading of 影袭 the
--- brief asked to cover. Ranked ABOVE the Sinister Strike variant: the lane runs limit = 1 and
--- draws only the top-ranked ACTIVE child, so a Hemo rogue gets Hemorrhage and everyone else
--- falls through to Sinister Strike. Same 85 threshold: Hemorrhage costs 35, so an 85-energy
--- Subtlety rogue is equally past the point of wasting a tick.
-local enH = hemoOnly(energyCap("Rogue Now - ENERGY CAP (Hemo)", "RgNowEnCpHm",
-  85, HEMORRHAGE, "Hemorrhage"))
-local enN = notMutilate(energyCap("Rogue Now - ENERGY CAP", "RgNowEnergy",
-  85, 1752, "Sinister Strike"))
+
+local function builder(id, uid, spellId, spellName)
+  local b = laneIcon(id, uid, { 1, 0.9, 0.45, 1 })
+  b.triggers = F.triggers({
+    hostileTarget(),                                  -- 1: the only visibility test
+    usableTrigger(spellId),                           -- 2: drives desaturate
+    F.cdTrigger(spellId, spellName, "showAlways"),    -- 3: ICON SOURCE ONLY
+    energyAtLeast(85),                                -- 4: drives the wasting-regen glow
+  }, { disjunctive = "custom",
+       customTriggerLogic = "function(t) return t[1] end" })
+  b.iconSource = 3
+  b.conditions = {
+    F.condition(2, "show", "==", 0, "desaturate", true),
+    F.condition(4, "show", "==", 1, "sub.1.glow", true),
+  }
+  return b
+end
+local enM = mutilateOnly(builder("Rogue Now - BUILDER (Mutilate)", "RgNowEnCpMu",
+  MUTILATE, "Mutilate"))
+local enH = hemoOnly(builder("Rogue Now - BUILDER (Hemo)", "RgNowEnCpHm",
+  HEMORRHAGE, "Hemorrhage"))
+local enN = notMutilate(builder("Rogue Now - BUILDER", "RgNowEnergy",
+  1752, "Sinister Strike"))
 
 -- THE ARRAY IS THE ROTATION. WeakAuras' options UI lets a user drag group children around,
 -- silently re-ranking this priority list with no other visible change. generate.lua's LANE
